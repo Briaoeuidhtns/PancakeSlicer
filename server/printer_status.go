@@ -346,58 +346,6 @@ func (s *Server) snapshot() statusSnapshot {
 	return snap
 }
 
-func (s *Server) connectionEvents(w http.ResponseWriter, r *http.Request) {
-	controller := http.NewResponseController(w)
-	if _, ok := w.(http.Flusher); !ok {
-		fail(w, 500, "Live progress streaming isn't available in this connection.")
-		return
-	}
-	hub := s.sends.hub
-	defer hub.subscribe()()
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("X-Accel-Buffering", "no")
-	defer controller.SetWriteDeadline(time.Time{})
-	heartbeat := time.NewTicker(15 * time.Second)
-	defer heartbeat.Stop()
-	var last []byte
-	for {
-		hub.mu.Lock()
-		wake := hub.wake
-		hub.mu.Unlock()
-		snap := s.snapshot()
-		b, _ := json.Marshal(snap)
-		if err := controller.SetWriteDeadline(time.Now().Add(15 * time.Second)); err != nil {
-			return
-		}
-		if !bytes.Equal(b, last) {
-			if _, err := fmt.Fprintf(w, "event: state\ndata: %s\n\n", b); err != nil {
-				return
-			}
-			last = b
-		}
-		if err := controller.Flush(); err != nil {
-			return
-		}
-		var tick <-chan time.Time
-		for _, t := range snap.Transfers {
-			if t.active() {
-				tick = time.After(250 * time.Millisecond)
-			}
-		}
-		select {
-		case <-r.Context().Done():
-			return
-		case <-wake:
-		case <-tick:
-		case <-heartbeat.C:
-			if _, err := io.WriteString(w, ": keepalive\n\n"); err != nil {
-				return
-			}
-		}
-	}
-}
-
 type sendHistory struct {
 	path string
 	mu   sync.Mutex

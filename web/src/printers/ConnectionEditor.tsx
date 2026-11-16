@@ -13,6 +13,7 @@ import {
 } from './connections';
 import { printerModel } from './capabilities';
 import './printers.css';
+import { addPrinterOnVariant } from '../profiles/catalog-add';
 
 const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const errorText = (e: unknown) => sentence(e instanceof Error ? e.message : String(e));

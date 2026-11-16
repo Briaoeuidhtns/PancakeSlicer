@@ -115,7 +115,7 @@ func NewServer(c Config, jobs *JobManager, catalog *resolve.Catalog) http.Handle
 	mux.HandleFunc("GET /api/jobs/{id}/send/plan", s.getSendPlan)
 	mux.HandleFunc("POST /api/jobs/{id}/send/cancel", s.cancelSend)
 	mux.HandleFunc("GET /api/printer-connections", s.listConnections)
-	mux.HandleFunc("GET /api/printer-connections/events", s.connectionEvents)
+	mux.HandleFunc("GET /api/events", s.liveEvents)
 	mux.HandleFunc("GET /api/printer-connections/{printer}/camera", s.printerCameras)
 	mux.HandleFunc("GET /api/printer-connections/{printer}/job-thumbnail", s.printerJobThumbnail)
 	mux.HandleFunc("GET /api/printer-connections/{printer}/camera/{camera}", s.printerCamera)

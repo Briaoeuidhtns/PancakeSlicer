@@ -32,12 +32,7 @@ import { exportProfiles } from './library-io';
 import { InLayer } from '../components/PageLayer';
 
 async function exportCurrent(type: PresetType, slot: number) {
-  const s = getState();
-  const name = (type === 'machine' ? s.printer : type === 'process' ? s.process : s.filamentSlots[slot]) ?? '';
-  const { base, user } = resolvePreset(s, type, name);
-  const project = type === 'filament' ? s.projectPresets?.filaments[slot] : s.projectPresets?.[type];
-  const { exportPresetJson } = await import('../preset-io');
-  exportPresetJson({ name: user?.name ?? base?.name ?? 'Profile', type, inherits: base?.name ?? name, overrides: { ...user?.overrides, ...project, ...presetEdits(s, type, slot) } });
+    await exportProfiles({ kind: 'current', type, slot });
 }
 
 interface MenuItem { label: string; run(): void; disabled?: boolean }

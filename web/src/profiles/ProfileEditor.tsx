@@ -18,7 +18,13 @@ import { sameValue } from '../state/value-equality';
 import { renameOwnedProfile } from './material-library';
 import { Glyph } from '../components/Glyph';
 import { useMachine } from '../flow/fsm';
-import { createProfileSave } from '../flow/profile-save';
+import { createResolvedSnapshot, resolveRequestOf, type ResolveRequest } from '../flow/resolved';
+import { normalizeConfig } from '../config-values';
+import { libraryWrites } from './library-writes';
+import { recordKey } from './records';
+import { recordProblems } from '../persist/profile-library';
+import { movesText, profileSaveFor } from '../flow/profile-save';
+import { librarySync } from '../flow/library-sync';
 import { settingSources } from './bases';
 import { DEFAULT_SCALES, effectiveShells, scaledValue, scaleValues, type ScaleRow } from './auto-rules';
 import { confirmDialog } from '../components/Ask';
@@ -58,7 +64,10 @@ export function ProfileEditor({type, name, draft, update, onBack, onSavingChange
   const changes = useMemo(() => changedKeys(values, baseline), [values, baseline]);
   const mode=useStore(effectiveMode);
   const connections=useStore(s=>s.printerConnections.enabled);
-  const m = useMemo(createProfileSave, []), snap = useMachine(m);
+  const m = useMemo(() => profileSaveFor(key), [key]), snap = useMachine(m);
+  const fieldsRef = useRef<HTMLFieldSetElement>(null);
+  useEffect(() => { const visible = () => !!fieldsRef.current?.getClientRects().length && document.visibilityState === 'visible';
+    librarySync.send({type: 'EDITOR_SHOWN', key, visible}); return () => librarySync.send({type: 'EDITOR_HIDDEN', key, visible}); }, [key]);
   const saving = snap.value === 'saving' || snap.value === 'renaming', error = snap.value === 'failed' ? snap.context.error : null;
   const setError = (message: string | null) => m.send(message ? {type: 'REJECT', error: message} : {type: 'DISMISS'});
   useEffect(() => {onSavingChange?.(saving);}, [saving]);
@@ -210,9 +219,14 @@ export function ProfileEditor({type, name, draft, update, onBack, onSavingChange
     controls={<>{type === 'machine' && source && <NozzleStrip printerKey={profileKey(source)} disabled={saving || dirty || !ready}/>}{(dirty || saving) && <button type="button" className="btn primary pf-editor-save" disabled={saving || !ready} onClick={() => void save()}>{saving ? 'Saving…' : 'Save'}</button>}
         {dirty && !foldActions && <button type="button" className="btn" disabled={saving} onClick={revert}>Revert</button>}
         {onDuplicate && !foldActions && <button type="button" className="btn" disabled={saving || dirty || !ready} onClick={onDuplicate}>Duplicate</button>}
-        <MenuButton label="Profile actions" className="icon-btn" items={[...(renamable ? [{label: 'Rename', disabled: saving, action: startRename}] : []), ...(type === 'process' && source ? [dynamic ? {label: 'Make regular', disabled: saving, action: () => void makeRegular()} : {label: 'Make dynamic', disabled: saving, action: makeDynamic}] : []), ...(foldActions && dirty ? [{label: 'Revert', disabled: saving, action: revert}] : []), ...(foldActions && onDuplicate ? [{label: 'Duplicate', disabled: saving || dirty || !ready, action: onDuplicate}] : []), {label: type === 'filament' ? 'Use in slot 1' : 'Use in project', disabled:saving || dirty, action:()=>requestPreset(type,0,key && profileKey(source!))}, {label:'Export',action:()=>void import('../preset-io').then(m=>m.exportPresetJson(source!))}, {label: 'Reset to base settings', disabled: saving || !resolved.base, action: () => {if(resolved.base) update(key, {...latest.current, values: resolved.base.config});}}, 'sep', {label:'Delete',disabled:saving,action:onRemove}]}>⋯</MenuButton></>}>
-    <fieldset className="pf-editor-fields" disabled={saving} aria-busy={saving}><SettingsTab type={type} hidePreset editor={editor} auxiliary={!source ? undefined : type === 'process' ? (dynamic ? {label: '✦ Dynamic', modified: scalesDirty || speedDirty, content: <DynamicTab config={shown} speedModel={speedModel} speeds={speedResolution.details} onSpeedModel={setSpeedModel} onUseMultiplier={useMultiplier} rows={scales} nozzle={nozzle} height={height} minHeight={minHeight} maxHeight={maxHeight} readOnly={saving} onChange={setScales} fromPrinter={{name: printerName, values: fromPrinter}}/>} : undefined) : type === 'filament' ? {label:'Works with',modified:applicabilityDirty,content:<Fits value={applicability} readOnly={saving} onChange={next=>update(key,{...latest.current,applicability:next})}/>}
-      : [{label: 'Print overrides', modified: overridesDirty, content: <PrintOverrides value={overrides} readOnly={saving} onChange={setOverrides}/>}, ...(connections ? [{label:'Connection',content:<Suspense fallback={null}><ConnectionEditor printer={profileKey(source)} name={profileName}/></Suspense>}] : [])]}/></fieldset>
+        <MenuButton label="Profile actions" className="icon-btn" items={[...(renamable ? [{label: 'Rename', disabled: saving, action: startRename}] : []), ...(type === 'process' && source ? [dynamic ? {label: 'Make regular', disabled: saving, action: () => void makeRegular()} : {label: 'Make dynamic', disabled: saving, action: makeDynamic}] : []), ...(foldActions && dirty ? [{label: 'Revert', disabled: saving, action: revert}] : []), ...(foldActions && onDuplicate ? [{label: 'Duplicate', disabled: saving || dirty || !ready, action: onDuplicate}] : []), {label: type === 'filament' ? 'Use in slot 1' : 'Use in project', disabled:saving || dirty, action:()=>requestPreset(type,0,key && source!.id)}, {label:'Export',output:true,action:()=>void import('./library-io').then(m=>m.exportProfiles({kind:'preset',targets:[{kind:type==='machine'?'printer':type,id:source!.id}]})).catch(e=>toast('profileeditor_failed', { detail: e instanceof Error?e.message:String(e) }))}, {label: 'Reset to base settings', disabled: saving || !Object.keys(ownValues(type, source)).length, action: resetAllToBase}, 'sep', {label:'Delete',disabled:saving,action:onRemove}]}>⋯</MenuButton>{onClose && <button type="button" className="icon-btn pf-editor-close" aria-label="Close" onClick={onClose}><Glyph name="close" size={14}/></button>}</>}>
+    {snap.context.updated && snap.value !== 'conflict' && <div className="pf-editor-note" role="status" data-updated-elsewhere>Updated in another tab or device: {movesText(snap.context.updated)}.
+      <button type="button" className="btn-ghost" onClick={() => m.send({type: 'SEEN'})}>OK</button></div>}
+    {snap.value === 'conflict' && <div className="pf-editor-error" role="alert">Changed elsewhere: {profileName}{snap.context.conflict?.length ? `: ${movesText(snap.context.conflict)}` : ''} (saved in another tab or device while you were editing it).
+      <span className="pf-conflict-actions"><button type="button" className="btn" onClick={() => {update(key, rebasedProfileDraft(latest.current, recordOf(getState(), type, name), resolvePreset(getState(), type, name).config)); m.send({type: 'KEEP'});}}>Keep my edits on the newer version</button>
+      <button type="button" className="btn-ghost" onClick={() => {update(key, null); m.send({type: 'DISCARD'});}}>Discard my edits</button></span></div>}
+    <fieldset ref={fieldsRef} className="pf-editor-fields" disabled={saving} aria-busy={saving}><SettingsTab type={type} hidePreset editor={editor} auxiliary={!source ? undefined : type === 'process' ? (dynamic ? {label: '✦ Dynamic', modified: scalesDirty || speedDirty, content: <DynamicTab config={shown} speedModel={speedModel} speeds={speedResolution.details} nozzleSpeeds={speedResolution.nozzles?.map((n) => ({ label: `${extruderLabel(n.extruder, speedNozzleCount, speedVendor === 'BBL')} ${n.diameter} mm`, speeds: n.speeds }))} missingReference={speedResolution.missingReference} slowerNote={mixedFlow} onSpeedModel={setSpeedModel} onUseMultiplier={useMultiplier} rows={scales} nozzle={nozzle} height={height} minHeight={minHeight} maxHeight={maxHeight} readOnly={saving} onChange={setScales} fromPrinter={{name: printerName, values: fromPrinter, printer: printer as PrinterRecord | undefined}}/>} : undefined) : type === 'filament' ? {label:'Printers',initial:scopeSnap.context.returned,content:<FilamentPrinters filament={name} dirty={dirty}/>}
+      : [{label: 'Print overrides', modified: overridesDirty, content: <PrintOverrides value={overrides} defaults={overrideDefaults} printer={source as PrinterRecord | undefined} readOnly={saving} onChange={setOverrides}/>}, ...(connections ? [{label:'Connection',content:<Suspense fallback={null}><ConnectionEditor printer={source.id} name={profileName}/></Suspense>}] : [])]}/></fieldset>
   </DetailPane>;
 }
 

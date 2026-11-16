@@ -55,6 +55,10 @@ async function gzipBody(init: RequestInit): Promise<RequestInit> {
   return { ...init, headers, body: await new Response(body.stream().pipeThrough(new CompressionStream('gzip'))).blob() };
 }
 
+export function serviceAnswered() {
+  if (notice && [0, 502, 503, 504].includes(notice.status)) accessNotice(null);
+}
+
 const showNotice = (value: AccessNotice | null) => accessNotice(value);
 
 let discarding = false;
@@ -71,6 +75,7 @@ export async function mutation(path: string, init: RequestInit, retry = false, s
     return onUpload && import.meta.env.MODE !== 'demo' ? sendWithProgress(path, init, headers, onUpload) : fetch(path, { ...init, headers });
   };
   let response = await send();
+  if (![502, 503, 504].includes(response.status)) serviceAnswered();
   if ((response.status === 429 || response.status === 503) && retry) {
     const raw = response.headers.get('Retry-After') ?? '1';
     const seconds = /^\d+$/.test(raw) ? Math.min(86400, Number(raw)) : 1;
@@ -116,6 +121,13 @@ export async function mutation(path: string, init: RequestInit, retry = false, s
     throw error;
   }
   return response;
+}
+
+export function failureText(what: string, error: unknown): string {
+  const status = (error as { status?: number } | null)?.status;
+  if (error instanceof TypeError || status !== undefined && [0, 502, 503, 504].includes(status))
+    return `${what}: the service is unreachable. Try again when it's back.`;
+  return `${what}: ${error instanceof Error ? error.message : String(error)}`;
 }
 
 export interface ApiError extends Error { status:number; code?:string; recovery?:string; profile?:{kind:string;name:string;vendor:string;slot?:number}; revision?:number; missing?:string[]; document?:Record<string,unknown> }

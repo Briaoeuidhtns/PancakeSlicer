@@ -1,3 +1,4 @@
+import { onLiveEvent } from '../live-events';
 import { mutation, responseError } from '../api/access';
 import { getState, setState } from '../state/store';
 import { printerCapabilities } from './capabilities';
@@ -39,23 +40,23 @@ export const connectionOutput = (kind: ConnectionKind) => (kind === 'bambu-lan' 
 export const connectionOf = (c: PrinterConnections, printer: string) => c.connections.find((x) => x.printer === printer);
 export const unassigned = (c: PrinterConnections) => c.connections.filter((x) => !x.printer);
 
-let source: EventSource | null = null;
+let following = false;
 export function followConnections() {
   if (import.meta.env.MODE === 'demo') {
     setState({ printerConnections: { enabled: true, live: true, connections: [], status: {}, transfers: [] } });
     return;
   }
-  if (source || getState().api?.mock) return;
-  source = new EventSource('/api/printer-connections/events');
-  source.addEventListener('state', (e) => {
-    const snap = JSON.parse((e as MessageEvent).data) as Omit<PrinterConnections, 'live' | 'status'> & { status: PrinterStatus[] };
+  if (following || getState().api?.mock) return;
+  following = true;
+  onLiveEvent('connections', (data) => {
+    const snap = JSON.parse(data) as Omit<PrinterConnections, 'live' | 'status'> & { status: PrinterStatus[] };
     setState({ printerConnections: { enabled: snap.enabled, live: true, connections: snap.connections, transfers: snap.transfers,
       status: Object.fromEntries(snap.status.map((s) => [s.printer, s])) } });
   });
-  source.onerror = () => {
+  onLiveEvent('down', () => {
     const c = getState().printerConnections;
     if (c.live) setState({ printerConnections: { ...c, live: false } });
-  };
+  });
 }
 
 const json = (method: string, body?: object): RequestInit => ({ method, headers: { 'Content-Type': 'application/json' }, body: body && JSON.stringify(body) });

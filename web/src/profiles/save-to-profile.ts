@@ -122,7 +122,8 @@ export const newProfileName = (s: State, type: PresetType, slot: number) => {
 export function newProfileNameError(s: State, type: PresetType, name: string): string | null {
   const n = name.trim();
   if (!n) return 'Enter a name';
-  return s.userPresets.some((p) => p.type === type && !p.archived && p.name === n) ? `“${n}” is already taken` : null;
+  if (nameLength(n) > NAME_MAX) return `Keep the name to ${NAME_MAX} characters`;
+  return listProfiles(s, type, { browseAll: true }).some((p) => p.name === n) ? `“${n}” is already taken` : null;
 }
 
 export type NewKind = 'same' | 'dynamic' | 'regular';

@@ -1,3 +1,4 @@
+import { failureText } from '../api/access';
 import { Check } from './Check';
 import { useRef, useState } from 'react';
 import type { PresetType } from '../api/types';

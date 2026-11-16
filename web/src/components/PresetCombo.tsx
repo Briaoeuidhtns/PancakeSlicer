@@ -23,6 +23,7 @@ export function requestPreset(type: PresetType, slot: number, name: string) {
 import { PrinterPicker, FilamentPicker } from '../profiles/Pickers';
 import { ProcessPresetPicker } from './ProcessPresetPicker';
 import { SEP } from '../separator';
+import { saveToProfile } from '../profiles/save-to-profile';
 export function PresetCombo({ type, slot = 0, className }: { type: PresetType; slot?: number; className?: string }) {
   return <span className={`preset-combo ${className ?? ''}`}>{type === 'machine' ? <PrinterPicker /> : type === 'process' ? <ProcessPresetPicker /> : <FilamentPicker slot={slot} />}</span>;
 }

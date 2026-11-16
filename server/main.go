@@ -207,6 +207,7 @@ func main() {
 	go func() {
 		defer close(shutdownDone)
 		<-ctx.Done()
+		closeLiveStreams()
 		jobs.Shutdown()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
