@@ -1010,7 +1010,7 @@ func (s *Server) libraryRoutes(mux *http.ServeMux) {
 		e, err := l.read()
 		l.mu.Unlock()
 		if err != nil {
-			libraryFailure(w, 503, "library_unavailable", "Oops! Couldn't read profiles: " + err.Error(), "retry_storage", 0)
+			libraryFailure(w, 503, "library_unavailable", "Oops! Couldn't read profiles: "+storageCause(err), "retry_storage", 0)
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")

@@ -216,7 +216,7 @@ func (s *Server) printerSlotRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/printer-slots", func(w http.ResponseWriter, r *http.Request) {
 		lib, err := s.libraryDocument()
 		if err != nil {
-			fail(w, 503, "profile_library_isnt_available", err.Error())
+			fail(w, 503, "profile_library_isnt_available", storageCause(err))
 			return
 		}
 		out := map[string]*printerSlots{}
@@ -235,7 +235,7 @@ func (s *Server) printerSlotRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/printer-slots/{printer}", func(w http.ResponseWriter, r *http.Request) {
 		lib, err := s.libraryDocument()
 		if err != nil {
-			fail(w, 503, "profile_library_isnt_available", err.Error())
+			fail(w, 503, "profile_library_isnt_available", storageCause(err))
 			return
 		}
 		slots, err := s.printerSlotsFor(r.PathValue("printer"), lib)
@@ -249,7 +249,7 @@ func (s *Server) printerSlotRoutes(mux *http.ServeMux) {
 		key, slot := r.PathValue("printer"), r.PathValue("slot")
 		lib, err := s.libraryDocument()
 		if err != nil {
-			fail(w, 503, "profile_library_isnt_available", err.Error())
+			fail(w, 503, "profile_library_isnt_available", storageCause(err))
 			return
 		}
 		if f := lib.Filament(filament); filament != "" && (f == nil || !f.Live()) {

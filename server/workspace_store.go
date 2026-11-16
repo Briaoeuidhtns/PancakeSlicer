@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"maps"
 	"math"
@@ -457,10 +458,18 @@ func (st *workspaceStore) locked(w http.ResponseWriter, fn func(*workspaceData))
 }
 
 func storageCause(err error) string {
-	if errors.Is(err, syscall.ENOSPC) {
+	log.Printf("storage: %v", err)
+	switch {
+	case errors.Is(err, syscall.ENOSPC):
 		return "the disk is full: no space left on device"
+	case errors.Is(err, syscall.EROFS):
+		return "the storage is read-only"
+	case errors.Is(err, fs.ErrPermission):
+		return "permission denied"
+	case errors.Is(err, fs.ErrNotExist):
+		return "a stored file is missing"
 	}
-	return err.Error()
+	return "a storage error; the service log has the details"
 }
 
 func (st *workspaceStore) view(w http.ResponseWriter, fn func(*workspaceData)) {
@@ -971,7 +980,7 @@ func (st *workspaceStore) putAsset(w http.ResponseWriter, r *http.Request) {
 	}
 	f, err := os.CreateTemp(dir, ".asset-*")
 	if err != nil {
-		workspaceFailure(w, 507, "asset_write_failed", err.Error(), "free_storage_and_retry", 0)
+		workspaceFailure(w, 507, "asset_write_failed", "Oops, couldn't store that file ("+storageCause(err)+").", "free_storage_and_retry", 0)
 		return
 	}
 	defer os.Remove(f.Name())

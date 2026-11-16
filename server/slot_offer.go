@@ -134,7 +134,7 @@ func (s *Server) postSlotOffer(w http.ResponseWriter, r *http.Request) {
 	}
 	lib, err := s.libraryDocument()
 	if err != nil {
-		fail(w, 503, "profile_library_isnt_available", err.Error())
+		fail(w, 503, "profile_library_isnt_available", storageCause(err))
 		return
 	}
 	writeJSON(w, 200, s.library.catalog.SlotOfferFor(lib, in))
