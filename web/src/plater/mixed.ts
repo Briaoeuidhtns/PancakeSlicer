@@ -22,7 +22,7 @@ export function broken(s: State, m: Mix) {
   return m.components.length < 2 || m.components.some((c) => c < 1 || c > n) || new Set(m.components.map((c) => filamentType(s, c))).size > 1;
 }
 
-function remapAll(st: State, map: number[], kept?: number[]): Partial<State> {
+export function remapAll(st: State, map: number[]): Partial<State> {
   const each = (os: PlateObject[]) => os.map((o) => remapObject(o, map));
   const events = (es: State['events']) => es.flatMap((e) => (e.type !== 'change' ? [e] : map[Number(e.text) - 1] ? [{ ...e, text: String(map[Number(e.text) - 1]) }] : []));
   return {

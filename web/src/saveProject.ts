@@ -30,7 +30,8 @@ export async function saveProject(as = false) {
   const first = s.objects[0] ?? s.projectPlates.flatMap((p) => p.objects)[0];
   let name = s.projectName ?? (first.name.replace(/\.(stl|obj|3mf)$/i, '') + '.3mf');
   if (as) {
-    const proposed = await promptDialog('Save Project as', name);
+    const proposed = await promptDialog('Save Project as', name, (v) => !v.replace(/\.3mf$/i, '').trim() ? 'Enter a name.'
+      : new TextEncoder().encode(v.replace(/\.3mf$/i, '') + '.3mf').length > 240 ? 'Whoa, that name\'s a bit too long for a file — trim it down a little!' : null);
     if (!proposed) return;
     name = proposed.replace(/\.3mf$/i, '') + '.3mf';
   }

@@ -79,6 +79,10 @@ export async function importObjects(file: File, allowNew = false, sourceUrl?: st
     if (!objects.length) throw new Error(`${file.name}: no 3D meshes found in this file`);
     const choice = await importObjectsDialog(file.name, objects.length, [...new Set(skipped)], allowNew);
     if (!choice || !task.current() || generation !== documentGeneration()) return 0;
+    let project: import('../profiles/library-io').ProjectSettings | null = null, settingsNote: string | null = null;
+    if (choice === 'settings') try { project = await (await import('../profiles/library-io')).decodeProjectSettings(file); }
+    catch (e) { const why = e instanceof Error ? e.message : String(e); settingsNote = /no project settings/i.test(why) ? 'No project settings in this file; its objects were imported.' : `Its settings couldn't be read (${why}); its objects were imported.`; }
+    if (!task.current() || generation !== documentGeneration()) return 0;
     const [{ blobDigest }, { assignBlobKey }] = await Promise.all([import('../api/blobs'), import('../persist/session')]);
     await Promise.all(objects.map(async (o) => {
       o.source = new File([await bakeStl(o)], `${o.name.replace(/\.[^.]+$/, '') || 'object'}.stl`, { type: 'model/stl' });
