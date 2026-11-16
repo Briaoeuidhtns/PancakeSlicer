@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/OrcaSlicer/OrcaSlicer/server/resolve"
 )
 
 type meshPoint [3]float64

@@ -18,7 +18,7 @@ export function start() {
   void startProjects(booted).catch(() => {});
   void booted.finally(() => {
     preloadViews();
-    whenIdle(() => preloadImages(listProfiles('machine').flatMap((e) => printerCover(e.vendor, e.config) ?? [])));
+    whenIdle(() => preloadImages(listProfiles('machine').flatMap((e) => printerCover(e.vendor, {}, e.model) ?? [])));
     whenIdle(() => void printerCatalog().then((vendors) => {
       const s = getState();
       preloadCovers(vendors, ['BBL', resolvePreset(s, 'machine', s.printer).base?.vendor ?? 'BBL']);

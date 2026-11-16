@@ -1,4 +1,5 @@
 import { ProfileLibraryNotice } from './ProfileLibraryNotice';
+import { openSlideOutEditor } from '../navigation';
 import { preloadable } from '../preloadable';
 import { nativeSurfaceSummary } from '../preview/explain-record';
 import { Suspense, useState, type ReactNode } from 'react';
@@ -61,7 +62,7 @@ function FilamentSummary() {
 function RailAction({glyph, label, disabled, onClick}: {glyph: GlyphName; label: string; disabled?: boolean; onClick(): void}) {
   return <button type="button" className="icon-btn rail-act" aria-label={label} disabled={disabled} onClick={onClick}><Glyph name={glyph}/></button>;
 }
-const edit = (type: PresetType, name?: string) => setState({presetUx: {kind: 'presets', type, ...(name ? {name, edit: true} : {})}});
+const edit = (type: PresetType, name?: string) => name && openSlideOutEditor(type, name);
 
 function PrinterSection() {
   const machine = useStore(printerPreset), name = useStore(s => s.printer), ready = useStore(printerReady);
@@ -137,18 +138,11 @@ function SlotMenu() {
 }
 const DETAIL = [['simple', 'Simple'], ['advanced', 'Advanced'], ['develop', 'Expert']] as const;
 type Detail = (typeof DETAIL)[number][0];
-function useViewChoices() {
-  const scope = useStore(s => s.processScope), hasObjects = useStore(s => !!s.objects.length);
-  const mode = useStore(effectiveMode), detail: Detail = mode === 'developer' ? 'develop' : mode;
-  const setScope = (v: 'global' | 'objects') => setState(s => ({processScope: v, selected: v === 'objects' ? s.selected ?? (s.objects[0] ? {object: s.objects[0].id, instance: s.objects[0].instances[0].id} : null) : s.selected}));
-  const setDetail = (id: Detail) => { savePreferences({'orca.settings_detail': id, 'orca.developer_mode': '0'}); setState({uiMode: id, developerMode: false}); };
-  const scopeItems: MenuEntry[] = [{label: 'Project', role: 'menuitemradio', checked: scope === 'global', action: () => setScope('global')}, {label: 'Objects', role: 'menuitemradio', checked: scope === 'objects', action: () => setScope('objects')}];
-  const detailItems: MenuEntry[] = DETAIL.map(([id, text]) => ({label: text, role: 'menuitemradio', checked: id === detail, action: () => setDetail(id)}));
-  const objects = hasObjects && scope === 'objects';
-  return {hasObjects, objects, detailLabel: DETAIL.find(([id]) => id === detail)?.[1] ?? 'Simple', scopeItems, detailItems};
-}
 function ViewChoices() {
-  const v = useViewChoices();
+  const mode = useStore(effectiveMode), detail: Detail = mode === 'developer' ? 'develop' : mode;
+  const setDetail = (id: Detail) => { savePreferences({'orca.settings_detail': id, 'orca.developer_mode': '0'}); setState({uiMode: id, developerMode: false}); };
+  const items: MenuEntry[] = DETAIL.map(([id, text]) => ({label: text, role: 'menuitemradio', checked: id === detail, action: () => setDetail(id)}));
+  const label = DETAIL.find(([id]) => id === detail)?.[1] ?? 'Simple';
   return <>
     <span className="rail-menus"><MenuButton className="rail-menu" label={`Settings detail: ${label}`} items={items}>{label}<Caret/></MenuButton></span>
     <MenuButton className="icon-btn rail-act rail-menus-folded" label="View options" items={[{label: 'Detail', header: true}, ...items]}><Glyph name="view"/></MenuButton>
@@ -173,14 +167,10 @@ export function Sidebar() {
     <ProfileLibraryNotice/>
     <PrinterSection/>
     {ready && <>
-      <FilamentSection/>
-      <RailSection title="Print settings" summary={processName} className="process-section" meta={!objects && <ChangesMark type="process"/>} actions={<><ViewChoices/>{!objects && <><RailAction glyph="edit" label="Edit print settings" disabled={!process} onClick={() => edit('process', process)}/><PresetActions type="process"/></>}</>}>
-        {objects ? <Suspense fallback={<div className="settings-load" role="status">Loading settings…</div>}><ObjectScope/></Suspense> : <>
-          <div className="rail-row rail-row-wide"><PresetCombo type="process"/></div>
-          <AutoInputs/>
-          {process && <ConflictLine type="process" name={process}/>}
-          <div className="process-panel"><Suspense fallback={<div className="settings-load" role="status">Loading settings…</div>}><SettingsTab type="process" compact hidePreset/></Suspense></div>
-        </>}
+      <RailSection title="Print settings" summary={processName} className="process-section" meta={<ChangesMark type="process"/>} actions={<><ViewChoices/><RailAction glyph="settings" label="Edit print settings" disabled={!process} onClick={() => edit('process', process)}/><PresetActions type="process"/></>}>
+        <div className="rail-row rail-row-wide"><PresetCombo type="process"/></div>
+        <AutoInputs/>
+        <div className="process-panel"><Suspense fallback={<SettingsSkeleton/>}><SettingsTab type="process" compact hidePreset/></Suspense></div>
       </RailSection>
       <SliceSummary/>
     </>}

@@ -8,7 +8,6 @@ import { DEMO, NO_ENGINE } from '../demo/config';
 
 export interface Api {
   mock: boolean;
-  presets(vendor: string, models: string[], update?: (c: PresetCatalog) => void, names?: string[]): Promise<PresetCatalog>;
   submit(req: JobRequest, signal?: AbortSignal, onUpload?: (fraction: number) => void): Promise<string>;
   status(id: string): Promise<JobStatus>;
   events(id: string, on: { progress(e: ProgressEvent): void; done(s: JobStatus): void; error(msg: string, code: string): void; log?(stream: string, line: string): void; result?(s: JobStatus): void }): () => void;
@@ -44,30 +43,6 @@ const refusal = (code: string, message: string) => Object.assign(new Error(messa
 
 const realApi: Api = {
   mock: false,
-  presets(vendor, models, update, names) {
-    const worker = catalogWorker();
-    const id = workerId();
-    return new Promise((resolve, reject) => {
-      let answered = false;
-      const cleanup = () => { worker.removeEventListener('message', on); unsubscribe(); };
-      const fail = (error: Error) => { cleanup(); if (!answered) reject(error); };
-      const on = (e: MessageEvent<CatalogOut>) => {
-        const m = e.data;
-        if (m.id !== id) return;
-        if (m.type === 'catalog') {
-          const catalog = expandCatalog(m.catalog);
-          if (answered) update?.(catalog);
-          else resolve(catalog);
-          answered = true;
-        } else if (m.type === 'done') cleanup();
-        else if (m.type === 'error') fail(new Error(m.message));
-      };
-      const unsubscribe = onWorkerFailure(fail);
-      worker.addEventListener('message', on);
-      worker.postMessage({ id, vendor, models, ...(names ? { names } : {}), engine: { options: toolFeatures.dump_options === true, presets: toolFeatures.dump_presets === true } } satisfies CatalogIn);
-    });
-  },
-
   async submit(req, signal, onUpload) {
     if (DEMO) throw new Error(NO_ENGINE);
     const fd = new FormData();
@@ -217,7 +192,7 @@ function guardedApi(api: Api): Api {
   return { ...api, async submit(request, signal, onUpload) {
     if (request.output !== '3mf' && !request.force_planar) {
       const objects = [...request.plate?.objects ?? [], ...request.project_edits?.filter((e) => e.op === 'add_object') ?? []];
-      const configs: Config[] = [request.overrides, request.project_settings ?? {},
+      const configs: Config[] = [request.project.machine ?? {}, request.project.process ?? {}, ...request.project.filaments ?? [], request.project_settings ?? {},
         ...request.plate?.plates?.map((p) => p.settings) ?? [],
         ...objects.flatMap((o) => [o.settings ?? {}, ...o.volumes?.map((v) => v.settings ?? {}) ?? [], ...o.ranges?.map((r) => r.settings) ?? []]),
         ...request.project_edits?.flatMap((e) => 'settings' in e ? [e.settings ?? {}] : []) ?? []];

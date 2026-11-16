@@ -27,11 +27,11 @@ export const createProfileSave = () => createMachine<ProfileSaveState, ProfileSa
   states: {
     idle: ready,
     failed: ready,
-    saving: { on: { ...results,
+    saving: { on: { ...results, REMOTE: late,
       SAVED: [{ target: 'idle', guard: mine }, late],
       FAIL: [{ target: 'failed', guard: mine, action: (_, e) => ({ error: e.error }) }, late],
     } },
-    naming: { on: { ...results,
+    naming: { on: { ...results, REMOTE: late,
       TYPE: { action: (_, e) => ({ name: e.value, nameError: null }) },
       COMMIT: [
         { target: 'idle', guard: (_, e) => e.value.trim() === e.current },
@@ -42,7 +42,7 @@ export const createProfileSave = () => createMachine<ProfileSaveState, ProfileSa
       ],
       CANCEL: { target: 'idle', action: () => ({ nameError: null }) },
     } },
-    renaming: { on: { ...results, COMMIT: late,
+    renaming: { on: { ...results, REMOTE: late, COMMIT: late,
       RENAMED: [{ target: 'idle', guard: mine, action: () => ({ nameError: null }) }, late],
       RENAME_FAIL: [{ target: 'naming', guard: mine, action: (_, e) => ({ nameError: e.error }) }, late],
     } },

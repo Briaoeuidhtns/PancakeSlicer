@@ -3,7 +3,6 @@ import react from '@vitejs/plugin-react';
 import { demoBuild } from './demo-build.ts';
 import { bundleReport } from './bundle-report.ts';
 import { optionAssets } from './option-assets.ts';
-import { mockAssets } from './mock-assets.ts';
 import { orcaAssets } from './orca-assets.ts';
 import { licenceNotices } from './licence-notices.ts';
 import { bambuChecks } from './bambu-checks.ts';

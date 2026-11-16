@@ -85,7 +85,7 @@ export default function ContextMenu() {
           { label: 'Convert from meter', action: () => void ops().then((m) => m.convertUnits(o.id, 'meter')), disabled: !editable || !!o.project }]),
       ...(o.volumes?.some((v) => v.type === 'part') ? [{ label: 'Set as individual objects', action: () => void ops().then((m) => m.partsToObjects(o.id)), disabled: !editable || !!o.project,
         tip: 'Turn each part into its own separate object' }] : []),
-      { label: 'Settings', action: () => setState({ processScope: 'objects', selected: { object: o.id, instance: o.instances[0].id, allInstances: true } }), disabled: !!o.project },
+      { label: 'Settings', action: () => setState({ selected: { object: o.id, instance: o.instances[0].id, allInstances: true } }), disabled: !!o.project },
       { label: 'Copy Process Settings', action: () => void ops().then((m) => m.copySettings(o.id)), disabled: !!o.project, tip: 'Copy Process Settings' },
       { label: 'Paste Process Settings', action: () => void ops().then((m) => m.pasteSettings([{ object: o.id }])), disabled: s.settingsClipboard?.kind !== 'object' || !!o.project, tip: 'Paste Process Settings' },
       { label: 'Replace 3D file...', action: () => void ops().then((m) => m.replaceFile(o.id)), disabled: !editable || !!o.project, tip: 'Replace the object\'s mesh with another file' },

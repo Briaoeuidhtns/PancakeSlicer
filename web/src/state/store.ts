@@ -1,4 +1,5 @@
-import { observePreference, preferenceJson, preferenceText } from '../saved-preferences';
+import { observePreference, preferenceText } from '../saved-preferences';
+import { emptyLibrary, type LibraryRecords } from '../profiles/records';
 import { timeInteraction } from '../interaction-metrics';
 import { app } from '../flow/app';
 import { tools } from '../flow/tools';
@@ -20,9 +21,9 @@ import { planPrinterSwitch } from '../profiles/material-library';
 import { findProfile,profileKey } from '../profiles/identity';
 import type { PrinterConnections } from '../printers/connections';
 export { PRESET_META } from '../profiles/model';
-import { effectiveProfileValues, resolvedWithAuto } from '../profiles/context';
-import { selectCompatibility } from '../profiles/compatibility';
-export { isCompatible, selectCompatibility } from '../profiles/compatibility';
+import { resolvedProfile, selectionValues, type ProfileBase } from '../profiles/view';
+import { slotFilaments } from '../profiles/slots';
+export { selectCompatibility } from '../profiles/compatibility';
 
 
 export interface Instance {
@@ -127,13 +128,12 @@ export interface HeadInfo {
   user?: boolean;
 }
 
-export type PresetUx =
-  | { kind: 'compare'; type: PresetType; left?: string; right?: string }
-  | { kind: 'presets'; type: PresetType; name?: string; edit?: boolean;add?: boolean;stage?:import('../profiles/project-draft').ProjectProfileChanges }
-  | { kind: 'export' }
-  | { kind: 'import'; back?: PresetUx };
+export type PresetUx = { kind: 'export' } | { kind: 'import' };
+export interface LibraryTarget { type: PresetType; name?: string; edit?: boolean; add?: boolean; compare?: string;
+  stage?: import('../profiles/project-draft').ProfileSave; at: number }
 
-export type MainTab = 'projects' | 'prepare' | 'preview' | 'device';
+export interface SlideOutTarget { type: PresetType; key: string; setting?: string; at: number }
+export type MainTab = 'projects' | 'prepare' | 'preview' | 'device' | 'library';
 export type CalibMenu = 'temperature' | 'max-flowrate' | 'pressure-advance' | 'flow-ratio' | 'retraction' | 'cornering' | 'input-shaping-freq' | 'input-shaping-damp' | 'vfa' | 'nonplanar';
 export type Gizmo = 'none' | 'move' | 'rotate' | 'scale' | 'flatten' | 'cut' | 'slant' | 'measure' | 'layers' | 'brimears' | 'boolean' | 'text' | 'svg' | PaintKind;
 
@@ -197,20 +197,19 @@ export interface State {
   cut: CutPlane | null;
   slant: SlantEdit | null;
   loading: string | null;
-  machines: SystemPreset[];
-  processes: SystemPreset[];
-  filaments: SystemPreset[];
-  userPresets: UserPreset[];
+  records: LibraryRecords;
   profileLibraryLoad: {state: 'loading'} | {state: 'ready'} | {state: 'failed'; error: string};
-  printerLibrary: PrinterProfileLibrary;
+  libraryHealth: import('../persist/profile-library').LibraryHealth;
+  resolved: import('../flow/resolved').ResolvedView;
+  resolveAsks: import('../flow/resolved').ProfileAsk[];
+  catalogReads: number;
   profileLibraryRevision: number;
   projectProfileContexts: Record<string,{projectPresets:State['projectPresets'];profileSnapshots:ProjectProfileReferences|null;process:string;dirty:State['dirty']}>;
-  lastProfileTransition: ProfileTransitionSummary|null;
   profileSnapshots: ProjectProfileReferences | null;
   profileRecoveries: ProfileRecovery[];
   printer: string;
   process: string;
-  filamentSlots: string[];
+  libraryDrafts: Record<string, import('../profiles/ProfileEditor').ProfileDraft>;
   dirty: Record<'machine' | 'process', Config>;
   filamentEdits: Record<string, Config>;
   projectPresets: { machine: Config; process: Config; filaments: Config[] } | null;
@@ -229,14 +228,10 @@ export interface State {
   renaming: number | null;
   meshErrors: Record<number, number>;
   clipboard: PlateObject[];
-  processScope: 'global' | 'objects';
-  slotColours: (string | undefined)[];
-  mixes: Record<number, Mix>;
   processVariant: { layerHeight: number } | null;
   projectMaterials: { colours: string[]; matrix: number[] | null; multiplier: number | null; builds?: { object: number; instance: number }[] } | null;
   flushDialog: boolean;
-  appDialog: 'about' | 'preferences' | 'shortcuts' | 'send' | 'setup' | 'plate' | 'clone' | 'simplify' | 'filaments' | 'objectTable' | 'createPrinter' | 'mixed' | 'what' | null;
-  filamentsToUse: string[] | null;
+  appDialog: 'about' | 'preferences' | 'shortcuts' | 'send' | 'setup' | 'plate' | 'clone' | 'simplify' | 'objectTable' | 'createPrinter' | 'mixed' | 'what' | null;
   calibDialog: CalibMenu | null;
   printerConnections: PrinterConnections;
   events: LayerEvent[];
@@ -255,6 +250,9 @@ export interface State {
   recommendedStyle: Record<number, 'standard'>;
   heads: HeadInfo[] | null;
   presetUx: PresetUx | null;
+  library: LibraryTarget;
+  slideOut: SlideOutTarget | null;
+  device: { printer: string; at: number };
   settingsFocus: { type: PresetType; page: string; key: string; nonce: number } | null;
   sessionDialog: 'recent' | null;
   orientPrompts: Record<number, OrientPrompt>;
@@ -295,20 +293,19 @@ let state: State = {
   cut: null,
   slant: null,
   loading: 'Connecting',
-  machines: [],
-  processes: [],
-  filaments: [],
-  userPresets: [],
+  records: emptyLibrary(),
   profileLibraryLoad: {state: 'loading'},
-  printerLibrary: emptyPrinterLibrary(),
+  libraryHealth: { problems: {}, notices: [] },
+  resolved: { state: 'idle', answer: null, answeredFor: null, error: null },
+  resolveAsks: [],
+  catalogReads: 0,
   profileLibraryRevision: 0,
   projectProfileContexts: {},
-  lastProfileTransition: null,
   profileSnapshots: null,
   profileRecoveries: [],
   printer: '',
   process: '',
-  filamentSlots: [],
+  libraryDrafts: {},
   dirty: { machine: {}, process: {} },
   filamentEdits: {},
   projectPresets: null,
@@ -317,7 +314,6 @@ let state: State = {
   projectSlots: null,
   uiMode: 'simple',
   developerMode: false,
-  filamentsToUse: null,
   mixedTemperatures: false,
   tab: 'prepare',
   dialog: null,
@@ -329,9 +325,7 @@ let state: State = {
   renaming: null,
   meshErrors: {},
   clipboard: [],
-  processScope: 'global',
-  slotColours: [],
-  mixes: {},
+  
   processVariant: null,
   projectMaterials: null,
   flushDialog: false,
@@ -354,6 +348,9 @@ let state: State = {
   recommendedStyle: {},
   heads: null,
   presetUx: null,
+  library: { type: 'machine', at: 0 },
+  slideOut: null,
+  device: { printer: '', at: 0 },
   settingsFocus: null,
   sessionDialog: null,
 };
@@ -398,83 +395,41 @@ export const reserveIds = (max: number) => { nextId = Math.max(nextId, max + 1);
 export const DEMO_MODELS = ['Bambu Lab A1 mini', 'Bambu Lab A1', 'Bambu Lab P1S', 'Prusa MINI', 'Prusa MINI IS', 'Prodcan3 5-axis BC table', 'Fairino FR3 cell'];
 export const DEFAULT_PRINTER = 'Bambu Lab A1 mini 0.4 nozzle';
 
-export function listFor(s: State, type: PresetType): SystemPreset[] {
-  return type === 'machine' ? s.machines : type === 'process' ? s.processes : s.filaments;
-}
 
-const resolvedCatalogs = new WeakMap<SystemPreset[], WeakMap<UserPreset[], Map<string, ReturnType<typeof resolveProfile>>>>();
-export function resolvePreset(s: Parameters<typeof resolveProfile>[0], type: PresetType, name: string) {
-  const catalog = type === 'machine' ? s.machines : type === 'process' ? s.processes : s.filaments;
-  let users = resolvedCatalogs.get(catalog);
-  if (!users) resolvedCatalogs.set(catalog, (users = new WeakMap()));
-  let values = users.get(s.userPresets);
-  if (!values) users.set(s.userPresets, (values = new Map()));
-  const key = `${type}:${name}`;
-  let result = values.get(key);
-  if (!result) values.set(key, (result = resolveProfile(s, type, name)));
-  return 'printer' in s ? resolvedWithAuto(s as State, type, result) : result;
-}
-
-const profileConflictRows = new WeakMap<State, Map<string, ReturnType<typeof profileConflicts>>>();
-export function selectProfileConflicts(s: State, type: PresetType, name?: string) {
-  let cache = profileConflictRows.get(s);
-  if (!cache) profileConflictRows.set(s, (cache = new Map()));
-  const selected = name ?? (type === 'machine' ? s.printer : type === 'process' ? s.process : s.filamentSlots[0] ?? '');
-  const key = `${type}\0${selected}`;
-  if (!cache.has(key)) cache.set(key, profileConflicts(s, type, selected));
-  return cache.get(key)!;
-}
-
-export async function resolveProfileConflict(type: PresetType, name: string, key: string, choice: 'mine' | 'theirs') {
-  const s = getState(), preset = decideConflict(s, type, name, key, choice);
-  if(!preset)throw new Error('That edit conflict has already been resolved—reload the profile to see the latest version.');
-  const {commitProfileRecords}=await import('../profiles/transactions');
-  await commitProfileRecords([{...preset,revision:(preset.revision ?? 0)+1}]);
-}
+export function resolvePreset(s: State, type: PresetType, key: string) { return resolvedProfile(s, type, key); }
 
 export function effectiveConfig(s: State, type: PresetType, slot = 0): Config {
-  const key = type === 'machine' ? s.printer : type === 'process' ? s.process : s.filamentSlots[slot] ?? '';
-  return effectiveProfileValues(s,type,key,slot);
+  return selectionValues(s, type, slot).values;
 }
 
-export function compatible(s: State, type: 'process' | 'filament', printer = s.printer, process = s.process): SystemPreset[] {
-  return listFor(s,type).filter(p => selectCompatibility({...s,process},type,p.name,printer).ok);
-}
 
-const printerCache = new WeakMap<SystemPreset, WeakMap<Config, SystemPreset>>();
-export function printerPreset(s: State): SystemPreset | undefined {
+export interface PrinterPreset extends ProfileBase { config: Config }
+const printerCache = new WeakMap<ProfileBase, WeakMap<Config, PrinterPreset>>();
+export function printerPreset(s: State): PrinterPreset | undefined {
   const { base } = resolvePreset(s, 'machine', s.printer);
   if (!base) return undefined;
   const config = effectiveConfig(s, 'machine');
   let configs = printerCache.get(base);
   if (!configs) printerCache.set(base, (configs = new WeakMap()));
-  const cached = configs.get(config);
-  if (cached) return cached;
-  const preset = { ...base, config };
-  configs.set(config, preset);
+  let preset = configs.get(config);
+  if (!preset) configs.set(config, (preset = { ...base, config }));
   return preset;
 }
 
-export function filamentVariant(s: State, name: string, printer = s.printer, process = s.process): string | undefined {
-  return selectCompatibility({...s,process},'filament',name,printer).ok ? name : undefined;
-}
 
-export function filamentSwitchReason(s: State, slot: number): string | null {
-  const name = s.filamentSlots[slot];
-  return name && !filamentVariant(s, name) ? 'Not supported on this printer' : null;
-}
 
 export function selectPrinter(name: string) {
   const initial=getState();
   if(initial.profileLibraryLoad.state!=='ready')throw new Error('Wait for your profile library to finish loading before switching printers (your current setup is safe!).');
   const target=findProfile(initial,'machine',name);
-  if(!target || target.archived || target.kind==='master')throw new Error('Add this printer template to your library first so you can customize and use it.');
+  if(!target || target.archived)throw new Error('Add this printer template to your library first so you can customize and use it.');
   setState(s=>{
     const key=profileKey(target),setup=planPrinterSwitch(s,key);
     const next={...s,...setup,profileRecoveries:setup.recoveries,profileSnapshots:null,
       dirty:{machine:{},process:s.dirty.process},job:markStale(s.job)};
     return next;
   });
+  void import('../profiles/printer-setups').then(m=>m.saveSelectionStrip());
 }
 
 const markStale = (job: JobView): JobView => (job.state === 'done' ? { ...job, stale: true } : job);
@@ -720,5 +675,4 @@ export function removeVolumeOptions(objectId: number, volumeId: number, keys: st
 
 observePreference('orca.settings_detail', () => { const mode = preferenceText('orca.settings_detail'); setState({uiMode: mode === 'advanced' || mode === 'develop' ? mode : 'simple'}); });
 observePreference('orca.developer_mode', () => setState({developerMode: preferenceText('orca.developer_mode') === '1'}));
-observePreference('orca.web.filamentsToUse', () => { const value = preferenceJson<unknown>('orca.web.filamentsToUse', null); setState({filamentsToUse: Array.isArray(value) ? value.filter((key): key is string=>typeof key === 'string') : null}); });
 observePreference('orca.enable_high_low_temp_mixed_printing', () => { const next = preferenceText('orca.enable_high_low_temp_mixed_printing') === '1'; if (next !== getState().mixedTemperatures) setState(s=>({mixedTemperatures:next,job:markStale(s.job)})); });

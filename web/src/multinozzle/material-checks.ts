@@ -1,5 +1,4 @@
 import { filamentIds, hardness, modelIds, rules, type MaterialRule } from 'virtual:bambu-checks';
-import type { Config } from '../api/types';
 import type { PrinterStatus, Tray } from '../printers/connections';
 import { extruderLabel } from './config';
 import type { PrinterRecord } from '../profiles/records';

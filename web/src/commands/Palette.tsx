@@ -27,7 +27,8 @@ registerProvider('presets', (q) => {
     id: `preset.${type}.${slot}.${name}`, title: name, group, detail: name === current ? 'Current' : undefined,
     keywords: type === 'machine' ? 'printer machine' : type, run: () => requestPreset(type, slot, name),
   });
-  const users = (t: string) => s.userPresets.filter((u) => u.type === t).map((u) => u.name);
+  const lists = { machine: s.records.printers, process: s.records.processes, filament: s.records.filaments } as const;
+  const users = (t: string) => (lists[t as keyof typeof lists] ?? []).filter((u) => !u.archived).map((u) => u.name);
   return [
     ...users('machine').map((n) => row('machine', 'Printer', n, s.printer)),
     ...users('process').map((n) => row('process', 'Process', n, s.process)),

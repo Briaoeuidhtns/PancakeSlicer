@@ -152,6 +152,8 @@ export function ExportDialog() {
               onCheckedChange={(checked) => { const next = new Set(picked); if (checked) next.add(c); else next.delete(c); setPicked(next); }} /><span data-full-text={c}>{c}</span></label>
           ))}</div>
         </div>}
+        {busy && <div role="status">Exporting…</div>}
+        {error && <p className="modal-error" role="alert">{error}</p>}
       </ModalBody>
       <ModalFooter lead={choices.length > 0 && `${selected.length} of ${choices.length}`}>
         <button type="button" className="btn" onClick={close}>Cancel</button>

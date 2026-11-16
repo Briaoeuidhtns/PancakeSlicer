@@ -4,10 +4,10 @@ import { createMachine, type StateNode } from './fsm';
 
 export type WindowOp = 'adding' | 'copying' | 'exporting' | 'deleting' | 'editor-saving';
 export type WindowOpsState = 'idle' | WindowOp;
-export interface CopyRequest { source: UserPreset; name: string; creation: ProfileCreation; error?: string }
+export interface CopyRequest { source: LibraryProfile; name: string; creation: ProfileCreation; error?: string }
 interface WindowOpsContext { copy: CopyRequest | null }
 type WindowOpsEvent = { type: 'BEGIN'; op: WindowOp } | { type: 'END'; op: WindowOp }
-  | { type: 'COPY'; source: UserPreset; name: string; creation: ProfileCreation } | { type: 'COPY_FAILED'; error: string }
+  | { type: 'COPY'; source: LibraryProfile; name: string; creation: ProfileCreation } | { type: 'COPY_FAILED'; error: string }
   | { type: 'COPY_DONE' } | { type: 'DISCARD' };
 type Node = StateNode<WindowOpsState, WindowOpsEvent, WindowOpsContext>;
 

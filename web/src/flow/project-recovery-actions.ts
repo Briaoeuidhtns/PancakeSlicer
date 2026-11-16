@@ -12,7 +12,6 @@ import { project, projectList, flushProject, writeProjectRoute, type ProjectDraf
 import { writeRoute } from './routes';
 import { checkpointCommitted, conflictFailure, draftConflictFailure, failureError, projectFailure, TRASHED, recoveryDocument, type DraftCheckpoint, type ProjectFailure, type CheckpointDocument, RECOVERED_MESSAGE } from './project-recovery';
 export interface RecoveryRuntime {
-  ensureCatalogs(document: StoredDoc, isCurrent: () => boolean): Promise<void>;
   storage(): ProjectStore | null; removed: Set<string>;
   checkpoint(): { checkpoint: DraftCheckpoint; durable: Promise<ProjectDraft> };
   hasUnsaved(): boolean; waitForWrites(): Promise<void>;
@@ -34,7 +33,6 @@ async function documentOffer(document: StoredDoc): Promise<() => void> {
 }
 export async function adoptProjectDraft(runtime: RecoveryRuntime, draft: ProjectDraft, canonical: ProjectMeta | null, mine: number, { offer = false } = {}) {
   const document = recoveryDocument(draft.doc) as StoredDoc;
-  await runtime.ensureCatalogs(document, () => runtime.isCurrent(mine));
   if (!runtime.isCurrent(mine)) return;
   const offered = documentOffer(document);
   const storage = await runtime.drafts();
@@ -58,7 +56,6 @@ export async function adoptProjectDraft(runtime: RecoveryRuntime, draft: Project
   });
   runtime.setRestored(draft); runtime.resetCaptured(); runtime.restoreEditedAt(editedOf(draft));
   project.send({ type: 'RECOVERED', meta, draft, failure, baseObjects: canonical ? canonical.objects ?? -1 : draft.baseRevision > 0 ? -1 : 0 });
-  keepCompatible();
   if (!offer) runtime.checkpointRecovered(draft.projectId, draft.baseRevision, failure);
   writeProjectRoute(true);
 }
@@ -163,7 +160,6 @@ export async function openProject(runtime: RecoveryRuntime, id: string, options:
     if (loadError) throw loadError;
     if (!rec || runtime.removed.has(rec.meta.id)) { project.send({ type: 'MISSING', id }); return; }
     const document = recoveryDocument(rec.doc) as StoredDoc;
-    await runtime.ensureCatalogs(document, () => runtime.isCurrent(mine));
     if (!runtime.isCurrent(mine)) return;
     const offered = documentOffer(document);
     const fields = await (await codec()).decode(document, (k) => runtime.storage()!.getBlob(rec.meta.id, k));
@@ -181,8 +177,7 @@ export async function openProject(runtime: RecoveryRuntime, id: string, options:
     });
     runtime.setRestored(null); runtime.resetCaptured(); savedVersionBase(rec.meta.id, snapshot());
     project.send({ type: 'OPENED', meta: rec.meta });
-    keepCompatible();
-    writeRoute(`/p/${rec.meta.id}`, true);
+      writeRoute(`/p/${rec.meta.id}`, true);
   } catch (error) {
     if (!runtime.isCurrent(mine)) return;
     const failure = projectFailure(error, id, project.get().context.revision, true);
@@ -196,7 +191,6 @@ export async function viewProjectVersion(runtime: RecoveryRuntime, id: string, r
   await flushProject();
   if (!runtime.isCurrent(mine) || project.get().context.id !== id) return false;
   const document = recoveryDocument(record.doc) as StoredDoc;
-  await runtime.ensureCatalogs(document, () => runtime.isCurrent(mine));
   if (!runtime.isCurrent(mine)) return false;
   const offered = documentOffer(document);
   const fields = await (await codec()).decode(document, (k) => runtime.storage()!.getBlob(id, k));

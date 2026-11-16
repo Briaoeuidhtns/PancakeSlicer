@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/OrcaSlicer/OrcaSlicer/server/resolve"
 )
 
 type slotTray struct {
@@ -154,93 +156,7 @@ func earlierChoice(lib *resolve.Library, spools map[string]spoolChoice, spool *s
 	return nil
 }
 
-var bambuIDs struct {
-	once sync.Once
-	ids  map[string]string
-	err  error
-}
-
-func bambuFilamentIDs(resources string) (map[string]string, error) {
-	bambuIDs.once.Do(func() {
-		var file struct {
-			Filaments map[string]struct {
-				BambuID string `json:"bambu_id"`
-			} `json:"filaments"`
-		}
-		b, err := os.ReadFile(filepath.Join(resources, "printers", "bambu_filament_ids.json"))
-		if err == nil {
-			err = json.Unmarshal(b, &file)
-		}
-		bambuIDs.ids, bambuIDs.err = map[string]string{}, err
-		for id, row := range file.Filaments {
-			bambuIDs.ids[id] = row.BambuID
-		}
-	})
-	return bambuIDs.ids, bambuIDs.err
-}
-
-const sameColour = 15.0
-
-func matchTray(t AMSTray, units int, mine []libraryFilament, chosen map[string]slotChoice, spools map[string]spoolChoice, vendor *VendorPresets, machine *Preset) slotMatch {
-	m := slotMatch{Slot: slotID(t), Label: slotLabel(t, units), Tray: slotTray{Type: t.Type, Colour: t.Color, Name: t.Name, FilamentID: t.FilamentID}, Remaining: t.Remaining}
-	if t.Spool != "" {
-		spool := t.Spool
-		m.Spool = &spool
-	}
-	if m.Remaining != nil && *m.Remaining < 0 {
-		m.Remaining = nil
-	}
-	byKey := map[string]*libraryFilament{}
-	for i := range mine {
-		byKey[mine[i].key] = &mine[i]
-	}
-	use := func(f *libraryFilament, rule string) slotMatch {
-		key := f.key
-		m.Filament, m.Name, m.Rule, m.Colour = &key, f.name, rule, f.colour
-		return m
-	}
-	if c, ok := spools[t.Spool]; ok && t.Spool != "" && byKey[c.Filament] != nil {
-		return use(byKey[c.Filament], "spool")
-	}
-	if c, ok := chosen[m.Slot]; ok && byKey[c.Filament] != nil && strings.EqualFold(c.Type, t.Type) && colourDistance(c.Colour, t.Color) < sameColour {
-		return use(byKey[c.Filament], "remembered")
-	}
-	if t.FilamentID != "" {
-		var exact []libraryFilament
-		for _, f := range mine {
-			if f.id != "" && f.id == t.FilamentID {
-				exact = append(exact, f)
-			}
-		}
-		if f := nearest(exact, t.Color); f != nil {
-			return use(f, "exact")
-		}
-	}
-	var typed, worded []libraryFilament
-	for _, f := range mine {
-		exact, word := sameType(f.typ, t.Type)
-		if exact {
-			typed = append(typed, f)
-		} else if word {
-			worded = append(worded, f)
-		}
-	}
-	if f := nearest(typed, t.Color); f != nil {
-		return use(f, "type")
-	}
-	if f := nearest(worded, t.Color); f != nil {
-		return use(f, "type")
-	}
-	m.Rule = "generic"
-	if g := genericFor(vendor, machine, t.Type); g != nil {
-		m.Catalog, m.Name, m.Colour = g.Name, filamentFamilyOf(g.Name), firstString(g.Config["filament_colour"])
-	} else {
-		m.Name = strings.TrimSpace("Generic " + t.Type)
-	}
-	return m
-}
-
-func (s *Server) printerSlotsFor(key string, profiles map[string]*v4Record) (*printerSlots, error) {
+func (s *Server) printerSlotsFor(key string, lib *resolve.Library) (*printerSlots, error) {
 	st, ok := s.sends.hub.current(key)
 	s.filamentSlots.mu.Lock()
 	defer s.filamentSlots.mu.Unlock()

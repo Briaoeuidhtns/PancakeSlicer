@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
-import type { SystemPreset } from '../api/types';
 import { requestPreset } from '../components/PresetCombo';
 import { Glyph } from '../components/Glyph';
 import { getState, setState, toast, useStore, type State } from '../state/store';
@@ -238,8 +237,7 @@ function Filaments({ error }: { error: string | null }) {
         </div>
         <label className="setup-check setup-all"><Check checked={picked === 0 ? false : picked === shown.length ? true : 'indeterminate'} disabled={!shown.length}
           onCheckedChange={() => setMany(shown.map((r) => r.key), picked < shown.length)} /><span>Select all shown</span><span className="setup-n">{shown.length}</span></label>
-        <div className="setup-grid">{shown.filter((r) => r.tuned).map(item)}
-          {!!other.length && <h3 className="setup-sub">Other {model?.vendorName ?? ''} filaments</h3>}{other.map(item)}
+        <div className="setup-grid">{shown.map(item)}
           {!shown.length && <span className="setup-count">{data ? 'No filaments match' : 'Loading filaments…'}</span>}</div>
       </section>
     </div>

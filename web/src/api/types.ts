@@ -1,4 +1,3 @@
-import type { ProfileBaseAnchor, ProfileOwnership } from '../profiles/ownership';
 import type { ProjectEdit } from '../plater/projectTransforms';
 
 export type PresetType = 'machine' | 'process' | 'filament';
@@ -50,7 +49,7 @@ export interface ProjectValues { machine?: Config; process?: Config; filaments?:
 export interface JobRequest {
   library: JobLibrary;
   files: { name: string; blob: Blob }[];
-  overrides: Config;
+  project: ProjectValues;
   plate?: PlateJson;
   plate_index?: number;
   project_instances?: { printable: boolean; transform?: number[] }[];

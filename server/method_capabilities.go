@@ -167,12 +167,12 @@ func methodSelection(config map[string]any, decisions []methodDecision) *methodP
 	}
 	return nil
 }
-func (s *Server) validateJobMethods(j *Job, req JobRequest, vendor *VendorPresets) *methodProblem {
+func (s *Server) validateJobMethods(j *Job, req JobRequest, presets *jobPresets) *methodProblem {
 	if req.Output == "3mf" || overlayOutput(req.Output) || req.Orient || req.Arrange || req.WipeTower || req.Explode || req.Cut != "" || req.MeshOp != "" {
 		return nil
 	}
-	printer := decodeMethodConfig(vendor.machines[req.Printer].Config)
-	config := decodeMethodConfig(vendor.processes[req.Process].Config)
+	printer := decodeMethodConfig(presets.machine.Config)
+	config := decodeMethodConfig(presets.process.Config)
 	var projectScopes []map[string]any
 	if !req.Plate && len(req.Files) > 0 && strings.EqualFold(filepath.Ext(req.Files[0]), ".3mf") {
 		saved, scopes, err := savedProjectMethods(filepath.Join(j.Dir, "input", req.Files[0]))

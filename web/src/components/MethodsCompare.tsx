@@ -1,4 +1,5 @@
 import { cancelMethods, closeMethods, keepMethod, useMethods, viewMethod, type MethodRun } from '../methods';
+import { SEP } from '../separator';
 import { curvedTopPercent, objectResults, readRecord } from '../preview/explain-record';
 import { spacedTime } from '../preview/format';
 import { useStore } from '../state/store';

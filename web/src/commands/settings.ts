@@ -109,7 +109,7 @@ function hiddenBySettings(entry: Entry, tab: TabDesc['tab']): string | undefined
 function reveal(entry: Entry) {
   const s = getState();
   const patch: Parameters<typeof setState>[0] = { presetUx: null };
-  if (entry.type === 'process') Object.assign(patch, { dialog: null, tab: 'prepare', processScope: 'global' });
+  if (entry.type === 'process') Object.assign(patch, { dialog: null, tab: 'prepare' });
   else if (s.dialog?.type !== entry.type) patch.dialog = { type: entry.type, slot: 0 };
   setState({ ...patch, settingsFocus: { type: entry.type, page: entry.page, key: entry.key, nonce: Date.now() } });
 }

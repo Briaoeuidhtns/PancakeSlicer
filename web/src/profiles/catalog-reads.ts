@@ -3,8 +3,6 @@ import type { CatalogList, CatalogPrinterEntry } from '../catalog/types';
 
 export type CatalogModel = CatalogPrinterEntry;
 export interface CatalogVendor { id: string; name: string; models: CatalogModel[] }
-export interface CatalogFamily { id: string; name: string; brand?: string; material?: string; colour?: string; models: string[]; variants: Record<string, string>; fallback?: string }
-export type CatalogRead = { vendors: CatalogVendor[] } | { families: CatalogFamily[] };
 
 const grouped = new WeakMap<CatalogList, CatalogVendor[]>();
 export function printerVendors(list: CatalogList): CatalogVendor[] {

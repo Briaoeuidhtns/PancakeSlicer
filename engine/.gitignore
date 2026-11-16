@@ -41,6 +41,8 @@ src/OrcaSlicer-doc/
 **/.flatpak-builder/
 *.no-debug.yml
 resources/profiles/user/default
+# Built by nonplanar_slice_tool --flatten-catalog (scripts/webapp/build_all.sh).
+resources/catalog/
 *.code-workspace
 deps_src/build/
 test.js

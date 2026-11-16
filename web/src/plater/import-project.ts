@@ -4,7 +4,8 @@ import { plateLabel, plateSetup } from '../profiles/plate-setup';
 import type * as THREE from 'three';
 import type { PlateObject, State } from '../state/store';
 import type { ProjectItem } from './threemf';
-import { markStale, newId, setState, toast } from '../state/store';
+import { archivePainting } from './paint';
+import { getState, markStale, newId, selectPrinter, setState, toast } from '../state/store';
 import { documentGeneration, undoable } from '../state/history';
 import { beginBusy } from '../state/busy';
 import { importing } from '../flow/import';
@@ -83,7 +84,8 @@ export async function importObjects(file: File, allowNew = false, sourceUrl?: st
     busy.end();
     if (!task.current()) return 0;
     if (!objects.length) throw new Error(`${file.name}: no 3D meshes found in this file`);
-    const choice = await importObjectsDialog(file.name, objects.length, [...new Set(skipped)], allowNew);
+    const hasSettings = skipped.includes('settings');
+    const choice = await importObjectsDialog(file.name, objects.length, [...new Set(skipped.filter((s) => s !== 'settings' || !hasSettings))], allowNew, hasSettings);
     if (!choice || !task.current() || generation !== documentGeneration()) return 0;
     let project: import('../profiles/library-io').ProjectSettings | null = null, settingsNote: string | null = null;
     if (choice === 'settings') try { project = await (await import('../profiles/library-io')).decodeProjectSettings(file); }

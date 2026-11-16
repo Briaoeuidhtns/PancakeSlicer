@@ -1,10 +1,9 @@
 import { useId, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { Popover } from 'radix-ui';
-import type { UserPreset } from '../api/types';
+import type { ProcessRecord } from './records';
 import { getState, useStore } from '../state/store';
 import { Dropdown } from '../components/Dropdown';
 import { Glyph } from '../components/Glyph';
-import { profileKey } from './identity';
 import { addPrintMaster, createPrintProfile, freeName, isAdded, layerRange, usePrintMasters, type PrintMaster } from './print-catalog';
 import '../components/menu.css';
 import './add-print-menu.css';
@@ -26,7 +25,7 @@ export function AddPrintMenu({ open, onOpenChange, anchor, onOpen, onCreated, ch
 }
 
 function AddPrintBody({ close, onOpen, onCreated }: { close(): void; onOpen(key: string): void; onCreated(key: string): void }) {
-  const users = useStore((s) => s.userPresets); useStore((s) => s.printer);
+  const users = useStore((s) => s.records.processes); useStore((s) => s.printer);
   const { data, error } = usePrintMasters(true);
   const [query, setQuery] = useState(''), [active, setActive] = useState(0), [busy, setBusy] = useState<string | null>(null), [failed, setFailed] = useState<string | null>(null);
   const [naming, setNaming] = useState(false);
@@ -70,18 +69,18 @@ function AddPrintBody({ close, onOpen, onCreated }: { close(): void; onOpen(key:
   </div>;
 }
 
-function NewProfileForm({ masters, users, back, onCreated }: { masters: PrintMaster[]; users: UserPreset[]; back(): void; onCreated(key: string): void }) {
+function NewProfileForm({ masters, users, back, onCreated }: { masters: PrintMaster[]; users: ProcessRecord[]; back(): void; onCreated(key: string): void }) {
   const s = getState();
-  const owned = users.filter((p) => p.type === 'process' && !p.archived && p.kind !== 'master');
-  const bases = [...owned.map((p) => ({ value: profileKey(p), label: p.name })), ...masters.filter((m) => !isAdded(s, m)).map((m) => ({ value: m.id, label: m.name }))];
-  const current = owned.find((p) => profileKey(p) === s.process || p.name === s.process);
-  const [base, setBase] = useState(current ? profileKey(current) : bases[0]?.value ?? '');
+  const owned = users.filter((p) => !p.archived);
+  const bases = [...owned.map((p) => ({ value: p.id, label: p.name })), ...masters.filter((m) => !isAdded(s, m)).map((m) => ({ value: m.id, label: m.name }))];
+  const current = owned.find((p) => p.id === s.process || p.name === s.process);
+  const [base, setBase] = useState(current ? current.id : bases[0]?.value ?? '');
   const baseName = bases.find((b) => b.value === base)?.label ?? '';
   const [name, setName] = useState(() => copyName(baseName)), [edited, setEdited] = useState(false);
   const [busy, setBusy] = useState(false), [failed, setFailed] = useState<string | null>(null);
   const create = async () => {
-    if (busy || !name.trim() || !base) return;
-    const profile = owned.find((p) => profileKey(p) === base), master = masters.find((m) => m.id === base);
+    if (busy || nameError || !base) return;
+    const profile = owned.find((p) => p.id === base), master = masters.find((m) => m.id === base);
     setBusy(true); setFailed(null);
     try { onCreated(await createPrintProfile(profile ? { profile } : { master: master! }, name)); }
     catch (e) { setFailed(message(e)); setBusy(false); }

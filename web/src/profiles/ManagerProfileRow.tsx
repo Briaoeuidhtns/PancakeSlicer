@@ -19,7 +19,6 @@ export interface ManagerProfileRowItem {
   problem?: string;
   method?: string;
   loaded?: string;
-  user?: UserPreset;
 }
 
 const METHOD: Record<string, string> = {
@@ -60,6 +59,5 @@ export const ManagerProfileRow = memo(function ManagerProfileRow({ item, listId,
     {item.problem ? <span className="pf-row-stack">{label}<ProblemLine role="gridcell" className="pf-row-sub" text={item.problem}/></span>
       : item.loaded ? <span className="pf-row-stack">{label}<span role="gridcell" className="pf-row-sub">{item.loaded}</span></span> : label}
     {item.method && <span role="gridcell" className="pf-row-method" aria-label={item.method} data-truncated="true" data-full-text={item.method}><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden><path d={METHOD[item.method] ?? METHOD.Flat}/></svg></span>}
-    {item.slot !== undefined && <span role="gridcell" className="pf-row-used">In use</span>}
   </div>;
 });

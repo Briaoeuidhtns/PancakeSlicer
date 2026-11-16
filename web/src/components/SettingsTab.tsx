@@ -22,9 +22,10 @@ import { Field } from './Field';
 import { useTabFit } from './tab-rows';
 import { LabelTip } from './InfoTip';
 import { displayLabel } from './fields/labels';
-import { GroupHead, isGroupOpen, setGroupOpen, useSettingsGroups } from './SettingsGroup';
-import type { SettingSource } from '../profiles/bases';
+import { GroupHead, isGroupOpen, markOf, setGroupOpen, useSettingsGroups } from './SettingsGroup';
+import { settingSources, type SettingSource } from '../profiles/bases';
 import type { ObjectOverrides } from './ObjectOverrides';
+import { undoable } from '../state/history';
 import './settings.css';
 import { slotFilaments } from '../profiles/slots';
 import { unsavedRule } from '../state/changes';
@@ -51,6 +52,10 @@ export interface Aux { label: string; icon?: string; content: React.ReactNode; m
 export function SettingsTab({ type, slot = 0, compact, hidePreset, editor, overrides, readOnly = false, auxiliary }: { type: PresetType; slot?: number; compact?: boolean; hidePreset?: boolean; editor?: ProfileFields;
   overrides?: ObjectOverrides | null; readOnly?: boolean; auxiliary?: Aux | Aux[] }) {
   const { desc, error } = useTab(TAB_OF[type]);
+  const overriddenKey = useStore((s) => type === 'process' && !overrides ? JSON.stringify(s.objects.reduce<Record<string, string[]>>((m, o) => {
+    for (const k of Object.keys(o.settings)) (m[k] ??= []).push(o.name.replace(/\.(stl|obj|3mf|step|stp)$/i, ''));
+    return m; }, {})) : '{}');
+  const overriddenBy = useMemo(() => JSON.parse(overriddenKey) as Record<string, string[]>, [overriddenKey]);
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
   const retry = () => {
@@ -90,7 +95,9 @@ export function SettingsTab({ type, slot = 0, compact, hidePreset, editor, overr
   const savedSources = useMemo(() => fields || !sidebarProfile ? undefined : settingSources(getState(), type, sidebarProfile), [fields, type, sidebarProfile, selected.layers, records]); // eslint-disable-line react-hooks/exhaustive-deps
   const sources = editor?.sources ?? savedSources;
   const system = fields?.baseline ?? unedited;
+  const unsaved = useMemo(() => unsavedRule(dirty, config, system, sources), [dirty, config, system, sources]);
 
+  const sideMachine = useAskedValues(type !== 'machine' && editor?.printer ? { type: 'machine', id: editor.printer } : null);
   const env = useMemo(() => {
     const state = getState();
     if (overrides) return environment([machineConfig, config], { printer_vendor: profileInfo(state, 'machine', state.printer).vendor,
@@ -144,11 +151,12 @@ export function SettingsTab({ type, slot = 0, compact, hidePreset, editor, overr
   };
   const groupsVersion = useSettingsGroups();
   const groupId = (pageTitle: string, groupTitle: string) => `${TAB_OF[type]}/${pageTitle}/${groupTitle}`;
-  const pageModified = (p: TabDesc['pages'][number]) => p.groups.some((g) => g.lines.some((l) => l.options.some((k) => splitKey(k)[0] in dirty)));
+  const keysOf = (lines: TabLine[]) => lines.flatMap((l) => l.options.map((k) => splitKey(k)[0]));
+  const pageMark = (p: TabDesc['pages'][number]) => markOf(p.groups.flatMap((g) => keysOf(g.lines)), unsaved);
   const focus = useStore((s) => (s.settingsFocus?.type === type ? s.settingsFocus : null));
   const strip = useRef<HTMLDivElement>(null);
   const breaks = useTabFit(strip, `${pages.map((p) => p.title).join('|')}|${auxes.map((a) => a.label).join('|')}`);
-  const openByDefault = editor ? typeof window !== 'undefined' && window.innerWidth >= 1100 : uiMode === 'simple';
+  const openByDefault = editor || overrides && !compact ? typeof window !== 'undefined' && window.innerWidth >= 1100 : uiMode === 'simple';
   const body = useRef<HTMLDivElement>(null);
   const labelWidths = useRef<{ flow: Element | null; byKey: Map<string, number> }>({ flow: null, byKey: new Map() });
   const rowKeys = groups.flatMap((g) => g.lines.flatMap((l) => l.options)).join(',');
@@ -192,12 +200,12 @@ export function SettingsTab({ type, slot = 0, compact, hidePreset, editor, overr
       {!hidePreset && <PresetBar type={type} slot={slot} />}
       <Tabs.Root className="settings-pages" value={auxiliaryOn ? `aux:${auxIdx}` : String(Math.min(pageIdx, pages.length - 1))} onValueChange={v => {const a = v.startsWith('aux:') ? Number(v.slice(4)) : null; setAuxIdx(a); if (a === null) setPageIdx(Number(v));}}><Tabs.List ref={strip} className="page-bar" aria-label={`${TYPE_NAME[type]} settings`}>
         {pages.map((p, i) => [breaks.includes(i) && <span key={`break-${i}`} className="tab-break" aria-hidden />, (
-          <Tabs.Trigger key={p.title} value={String(i)} aria-label={p.title} className={`page-tab ${p === page && !auxiliaryOn ? 'active' : ''} ${pageModified(p) ? 'modified' : ''}`} onClick={() => setPageIdx(i)}>
+          <Tabs.Trigger key={p.title} value={String(i)} aria-label={p.title} className={`page-tab ${p === page && !auxiliaryOn ? 'active' : ''} ${pageMark(p) ? `modified ${pageMark(p)}` : ''}`} onClick={() => setPageIdx(i)}>
             <span className="page-tab-label">{p.title}</span>
           </Tabs.Trigger>
         )])}
         {auxes.map((a, i) => [breaks.includes(pages.length + i) && <span key={`break-aux-${i}`} className="tab-break" aria-hidden />,
-          <Tabs.Trigger key={`aux-${i}`} value={`aux:${i}`} className={`page-tab ${auxIdx === i ? 'active' : ''} ${a.modified ? 'modified' : ''}`}><span className="page-tab-label">{a.label}</span></Tabs.Trigger>])}
+          <Tabs.Trigger key={`aux-${i}`} value={`aux:${i}`} className={`page-tab ${auxIdx === i ? 'active' : ''} ${a.modified ? 'modified unsaved' : ''}`}><span className="page-tab-label">{a.label}</span></Tabs.Trigger>])}
       </Tabs.List>
       <Tabs.Content forceMount value={auxiliaryOn ? `aux:${auxIdx}` : String(Math.min(pageIdx,pages.length-1))} className="page-body" ref={body}>
         {aux ? aux.content : <><div className="page-flow">
@@ -210,16 +218,16 @@ export function SettingsTab({ type, slot = 0, compact, hidePreset, editor, overr
         {type === 'process' && !overrides && page?.title === 'Multimaterial' && getState().filamentSlots.length > 1 && <section className="optgroup"><button type="button" className="btn" onClick={() => setState({flushDialog: true})}>Flush volumes</button></section>}
         {groups.map((g) => {
           const single = groups.length === 1 && g.lines.length === 1 && g.lines[0].options.length === 1 && !!OPTIONS[splitKey(g.lines[0].options[0])[0]]?.multiline, id = groupId(page.title, g.title), open = !g.title || single || isGroupOpen(id, openByDefault);
-          const modified = g.lines.some((l) => l.options.some((k) => splitKey(k)[0] in dirty));
-          const method = type === 'process' ? String(config.nonplanar_mode ?? OPTIONS.nonplanar_mode?.default ?? 'off') : undefined;
+          const modified = markOf(keysOf(g.lines), unsaved);
+          const method = type === 'process' ? String(config.nonplanar_mode ?? '') : undefined;
           const field = (line: TabLine, keys: string[], k: string, i: number, labels: string[] | undefined, shared: boolean, tooltip: string | undefined, hide = false) => {
             const [key, column] = splitKey(k);
             const index = !overrides && !line.index_labels ? optionIndex(key, type, config, extruderSelection, column) : null;
             const indexedKey = index === null ? k : `${key}#${index}`;
-            const source = editor?.sources?.[key];
+            const source = sources?.[key];
             return <Field widget={type === 'machine' && key === 'printable_area' ? <button type="button" className="btn" onClick={() => setBedDialog(true)}>Set bed shape</button>
               : type === 'machine' && key === 'nonplanar_head' ? <Suspense fallback={null}><HeadPicker value={String(config[key] ?? '')} onCommit={(v) => editor ? editor.set(key, v) : v === String(system[key] ?? '') ? resetOption(type, key) : setOption(type, key, v)} /></Suspense>
-              : undefined} key={`${k}:${i}`} optKey={indexedKey} type={type} value={config[key]} systemValue={system[key]} dirty={key in dirty}
+              : undefined} key={`${k}:${i}`} optKey={indexedKey} type={type} value={config[key]} systemValue={system[key]} dirty={unsaved(key)}
               slot={slot} onSet={fields?.set} onReset={fields?.reset} mixed={overrides?.mixed[key]} resetTitle={overrides ? 'Reset to project' : undefined} mode={method}
               source={source} sourceText={editor?.sourceText?.[key]} onResetToBase={source === 'set' && !readOnly ? editor?.resetToBase : undefined}
               disabled={readOnly || editor?.readOnlyKeys?.has(key) || states[key]?.enabled === false}
@@ -229,7 +237,7 @@ export function SettingsTab({ type, slot = 0, compact, hidePreset, editor, overr
               overrideDisabled={readOnly}
               label={labels?.[i] ?? (shared ? line.overrides?.[key]?.label ?? OPTIONS[key]?.label : line.label)}
               hideLabel={hide || g.lines.length === 1 && keys.length === 1 && !!OPTIONS[key]?.multiline && (line.label ?? OPTIONS[key]?.label ?? '').trim().toLowerCase() === g.title.trim().toLowerCase()}
-              tooltip={tooltip} />;
+              overriddenBy={overriddenBy[key]?.join(', ')} tooltip={tooltip} />;
           };
           const own = groupSwitch(g), ownLine = own >= 0 ? g.lines[own] : undefined, fixed = !!ownLine && g.lines.length === 1;
           const sub = (l: TabLine, k: string) => l.overrides?.[splitKey(k)[0]]?.label ?? OPTIONS[splitKey(k)[0]]?.label ?? '';
@@ -264,7 +272,7 @@ export function SettingsTab({ type, slot = 0, compact, hidePreset, editor, overr
           </section>;
         })}</div>
         {gcodeKeys.length > 0 && <Suspense fallback={<div className={`gcode-bench ${groups.length ? '' : 'fill'}`} role="status" aria-label="Loading G-code editor" />}>
-          <GcodeWorkbench type={type} slot={slot} keys={gcodeKeys} labels={gcodeLabels} config={config} system={system} dirty={dirty} editor={editor} readOnly={readOnly} fill={!groups.length} />
+          <GcodeWorkbench type={type} slot={slot} keys={gcodeKeys} labels={gcodeLabels} config={config} system={system} unsaved={unsaved} editor={editor} readOnly={readOnly} fill={!groups.length} />
         </Suspense>}
         </>}
       </Tabs.Content></Tabs.Root>

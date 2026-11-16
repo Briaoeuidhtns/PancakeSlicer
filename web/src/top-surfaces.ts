@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { joinParts } from './separator';
 import * as THREE from 'three';
 import { mutation } from './api/access';
 import { jobRequest } from './actions';
@@ -167,7 +168,7 @@ export const selectedSurface = () => selected;
 export function surfaceText(f: Surface): string[] {
   const area = f.area < 10 ? f.area.toFixed(1) : String(Math.round(f.area));
   const share = f.share !== undefined && f.share > 0 && f.share < 0.995 ? ` (${Math.round(f.share * 100)}% curved)` : '';
-  return [f.line + share, ...(f.why ? [f.why] : []), `Max slope ${Math.round(f.slope)}° · ${f.span.toFixed(1)} mm tall · ${area} mm²`];
+  return [f.line + share, ...(f.why ? [f.why] : []), joinParts([`Max slope ${Math.round(f.slope)}°`, `${f.span.toFixed(1)} mm tall`, `${area} mm²`])];
 }
 export const headIgnoresDuct = () => ductIgnorable;
 

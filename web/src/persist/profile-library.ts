@@ -30,45 +30,25 @@ function adopted(answer: LibraryAnswer): LibraryRecords {
   return doc;
 }
 
-async function toV4(p: ProfileOverlay): Promise<V4Record> {
-  const type = v4Type[p.type], extra = p as ProfileOverlay & { printOverrides?: Config; auto?: { scales?: ScaleRow[]; preferredHeight?: number; heightRule?: string; speedModel?: SpeedModel } };
-  const base: V4Record = { id: p.id!, type, name: p.name.replace(/\s+@.*$/, '').trim() || p.name, revision: p.revision ?? 0, ...(p.archived ? { archived: p.archived } : {}) };
-  const overlay = { ...p.overlay };
-  if (type === 'printer') {
-    const name = p.base.name, catalog = await printerCatalog();
-    for (const v of catalog) for (const m of v.models) for (const [nozzle, machine] of Object.entries(m.machines ?? {}))
-      if (machine === name) return { ...base, vendor: v.id, model: m.id, nozzle: Number(nozzle), ...(Object.keys(overlay).length ? { machine: overlay } : {}),
-        ...(extra.printOverrides && Object.keys(extra.printOverrides).length ? { printOverrides: extra.printOverrides } : {}) };
-    const model = first(overlay.printer_model), nozzle = Number(first(overlay.nozzle_diameter));
-    return { ...base, vendor: p.base.vendor ?? '', model, nozzle, ...(Object.keys(overlay).length ? { machine: overlay } : {}) };
-  }
-  if (type === 'filament') {
-    const vendor = p.base.vendor ?? 'BBL', list = await filamentCatalog(vendor).catch(() => []);
-    const family = String(p.metadata?.family ?? '') || list.find((f) => f.fallback === p.base.name || Object.values(f.variants ?? {}).includes(p.base.name))?.id || `${vendor}/${p.base.name.replace(/\s+@.*$/, '')}`;
-    writtenFilaments.set(p.id!, { family, base: p.base, ...(p.metadata ? { metadata: p.metadata } : {}) });
-    const known = list.find((f) => f.id === family), colour = first(overlay.filament_colour);
-    delete overlay.filament_colour;
-    const rule = (p as { applicability?: { printers?: { models?: string[] }; nozzle?: { sizes?: number[] } } }).applicability;
-    const fits = rule?.printers?.models?.length || rule?.nozzle?.sizes?.length ? { ...(rule.printers?.models?.length ? { models: rule.printers.models } : {}), ...(rule.nozzle?.sizes?.length ? { nozzles: rule.nozzle.sizes } : {}) } : undefined;
-    return { ...base, family, ...(known?.brand ? { brand: known.brand } : {}), ...(known?.material ? { material: known.material } : {}), ...(colour ? { colour } : {}),
-      ...(Object.keys(overlay).length ? { settings: overlay } : {}), ...(fits ? { fits } : {}) };
-  }
-  return { ...base, ...(Object.keys(overlay).length ? { values: overlay } : {}), ...(extra.auto?.scales?.length ? { scales: extra.auto.scales } : {}),
-    ...(extra.auto?.speedModel ? { speedModel: extra.auto.speedModel } : {}),
-    ...(extra.auto?.preferredHeight ? { preferredHeight: extra.auto.preferredHeight } : {}), ...(extra.auto?.heightRule ? { heightRule: extra.auto.heightRule } : {}) };
+export const CLIENT_OUTDATED = 'PancakeSlicer got an update!';
+
+function checked(doc: LibraryRecords): LibraryRecords {
+  if (typeof (doc as { schema?: unknown } | null)?.schema === 'number' && doc.schema > LIBRARY_SCHEMA) throw new Error(CLIENT_OUTDATED);
+  if (!doc || doc.schema !== LIBRARY_SCHEMA || !Number.isInteger(doc.revision) || !Array.isArray(doc.printers) || !Array.isArray(doc.filaments)
+    || !Array.isArray(doc.processes) || !Array.isArray(doc.calibrations))
+    throw new Error(`Oops, this library document isn't schema ${LIBRARY_SCHEMA} (got schema ${String((doc as { schema?: unknown } | null)?.schema)}, revision ${String(doc?.revision)}).`);
+  return doc;
 }
 
-export async function readProfileLibrary(_mock = false): Promise<ProfileLibraryDocument> {
+export async function readLibrary(): Promise<LibraryRecords> {
   const response = await fetch('/api/library');
   if (!response.ok) throw await responseError(response);
   return adopted(await response.json() as LibraryAnswer);
 }
-export async function persistProfileLibrary(write: ProfileLibraryWrite, _mock = false): Promise<ProfileLibraryWriteResult> {
-  const { document } = write;
-  const v4: V4Document = { schema: 4, revision: document.revision, ...(document.epoch ? { epoch: document.epoch } : {}),
-    profiles: await Promise.all(document.profiles.filter((p) => p.id).map(toV4)), setups: document.printers.setups };
-  const response = await mutation('/api/library', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ operationId: write.operationId, expectedRevision: write.expectedRevision, document: v4 }) });
+export const encodeLibraryWrite = (operationId: string, expectedRevision: number, document: LibraryRecords): string =>
+  JSON.stringify({ operationId, expectedRevision, document });
+export async function putLibrary(body: string): Promise<LibraryRecords> {
+  const response = await mutation('/api/library', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body }, false, undefined, undefined, true);
   if (!response.ok) throw await responseError(response);
   return adopted(await response.json() as LibraryAnswer);
 }

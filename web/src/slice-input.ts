@@ -1,7 +1,4 @@
-import { filamentVectors } from './multinozzle/config';
-import { nozzleAssignments } from './multinozzle/assignments';
-import type { Config, ConfigValue, JobLibrary } from './api/types';
-import { allFlush } from './flush-state';
+import type { Config, JobLibrary, ProjectValues } from './api/types';
 import { OPTIONS, jobValue } from './options';
 import { filamentColor } from './plater/filamentColor';
 import { meshSignature, plateDescription } from './plater/geometry';
@@ -26,64 +23,50 @@ export function outputKind(s = getState()): 'gcode' | 'gcode.3mf' {
 export const MIX_KEYS = ['filament_is_mixed', 'filament_mixed_components', 'filament_mixed_sublayer_ratios', 'filament_mixed_gradient',
   'filament_mixed_gradient_range', 'filament_mixed_gradient_curve', 'filament_mixed_gradient_per_part'];
 
-export function overrides(s = getState()): Config {
-  const out: Config = { ...s.projectPresets?.machine, ...s.dirty.machine, ...s.projectPresets?.process, ...s.dirty.process };
-  const slots = s.filamentSlots.map((key, i) => ({ ...s.projectPresets?.filaments[i], ...s.filamentEdits[key] }));
-  const edited = new Set(slots.flatMap((c) => Object.keys(c)));
-  if (edited.size) {
-    const configs = s.filamentSlots.map((_, i) => effectiveConfig(s, 'filament', i));
-    const assembled = filamentVectors(configs, Object.fromEntries([...edited].flatMap((key) => OPTIONS[key]?.default === undefined ? [] : [[key, OPTIONS[key].default as ConfigValue]])));
-    Object.assign(out, Object.fromEntries(Object.entries(assembled).filter(([key]) => edited.has(key) || key === 'filament_self_index' || key === 'filament_extruder_variant')));
-  }
-  delete out.layer_height;
-  Object.assign(out, nozzleAssignments(s));
-  for (const k of Object.keys(out)) if (!OPTIONS[k]) delete out[k];
-  if (s.projectMaterials && s.project) {
-    out.filament_colour = s.filamentSlots.map((_, i) => filamentColor(s, i + 1));
-    if (s.projectMaterials.matrix) out.flush_volumes_matrix = s.projectMaterials.matrix;
-    if (s.projectMaterials.multiplier !== null) out.flush_multiplier = [s.projectMaterials.multiplier];
-  }
-  if (s.bedType) out.curr_bed_type = s.bedType;
+export function projectValues(s = getState()): ProjectValues {
+  const own = (c: Config): Config => {
+    const out: Config = {};
+    for (const [k, v] of Object.entries(c)) {
+      if (k === 'layer_height' || !OPTIONS[k]) continue;
+      const value = jobValue(k, v);
+      const values = s.project && OPTIONS[k].type === 'enum' ? OPTIONS[k].enum_values : undefined;
+      if (values?.length && !values.includes(String(value))) continue;
+      out[k] = value;
+    }
+    return out;
+  };
+  const process: Config = { ...s.projectPresets?.process, ...s.dirty.process };
+  const filaments: Config[] = slotFilaments(s).map((key, i) => ({ ...s.projectPresets?.filaments[i], ...s.filamentEdits[key] }));
+  if (s.projectMaterials && s.project) filaments.forEach((f, i) => { f.filament_colour = [filamentColor(s, i + 1)]; });
   const plate = s.projectPlates.find((p) => p.index === s.plateIndex);
-  const plateBed = plate?.settings.curr_bed_type;
-  if (plateBed && !s.dirty.machine.curr_bed_type) out.curr_bed_type = plateBed;
   const tower = !s.project ? s.wipeTowerPos[s.plateIndex] : undefined;
-  if (tower) [out.wipe_tower_x, out.wipe_tower_y] = [[tower[0]], [tower[1]]];
+  if (tower) [process.wipe_tower_x, process.wipe_tower_y] = [[tower[0]], [tower[1]]];
   if (plate && !s.project)
     for (const k of ['print_sequence', 'spiral_mode', 'first_layer_print_sequence', 'other_layers_print_sequence', 'other_layers_print_sequence_nums'])
       if (plate.settings[k] !== undefined) process[k] = plate.settings[k];
   if (Object.keys(slotMixes(s)).length) {
     const sum = (m: Mix) => m.ratios.reduce((a, b) => a + b, 0) || 100;
-    Object.assign(out, {
-      filament_is_mixed: flag(() => true),
-      filament_mixed_components: per((m) => m.components.join(',')),
-      filament_mixed_sublayer_ratios: per((m) => m.ratios.map((r) => Math.fround(r / sum(m)).toFixed(4)).join(',')),
-      filament_mixed_gradient: flag((m) => m.gradient !== null),
-      filament_mixed_gradient_range: per((m) => (m.gradient === null || m.components.length !== 2 ? '' : m.gradient ? '0.1000,0.9000' : '0.9000,0.1000')),
-      filament_mixed_gradient_curve: per(() => ''),
-      filament_mixed_gradient_per_part: flag((m) => m.gradient !== null && m.perPart),
+    filaments.forEach((f, i) => {
+      const m = slotMixes(s)[i];
+      Object.assign(f, { filament_is_mixed: [m ? '1' : '0'], filament_mixed_components: [m ? m.components.join(',') : ''],
+        filament_mixed_sublayer_ratios: [m ? m.ratios.map((r) => Math.fround(r / sum(m)).toFixed(4)).join(',') : ''],
+        filament_mixed_gradient: [m && m.gradient !== null ? '1' : '0'],
+        filament_mixed_gradient_range: [!m || m.gradient === null || m.components.length !== 2 ? '' : m.gradient ? '0.1000,0.9000' : '0.9000,0.1000'],
+        filament_mixed_gradient_curve: [''], filament_mixed_gradient_per_part: [m && m.gradient !== null && m.perPart ? '1' : '0'] });
     });
   }
   if (s.project && s.projectPlates.length > 1) for (const key of ['wipe_tower_x', 'wipe_tower_y']) {
-    const value = out[key];
-    if (Array.isArray(value) && value.length) out[key] = [Number(value[Math.min(s.plateIndex - 1, value.length - 1)])];
+    const value = process[key];
+    if (Array.isArray(value) && value.length) process[key] = [Number(value[Math.min(s.plateIndex - 1, value.length - 1)])];
   }
-  for (const k of Object.keys(out)) out[k] = jobValue(k, out[k]);
-  if (s.project) for (const k of Object.keys(out)) {
-    const values = OPTIONS[k].type === 'enum' ? OPTIONS[k].enum_values : undefined;
-    if (values?.length && !values.includes(String(out[k]))) delete out[k];
-  }
-  return out;
+  return { machine: own({ ...s.projectPresets?.machine, ...s.dirty.machine }), process: own(process), filaments: filaments.map(own) };
 }
 
-export function calibOverrides(s = getState(), kind = ''): Config {
-  const out: Config = {};
-  const slots: ['machine' | 'process' | 'filament', string][] = [['machine', s.printer], ['process', s.process], ['filament', s.filamentSlots[0] ?? '']];
-  for (const [type, name] of slots) Object.assign(out, resolvePreset(s, type, name).user?.overrides ?? {}, presetEdits(s, type));
-  if (s.bedType) out.curr_bed_type = s.bedType;
-  if (!kind.startsWith('nonplanar-')) out.nonplanar_mode = 'off';
-  for (const k of Object.keys(out)) if (OPTIONS[k]) out[k] = jobValue(k, out[k]); else delete out[k];
-  return out;
+export function calibProject(s = getState(), kind = ''): ProjectValues {
+  const own = (c: Config) => Object.fromEntries(Object.entries(c).flatMap(([k, v]) => OPTIONS[k] ? [[k, jobValue(k, v)]] : []));
+  const process: Config = { ...presetEdits(s, 'process') };
+  if (!kind.startsWith('nonplanar-')) process.nonplanar_mode = 'off';
+  return { machine: own(presetEdits(s, 'machine')), process: own(process), filaments: [own(presetEdits(s, 'filament'))] };
 }
 
 export function jobLibrary(s: State): JobLibrary {
@@ -95,8 +78,8 @@ export function appendLibrary(fd: FormData, s: State, settings: Config = {}) {
   const library = jobLibrary(s);
   if (!library.printer) throw new Error('Pick a printer first to get started.');
   if (!library.print) throw new Error('Pick a print profile first.');
-  if (!library.filaments.length || library.filaments.some((f) => !f)) throw new Error('Please pick a filament for each slot before continuing.');
-  fd.append('library', JSON.stringify({ ...library, project: { ...overrides(s), ...settings } }));
+  const project = projectValues(s);
+  fd.append('library', JSON.stringify({ ...library, project: { ...project, process: { ...project.process, ...settings } } }));
 }
 
 export function jobFields(s: State, saving = false) {

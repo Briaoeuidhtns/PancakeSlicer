@@ -35,7 +35,7 @@ export function applyRecommended(objects: PlateObject[]) {
   if (!objects.length) return;
   const end = beginStep('Change print style to "Standard"');
   try {
-    setState({ processScope: 'objects', selected: { object: objects[0].id, instance: objects[0].instances[0].id } });
+    setState({ selected: { object: objects[0].id, instance: objects[0].instances[0].id } });
     for (const o of objects) applyStyle(getState().recommendedStyle[o.id], o.id);
   } finally {
     end();

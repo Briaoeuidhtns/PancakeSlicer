@@ -68,8 +68,6 @@
 #include "libslic3r/Point.hpp"
 #include "libslic3r/Preset.hpp"
 #include "libslic3r/PresetBundle.hpp"
-#include "libslic3r/PresetCacheFormat.hpp"
-#include <cereal/archives/binary.hpp>
 #include "libslic3r/Print.hpp"
 #include "libslic3r/PrintConfig.hpp"
 #include "libslic3r/Semver.hpp"
@@ -151,12 +149,15 @@ namespace {
 struct Args
 {
     std::string profiles = std::string(PROFILES_DIR);
-    std::string vendor   = "Prusa";
+    std::string catalog;
+    std::string flatten_catalog;
+    std::string fold_candidates;
+    bool        verbose_flatten = false;
     std::string detect_regions;
     std::string plan_tops;
     std::string printer, process, datadir, output, model, config_out, paint, gcode_3mf, json, plate, project_out, head_out, layer_profile, project, save_3mf,
-                tip_out, planned_out, verify_gcode, field_file, dump_field, move_times, calib, calib_head, calib_picks, calib_params, moves_out, dump_options, dump_presets,
-                preset_cache, stage_cache;
+                tip_out, planned_out, verify_gcode, field_file, dump_field, move_times, calib, calib_head, calib_picks, calib_params, moves_out, dump_options,
+                stage_cache;
     uint64_t    stage_cache_max_mb = 1024;
     bool        progress = false;
     bool        moves_extended = false;
@@ -243,8 +244,8 @@ Model read_input(const std::string &file)
 [[noreturn]] void usage(const std::string &error)
 {
     std::cerr << "error: " << error << "\n"
-              << "usage: nonplanar_slice_tool --printer NAME --process NAME --filament NAME [--vendor Prusa]\n"
-                 "       --detect-regions OUT.json MODEL [--printer NAME --vendor VENDOR] (no slicing)\n"
+              << "usage: nonplanar_slice_tool --printer VARIANT --process PRINT --filament FILAMENT [--catalog DIR]\n"
+                 "       --detect-regions OUT.json MODEL [--printer VARIANT] (no slicing)\n"
                  "       --plan-tops OUT.json: with the print arguments and no -o, the curved tops plan per detected region\n"
                  "       [--profiles DIR] [--datadir DIR] [--bed-type NAME] [--set key=value]... [--center X,Y]\n"
                  "       [--config-out FILE] [--project-out FILE] [--head-out FILE] [--gcode-3mf FILE] [--json FILE]\n"
@@ -252,7 +253,7 @@ Model read_input(const std::string &file)
                  "       [--atom TOOLPATH] [--verify] [--explain] [--auto-orient | --orient-only | --orient-scores] [--floating] [--save-3mf PROJECT.3mf]\n"
                  "       [--plate-index N] [--layer-profile adaptive:QUALITY | ramp:H_BOTTOM:H_TOP | range:DEPTH:H | file:PATH] [--calib-head ID]\n"
                  "       -o OUT.gcode (MODEL | PROJECT.3mf | --plate PLATE.json | --project SPEC.json | --calib TEST)\n"
-                 "       [--moves-out FILE [--moves-extended]] [--progress] [--calib-params key=value,...] [--preset-cache DIR]\n"
+                 "       [--moves-out FILE [--moves-extended]] [--progress] [--calib-params key=value,...]\n"
                  "       [--stage-cache DIR [--stage-cache-max-mb N]]\n"
                  "       [--research NAME=VALUE]...   (a research switch, Nonplanar/Research.hpp; the engine reads no environment)\n"
                  "       (plate JSON objects take \"plate\": N; a plate JSON of several plates slices with --plate-index N)\n"
@@ -285,8 +286,8 @@ Model read_input(const std::string &file)
                  "       nonplanar_slice_tool --mesh-boolean union|difference|intersection --a A --b B [--b C] OUT.stl|OUT.3mf\n"
                  "       nonplanar_slice_tool --repair-mesh IN OUT.stl|OUT.3mf   (desktop mesh repair, no slice)\n"
                  "       nonplanar_slice_tool --simplify-mesh IN OUT.stl|OUT.3mf [--ratio R | --triangles N] [--max-error E]   (QEM, no slice)\n"
-                 "       nonplanar_slice_tool --dump-options FILE | --dump-presets VENDOR FILE [--profiles DIR]\n"
-                 "       (--dump-presets filament entries carry filament_id and setting_id)\n"
+                 "       nonplanar_slice_tool --dump-options FILE\n"
+                 "       nonplanar_slice_tool --flatten-catalog OUTDIR [--profiles DIR] [--verbose]   (build time: the catalog products)\n"
                  "       nonplanar_slice_tool --load-gcode FILE.gcode   (times the preview's G-code load)\n";
     std::exit(2);
 }
@@ -475,14 +476,13 @@ Args parse_args(int argc, char **argv)
             a.layer_profile = next();
             if (a.layer_profile.rfind("file:", 0) == 0)
                 read_layer_profile(a.layer_profile.substr(5));
-        } else if (arg == "--vendor") a.vendor = next();
-        else if (arg == "--profiles") a.profiles = next();
+        } else if (arg == "--profiles") a.profiles = next();
+        else if (arg == "--catalog") a.catalog = next();
         else if (arg == "--datadir") a.datadir = next();
         else if (arg == "--config-out") a.config_out = next();
         else if (arg == "--project-out") a.project_out = next();
         else if (arg == "--head-out") a.head_out = next();
         else if (arg == "--gcode-3mf") a.gcode_3mf = next();
-        else if (arg == "--preset-cache") a.preset_cache = next();
         else if (arg == "--stage-cache") a.stage_cache = next();
         else if (arg == "--stage-cache-max-mb") {
             const std::string value = next();
@@ -506,7 +506,9 @@ Args parse_args(int argc, char **argv)
         else if (arg == "--moves-out") a.moves_out = next();
         else if (arg == "--moves-extended") a.moves_extended = true;
         else if (arg == "--dump-options") a.dump_options = next();
-        else if (arg == "--dump-presets") { a.vendor = next(); a.dump_presets = next(); }
+        else if (arg == "--flatten-catalog") a.flatten_catalog = next();
+        else if (arg == "--fold-candidates") a.fold_candidates = next();
+        else if (arg == "--verbose") a.verbose_flatten = true;
         else if (arg == "--progress") a.progress = true;
         else if (arg == "--move-times") a.move_times = next();
         else if (arg == "--plate-index") {
@@ -659,7 +661,7 @@ Args parse_args(int argc, char **argv)
             a.mesh_output = std::move(a.model);
             a.model.clear();
         }
-        if (!a.explode_3mf.empty() || !a.dump_options.empty() || !a.dump_presets.empty() || !a.verify_gcode.empty() || a.orient_scores)
+        if (!a.explode_3mf.empty() || !a.dump_options.empty() || !a.flatten_catalog.empty() || !a.verify_gcode.empty() || a.orient_scores)
             usage("choose one mesh operation or catalog/project operation");
         if (a.mesh_input.empty() || a.mesh_output.empty() || !a.model.empty() || !a.plate.empty() || !a.project.empty())
             usage("mesh operations need IN and OUT instead of a model, plate or project");
@@ -670,7 +672,8 @@ Args parse_args(int argc, char **argv)
         return a;
     }
     if (a.simplify_ratio || a.simplify_triangles || a.simplify_max_error) usage("--ratio, --triangles and --max-error need --simplify-mesh");
-    if (!a.dump_options.empty() || !a.dump_presets.empty() || !a.verify_gcode.empty() || !a.explode_3mf.empty()) return a;
+    if (a.catalog.empty()) a.catalog = (fs::path(a.profiles).parent_path() / "catalog").string();
+    if (!a.dump_options.empty() || !a.flatten_catalog.empty() || !a.verify_gcode.empty() || !a.explode_3mf.empty()) return a;
     if (a.orient_scores) {
         if (a.model.empty()) usage("--orient-scores needs a model");
         return a;
@@ -696,87 +699,11 @@ Args parse_args(int argc, char **argv)
     return a;
 }
 
-std::string find_preset_file(const Args &a, const char *kind, const std::string &name)
-{
-    if (fs::is_regular_file(name))
-        return name;
-    std::vector<fs::path> dirs = { fs::path(a.profiles) / a.vendor / kind };
-    if (std::string(kind) == "filament")
-        dirs.push_back(fs::path(a.profiles) / "OrcaFilamentLibrary" / kind);
-    for (const fs::path &dir : dirs) {
-        if (! fs::is_directory(dir))
-            continue;
-        for (const fs::directory_entry &entry : fs::recursive_directory_iterator(dir)) {
-            if (entry.path().extension() != ".json")
-                continue;
-            boost::nowide::ifstream in(entry.path().string());
-            const nlohmann::json    j = nlohmann::json::parse(in, nullptr, false);
-            if (j.is_object() && j.value("name", std::string()) == name)
-                return entry.path().string();
-        }
-    }
-    throw std::runtime_error(std::string(kind) + " preset \"" + name + "\" not found under " + dirs.front().string());
 }
+#include "nonplanar_slice_catalog.ipp"
+namespace {
 
-fs::path preset_cache_file(const Args &a, const std::string &key)
-{
-    uint64_t hash = 1469598103934665603ull;
-    for (const unsigned char c : key)
-        hash = (hash ^ c) * 1099511628211ull;
-    char name[32];
-    std::snprintf(name, sizeof(name), "%016llx.bin", static_cast<unsigned long long>(hash));
-    return fs::path(a.preset_cache) / name;
-}
-
-bool read_cached_preset(const fs::path &file, const std::string &key, DynamicPrintConfig &config, std::string &filament_id)
-{
-    boost::nowide::ifstream in(file.string(), std::ios::binary);
-    if (!in)
-        return false;
-    try {
-        cereal::BinaryInputArchive ar(in);
-        std::string stored_key, stored_id;
-        ar(stored_key);
-        if (stored_key != key)
-            return false;
-        ar(stored_id);
-        CacheDictionary dict;
-        dict.load(ar);
-        DynamicPrintConfig stored;
-        load_config(ar, stored, dict);
-        config      = std::move(stored);
-        filament_id = std::move(stored_id);
-        return true;
-    } catch (const std::exception &) {
-        return false;
-    }
-}
-
-void write_cached_preset(const fs::path &file, const std::string &key, const DynamicPrintConfig &config, const std::string &filament_id)
-{
-    boost::system::error_code ec;
-    fs::create_directories(file.parent_path(), ec);
-    const fs::path tmp = file.parent_path() / fs::unique_path(file.filename().string() + ".%%%%%%%%.tmp");
-    try {
-        {
-            boost::nowide::ofstream out(tmp.string(), std::ios::binary);
-            cereal::BinaryOutputArchive ar(out);
-            CacheDictionary dict;
-            dict.collect(config);
-            ar(key, filament_id);
-            dict.save(ar);
-            save_config(ar, config, dict);
-        }
-        DynamicPrintConfig back;
-        std::string        back_id;
-        if (read_cached_preset(tmp, key, back, back_id) && back == config && back_id == filament_id)
-            fs::rename(tmp, file, ec);
-    } catch (const std::exception &) {
-    }
-    fs::remove(tmp, ec);
-}
-
-DynamicPrintConfig resolve(PresetBundle &bundle, const Args &a, const char *kind, Preset::Type type, const std::string &name)
+DynamicPrintConfig resolve(const Args &a, Preset::Type type, const std::string &name)
 {
     DynamicPrintConfig config;
     std::string        error, filament_id, preset_name = name;
@@ -789,17 +716,35 @@ DynamicPrintConfig resolve(PresetBundle &bundle, const Args &a, const char *kind
         if (preset_name.empty())
             preset_name = fs::path(name).stem().string();
         filament_id = key_values[BBL_JSON_KEY_FILAMENT_ID];
+    } else if (type == Preset::TYPE_PRINTER) {
+        const auto [printer, variant] = catalog_variant(a.catalog, name);
+        apply_record_values(config, printer.at("base"));
+        apply_record_values(config, variant.at("values"));
     } else {
-        const std::string key   = a.vendor + "\n" + kind + "\n" + std::to_string(int(type)) + "\n" + name;
-        const fs::path    entry = a.preset_cache.empty() ? fs::path() : preset_cache_file(a, key);
-        if (entry.empty() || !read_cached_preset(entry, key, config, filament_id)) {
-            const std::string file = find_preset_file(a, kind, name);
-            if (!bundle.resolve_preset_config(config, type, file, ForwardCompatibilitySubstitutionRule::EnableSilent, error, true, &filament_id))
-                throw std::runtime_error("cannot resolve " + file + ": " + error);
-            if (!entry.empty())
-                write_cached_preset(entry, key, config, filament_id);
+        const nlohmann::json product = catalog_product(a.catalog, type == Preset::TYPE_PRINT ? "prints" : "filaments", name);
+        apply_record_values(config, product.at("base"));
+        for (const nlohmann::json &tuning : product.at("tunings")) {
+            const auto &fits = tuning.at("fits");
+            if (std::find(fits.begin(), fits.end(), a.printer) == fits.end())
+                continue;
+            if (type == Preset::TYPE_FILAMENT) {
+                DynamicPrintConfig own;
+                apply_record_values(own, tuning.at("values"));
+                for (const auto &[key, value] : variant_projection(config, tuning_variants(config, own)))
+                    if (!tuning.at("values").contains(key))
+                        config.option(key, true)->deserialize(value);
+            }
+            apply_record_values(config, tuning.at("values"));
+            const nlohmann::json &source = tuning.at("source");
+            preset_name = source.at("name").get<std::string>();
+            filament_id = source.value("filament_id", "");
+            for (const std::string &key : flatten::source_metadata)
+                if (source.contains(key))
+                    config.set_deserialize_strict(key, source.at(key).get<std::string>());
         }
     }
+    if (!(fs::path(name).extension() == ".json" && fs::is_regular_file(name)))
+        config.set_key_value("inherits", new ConfigOptionString());
     if (type == Preset::TYPE_PRINTER)
         config.set_key_value("printer_settings_id", new ConfigOptionString(preset_name));
     else if (type == Preset::TYPE_PRINT)
@@ -901,31 +846,18 @@ indexed_triangle_set plate_mesh(const Model &model)
     return out;
 }
 
-std::string vendor_json_value(const std::vector<fs::path> &dirs, std::string name, const std::string &key)
+nlohmann::json catalog_printer(const Args &args)
 {
-    for (int depth = 0; depth < 8 && ! name.empty(); ++depth) {
-        std::string inherits;
-        for (const fs::path &dir : dirs) {
-            if (! fs::is_directory(dir))
-                continue;
-            for (const fs::directory_entry &entry : fs::recursive_directory_iterator(dir)) {
-                if (entry.path().extension() != ".json")
-                    continue;
-                boost::nowide::ifstream in(entry.path().string());
-                const nlohmann::json    j = nlohmann::json::parse(in, nullptr, false);
-                if (! j.is_object() || j.value("name", std::string()) != name)
-                    continue;
-                if (j.contains(key) && j[key].is_string())
-                    return j[key].get<std::string>();
-                inherits = j.value("inherits", std::string());
-                break;
-            }
-            if (! inherits.empty())
-                break;
-        }
-        name = inherits;
-    }
-    return {};
+    if (fs::path(args.printer).extension() == ".json" && fs::is_regular_file(args.printer))
+        return nlohmann::json::object();
+    return catalog_variant(args.catalog, args.printer).first;
+}
+std::string printer_model_value(const Args &args, const std::string &key)
+{
+    const nlohmann::json printer = catalog_printer(args);
+    if (!printer.contains("model") || !printer["model"].contains(key) || !printer["model"][key].is_string())
+        return {};
+    return printer["model"][key].get<std::string>();
 }
 
 void write_gcode_3mf(const Args &args, Model &model, Print &print, DynamicPrintConfig &config, GCodeProcessorResult &result,
@@ -962,7 +894,7 @@ void write_gcode_3mf(const Args &args, Model &model, Print &print, DynamicPrintC
     plate->optimal_assignment     = result.optimal_assignment;
     plate->is_label_object_enabled = result.label_object_enabled;
     plate->is_support_used         = print.is_support_used();
-    plate->printer_model_id = vendor_json_value({ fs::path(args.profiles) / args.vendor / "machine" }, config.opt_string("printer_model"), "model_id");
+    plate->printer_model_id = printer_model_value(args, "model_id");
     plate->nozzle_diameters = config.option("nozzle_diameter")->serialize();
     plate->gcode_prediction = std::to_string(int(result.print_statistics.modes[size_t(PrintEstimatedStatistics::ETimeMode::Normal)].time));
     plate->first_layer_time = std::to_string(result.initial_layer_time);
@@ -984,10 +916,6 @@ void write_gcode_3mf(const Args &args, Model &model, Print &print, DynamicPrintC
         info.color       = config.option<ConfigOptionStrings>("filament_colour")->get_at(info.id);
         const auto *ids = config.option<ConfigOptionStrings>("filament_ids");
         info.filament_id = ids && info.id < ids->values.size() ? ids->values[info.id] : std::string();
-        if (info.filament_id.empty())
-            info.filament_id = vendor_json_value({ fs::path(args.profiles) / args.vendor / "filament",
-                                               fs::path(args.profiles) / "OrcaFilamentLibrary" / "filament" },
-                                             args.filaments[std::min(size_t(info.id), args.filaments.size() - 1)], "filament_id");
         if (bambu_ids.is_object() && bambu_ids["filaments"].contains(info.filament_id))
             info.filament_id = bambu_ids["filaments"][info.filament_id].value("bambu_id", info.filament_id);
     }
@@ -1054,12 +982,12 @@ void write_gcode_3mf(const Args &args, Model &model, Print &print, DynamicPrintC
         throw std::runtime_error("cannot write " + args.gcode_3mf);
 }
 
-void apply_filaments(PresetBundle &bundle, const Args &a, DynamicPrintConfig &config)
+void apply_filaments(const Args &a, DynamicPrintConfig &config)
 {
     const size_t n = a.filaments.size();
     std::vector<DynamicPrintConfig> slots;
     for (const std::string &name : a.filaments)
-        slots.emplace_back(resolve(bundle, a, "filament", Preset::TYPE_FILAMENT, name));
+        slots.emplace_back(resolve(a, Preset::TYPE_FILAMENT, name));
     config.apply(slots.front());
     if (n == 1 && a.colours.empty())
         return;
@@ -2487,7 +2415,7 @@ Model load_project(const std::string &path)
     return model;
 }
 
-DynamicPrintConfig project_config(PresetBundle &bundle, const Args &a, const DynamicPrintConfig &config)
+DynamicPrintConfig project_config(const Args &a, const DynamicPrintConfig &config)
 {
     DynamicPrintConfig out = config;
     const size_t n = config.option<ConfigOptionStrings>("filament_settings_id")->size();
@@ -2497,7 +2425,7 @@ DynamicPrintConfig project_config(PresetBundle &bundle, const Args &a, const Dyn
     lists.resize(n + 2);
     auto diff_slot = [&](size_t list, const char *kind, Preset::Type type, const std::string &name, const std::string &saved_name,
                    const std::vector<std::string> &keys, size_t slot) {
-        const DynamicPrintConfig system = resolve(bundle, a, kind, type, name);
+        const DynamicPrintConfig system = resolve(a, type, name);
         const std::string system_name = type == Preset::TYPE_PRINTER ? system.opt_string("printer_settings_id") :
                                         type == Preset::TYPE_PRINT   ? system.opt_string("print_settings_id") :
                                                                        system.option<ConfigOptionStrings>("filament_settings_id")->values.front();
@@ -2606,7 +2534,7 @@ void restore_loaded_ids(const std::vector<SavedInstance> &instances, Model &mode
 
 #include "nonplanar_slice_tool_save.ipp"
 
-void save_project(PresetBundle &bundle, const Args &args, Model &model, const DynamicPrintConfig &config, bool loaded_ids,
+void save_project(const Args &args, Model &model, const DynamicPrintConfig &config, bool loaded_ids,
                   const PlateDataPtrs &plates, const std::string &cut_information = {}, const DynamicPrintConfig *slice_config = nullptr)
 {
     model.get_backup_path();
@@ -2614,7 +2542,7 @@ void save_project(PresetBundle &bundle, const Args &args, Model &model, const Dy
     params.path            = args.save_3mf;
     params.model           = &model;
     params.plate_data_list = plates;
-    DynamicPrintConfig saved = project_config(bundle, args, config);
+    DynamicPrintConfig saved = project_config(args, config);
     params.config          = &saved;
     params.strategy        = SaveStrategy::Silence | SaveStrategy::SplitModel | SaveStrategy::ShareMesh |
                              (loaded_ids ? SaveStrategy::UseLoadedId : SaveStrategy::Default);
@@ -2932,7 +2860,7 @@ TriangleMesh cut_solid_mesh(const ModelObject &object)
     return result;
 }
 
-void cut_only(PresetBundle &bundle, const Args &args, Model &model, DynamicPrintConfig &config)
+void cut_only(const Args &args, Model &model, DynamicPrintConfig &config)
 {
     if (model.objects.size() != 1 || model.objects.front()->instances.size() != 1)
         throw std::runtime_error("--cut-only needs a model of one object with one instance, this has " +
@@ -3050,7 +2978,7 @@ void cut_only(PresetBundle &bundle, const Args &args, Model &model, DynamicPrint
         plates.push_back(plate.get());
         Args written = args;
         written.save_3mf = args.output;
-        save_project(bundle, written, result, config, false, plates);
+        save_project(written, result, config, false, plates);
         std::cout << "cut_project " << args.output << "\n";
         return;
     }
@@ -3346,7 +3274,7 @@ int main(int argc, char **argv)
         set_logging_level(unsigned(std::atoi(level)));
     try {
         if (!args.dump_options.empty()) dump_options(args.dump_options);
-        if (!args.dump_options.empty() && args.dump_presets.empty()) return 0;
+        if (!args.dump_options.empty()) return 0;
         if (args.orient_scores) { print_stock_orient_scores(args); return 0; }
         if (! args.json.empty()) slice_json_record(record, args);
         auto progress = [&args](const char *stage, int percent) {
@@ -3362,10 +3290,9 @@ int main(int argc, char **argv)
         Nonplanar::HeadLibrary::instance().reload();
         if (!args.detect_regions.empty()) {
             PrintConfig printer_config;
-            if (!args.printer.empty()) {
-                PresetBundle bundle;
-                printer_config.apply(resolve(bundle, args, "machine", Preset::TYPE_PRINTER, args.printer), true);
-            } else printer_config.nonplanar_head.value = "bambu-a1-mini";
+            if (!args.printer.empty())
+                printer_config.apply(resolve(args, Preset::TYPE_PRINTER, args.printer), true);
+            else printer_config.nonplanar_head.value = "bambu-a1-mini";
             for (const auto &[key, value] : args.overrides)
                 if (printer_config.has(key)) printer_config.set_deserialize_strict(key, value);
             const auto head = Nonplanar::resolve_head_envelope(printer_config);
@@ -3452,20 +3379,19 @@ int main(int argc, char **argv)
             return 0;
         }
 
-        if (!args.dump_presets.empty()) { dump_presets(args); return 0; }
-        PresetBundle       bundle;
+        if (!args.flatten_catalog.empty()) { flatten_catalog(args); return 0; }
         DynamicPrintConfig config = DynamicPrintConfig::full_print_config();
-        config.apply(resolve(bundle, args, "machine", Preset::TYPE_PRINTER, args.printer));
+        config.apply(resolve(args, Preset::TYPE_PRINTER, args.printer));
         const std::string default_bed = !config.opt_string("default_bed_type").empty() ? config.opt_string("default_bed_type") :
-            vendor_json_value({fs::path(args.profiles) / args.vendor / "machine"}, config.opt_string("printer_model"), "default_bed_type");
-        if (args.vendor == "BBL" || config.opt_bool("support_multi_bed_types") || !default_bed.empty()) {
+            printer_model_value(args, "default_bed_type");
+        if (catalog_printer(args).value("vendor", "") == "BBL" || config.opt_bool("support_multi_bed_types") || !default_bed.empty()) {
             Preset printer(Preset::TYPE_PRINTER, args.printer);
             printer.config = config;
             printer.config.set_key_value("default_bed_type", new ConfigOptionString(default_bed));
-            config.set_key_value("curr_bed_type", new ConfigOptionEnum<BedType>(printer.get_default_bed_type(&bundle)));
+            config.set_key_value("curr_bed_type", new ConfigOptionEnum<BedType>(printer.get_default_bed_type(nullptr)));
         }
-        config.apply(resolve(bundle, args, "process", Preset::TYPE_PRINT, args.process));
-        apply_filaments(bundle, args, config);
+        config.apply(resolve(args, Preset::TYPE_PRINT, args.process));
+        apply_filaments(args, config);
         Model model;
         const bool project_input = boost::algorithm::iequals(fs::path(args.model).extension().string(), ".3mf");
         if (args.plate_index && !project_input && args.plate.empty())
@@ -3629,7 +3555,7 @@ int main(int argc, char **argv)
         if (model.objects.empty() && (args.wipe_tower_only.empty() || !args.paint.empty() || !args.parts.empty()))
             throw std::runtime_error("no objects in " + args.model);
         if (! args.cut.empty()) {
-            cut_only(bundle, args, model, config);
+            cut_only(args, model, config);
             return 0;
         }
         if (!model.objects.empty()) apply_multi_material(args, model);
@@ -3663,7 +3589,7 @@ int main(int argc, char **argv)
                 DynamicPrintConfig stored = full_config ? *full_config : config;
                 if (!project_input && layout.count > 0)
                     stored = plate_save_config(args, saved_model, stored, source_plates, saved_instances, project_settings);
-                save_project(bundle, args, saved_model, stored, project_input, plate_list,
+                save_project(args, saved_model, stored, project_input, plate_list,
                              project_input ? carried_cut_information(args.model, source_objects, saved_model) : std::string(),
                              !project_input && layout.count == 1 ? &config : nullptr);
             }
@@ -3707,7 +3633,7 @@ int main(int argc, char **argv)
             params.plate_data_list = { &plate };
             params.path = args.project_out;
             params.model = &model;
-            DynamicPrintConfig saved = project_config(bundle, args, config);
+            DynamicPrintConfig saved = project_config(args, config);
             params.config = &saved;
             params.strategy = SaveStrategy::Silence | SaveStrategy::SplitModel | SaveStrategy::ShareMesh |
                               (project_input ? SaveStrategy::UseLoadedId : SaveStrategy::Default);

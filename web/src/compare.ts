@@ -100,7 +100,7 @@ async function standardRequest() {
   const flat = { nonplanar_mode: jobValue('nonplanar_mode', 'off'), zaa_enabled: false };
   return {
     ...req,
-    overrides: { ...req.overrides, ...flat },
+    project: { ...req.project, process: { ...req.project.process, ...flat } },
     plate: req.plate && { objects: req.plate.objects.map((o) => {
       const { nonplanar_mode: _, ...rest } = o.settings ?? {};
       return { ...o, settings: { ...rest, zaa_enabled: '0' } };

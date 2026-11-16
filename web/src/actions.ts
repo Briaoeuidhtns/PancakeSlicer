@@ -2,7 +2,6 @@ import { ownValues } from './profiles/view';
 import { failureCode, responseError, type ApiError } from './api/access';
 import { savePreferences } from './saved-preferences';
 import { beginBusy, startupBusy, withBusy, type BusyToken } from './state/busy';
-import { findProfile } from './profiles/identity';
 import { beginSlicePreview, bindSlicePreview } from './flow/preview-navigation';
 import { project as projectFlow } from './flow/project';
 import { app } from './flow/app';
@@ -18,7 +17,6 @@ import type { Config, ConfigValue, JobRequest, JobStatus, PresetType } from './a
 import { sliceProgress } from './api/progress';
 import { connect, surfaceConfigBlocker, type Api } from './api/client';
 import { validateProfileSubmission } from './profiles/submission';
-import { normalizeUserPreset } from './profiles/model';
 import { shortTime } from './preview/format';
 import { calibProject, firstLayer, jobFields, outputKind, plateSignature } from './slice-input';
 import { arrange, bakeStl, bedBounds, instanceBox, loadMesh, loadProject, nextFreeSpot, parsePoints, plateJson, outsideBed } from './plater/geometry';
@@ -27,10 +25,9 @@ import { confirmDialog, numberDialog, promptDialog } from './components/Ask';
 import {
   IDLE_JOB, PRESET_META, effectiveConfig, getState, markStale, newId, presetEdits, printerPreset, resolvePreset, selectPrinter, setState, toast, type JobView, type PlateObject, type State,
 } from './state/store';
-import { captureUndo, documentGeneration, historyVersion, leaveDocument, newDocument, undoable } from './state/history';
+import { documentGeneration, leaveDocument, newDocument, undoable } from './state/history';
 import { clearPlateJobs, currentPlates } from './plater/plates';
 import { nativeSupportCapable } from './settings-env';
-import { capturePrinterMaterials, selectionNotice } from './profiles/material-library';
 import { preferredHeight } from './profiles/context';
 import { loadPreviewView } from './components/preview-loader';
 import { slotFilaments } from './profiles/slots';
@@ -68,20 +65,12 @@ function switchingChanges(s: State, type: PresetType, slot = 0): Config {
   const text = (v: ConfigValue) => JSON.stringify(Array.isArray(v) ? v.map(String) : String(v));
   const baseline = Object.fromEntries(Object.entries(project ?? {}).filter(([k, v]) =>
     !PRESET_META.test(k) && (config[k] === undefined || text(v) !== text(config[k]))));
-  return { ...(type === 'process' ? {} : user?.overrides), ...baseline, ...presetEdits(s, type, slot) };
+  return { ...(type === 'process' ? {} : ownValues(type, record)), ...baseline, ...presetEdits(s, type, slot) };
 }
 
 export function switchPreset(type: PresetType, slot: number, name: string, edits: 'discard' | 'transfer' = 'transfer') {
-  const before=historyVersion();
   const result=undoable(type === 'machine' ? 'Change printer' : type === 'process' ? 'Change process preset' : 'Change filament preset',
     () => applyPresetSwitch(type, slot, name, edits));
-  const summary=getState().lastProfileTransition;
-  const changed=summary?.changes.filter(c=>c.from) ?? [];
-  if(type==='machine' && historyVersion()!==before && summary && (changed.length || summary.needsSelection)){
-    const undoTransition=captureUndo();
-    const replaced=selectionNotice(getState(),summary);
-    toast(replaced || changed.map(c=>`${c.kind==='process'?'Print settings':`Slot ${(c.slot??0)+1}`}: ${c.to ?? c.reason}`).join(SEP),{label:'Undo',run:()=>{if(!undoTransition())toast('Can\'t undo the printer switch because you\'ve made newer changes since then (your latest work is safe!).');}},undefined,replaced?'warning':undefined);
-  }
   return result;
 }
 
@@ -126,8 +115,10 @@ function applyPresetSwitch(type: PresetType, slot: number, name: string, edits: 
       ...(type === 'process' ? { process: name, ...(preferred ? { processVariant: { layerHeight: preferred } } : {}) } : {}),
       job: markStale(st.job),
     };
-    return st.profileLibraryLoad.state === 'ready' ? { ...patch, printerLibrary: capturePrinterMaterials({ ...st, ...patch }) } : patch;
+    return patch;
   });
+  if (type === 'filament') void import('./profiles/slot-writes').then(({ editStrip }) => editStrip((strip) => ({ ...strip, filaments: strip.filaments.map((f, i) => (i === slot ? name : f)) }), 'Filament'));
+  void import('./profiles/printer-setups').then((m) => m.saveSelectionStrip());
   return { kept, dropped };
 }
 
@@ -366,10 +357,10 @@ export async function jobRequest(s = getState(), saving = false): Promise<JobReq
     const availability=methodAvailability(s), global=effectiveConfig(s,'process');
     const effective=[global,...s.objects.flatMap(o=>[ {...global,...o.settings},...(o.volumes ?? []).map(v=>({...global,...o.settings,...v.settings})),...(o.ranges ?? []).flatMap(r=>(o.volumes?.filter(v=>v.type === 'part') ?? [undefined]).map(v=>({...global,...o.settings,...v?.settings,...r.settings})))])];
     for(const config of effective) {const problem=methodSelectionProblem(availability,config);if(problem) throw new Error(`That slicing method isn't available right now: ${problem.reason}`);}
-    const {readProfileLibrary}=await import('./persist/profile-library'), remote=await readProfileLibrary(s.api?.mock);
-    for(const [type,key] of [['machine',s.printer],['process',s.process],...s.filamentSlots.map(key=>['filament',key])] as [PresetType,string][]) {
-      const local=findProfile(s,type,key), persisted=findProfile({userPresets:remote.profiles.map(normalizeUserPreset)},type,key);
-      if(!local || !persisted || (local.revision ?? 0)!==(persisted.revision ?? 0)) throw new Error('Heads up: one of your selected profiles was updated elsewhere. Reload it or save your current edits before slicing.');
+    const [{readLibrary},{getRecord,recordKey}]=await Promise.all([import('./persist/profile-library'),import('./profiles/records')]), remote=await readLibrary();
+    for(const [kind,key] of [['printer',s.printer],['process',s.process],...slotFilaments(s).map(key=>['filament',key])] as ['printer'|'process'|'filament',string][]) {
+      const local=getRecord(s.records,recordKey(kind,key)), persisted=getRecord(remote,recordKey(kind,key));
+      if(!local || !persisted || local.revision!==persisted.revision) throw new Error('Heads up: one of your selected profiles was updated elsewhere. Reload it or save your current edits before slicing.');
     }
     const configs = [effectiveConfig(s, 'process'), ...s.objects.flatMap((o) =>
       [o.settings, ...o.volumes?.map((v) => v.settings) ?? [], ...o.ranges?.map((r) => r.settings) ?? []])];
@@ -403,7 +394,7 @@ export async function jobRequest(s = getState(), saving = false): Promise<JobReq
   const r = await jobRequest();
   return {
     files: r.files.map((f) => `${f.name} (${f.blob.size} bytes)`),
-    library: JSON.stringify({ ...r.library, project: r.overrides }), plate: r.plate && JSON.stringify(r.plate), project_instances: r.project_instances,
+    library: JSON.stringify({ ...r.library, project: r.project }), plate: r.plate && JSON.stringify(r.plate), project_instances: r.project_instances,
     events: r.events.length ? JSON.stringify(r.events) : undefined, output: r.output,
   };
 };
@@ -518,7 +509,7 @@ export async function slice(calib?: { kind: string; params: string; head?: strin
   const current = () => generation === sliceGeneration && document === documentGeneration() && projectId === projectFlow.get().context.id && plate === getState().plateIndex;
   const signature = plateSignature(s);
   const { library, output } = jobFields(s);
-  const request = calib ? { library, overrides: calibOverrides(s, calib.kind), output, events: [], files: [], calib: calib.kind, calib_params: calib.params, calib_head: calib.head }
+  const request = calib ? { library, project: calibProject(s, calib.kind), output, events: [], files: [], calib: calib.kind, calib_params: calib.params, calib_head: calib.head }
     : await plateJob(s).catch((e: unknown) => String(e));
   if (!current() || request === null) return;
   if (typeof request === 'string') return void setState({ job: { state: 'failed', pct: 0, stage: '', error: request, errorCode: 'slice_refused' } });
@@ -545,7 +536,7 @@ export function exportFilename(s = getState()): string {
   const time = Number((s.job.status?.record as { text_summary?: Record<string, string> } | undefined)?.text_summary?.estimated_time_s);
   const firstTool = Math.max(0, Math.min(...s.objects.map((o) => o.extruder - 1)));
   const vars: Config = {
-    ...effectiveConfig(s, 'machine'), ...effectiveConfig(s, 'filament'), ...effectiveConfig(s, 'process'), ...overrides(s),
+    ...effectiveConfig(s, 'machine'), ...effectiveConfig(s, 'filament'), ...effectiveConfig(s, 'process'),
     input_filename_base: base, initial_tool: firstTool, initial_extruder: firstTool,
     ...(Number.isFinite(time) ? { print_time: shortTime(time) } : {}),
   };

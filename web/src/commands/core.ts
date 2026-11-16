@@ -130,8 +130,7 @@ export const CORE: Command[] = [
 
   { id: 'preset.printer', title: 'Printer settings…', group: 'Preset', keywords: 'machine edit', run: () => setState({ dialog: { type: 'machine', slot: 0 } }) },
   { id: 'preset.filament', title: 'Filament settings…', group: 'Preset', keywords: 'material edit', run: () => setState({ dialog: { type: 'filament', slot: 0 } }) },
-  { id: 'preset.process', title: 'Process settings', group: 'Preset', keywords: 'quality edit', run: () => setState({ tab: 'prepare', processScope: 'global' }) },
-  { id: 'preset.filaments', title: 'Set filaments to use…', group: 'Preset', run: app('filaments') },
+  { id: 'preset.process', title: 'Process settings', group: 'Preset', keywords: 'quality edit', run: () => setState({ tab: 'prepare' }) },
   { id: 'preset.create', title: 'Create printer…', group: 'Preset', keywords: 'new machine nozzle', run: app('createPrinter') },
   { id: 'preset.search', title: 'Search settings', group: 'Preset', keys: 'Mod+F / /', keywords: 'find option', run: () => void import('./registry').then((m) => m.openPalette('/')) },
 

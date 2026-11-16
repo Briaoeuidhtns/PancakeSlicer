@@ -27,7 +27,6 @@ export default function MixedFilaments({ close }: { close(): void }) {
   const s = getState();
   const [dialog, setDialog] = useState<{ slot: number | null } | null>(null);
   const [menu, setMenu] = useState<{ slot: number; x: number; y: number } | null>(null);
-  useEffect(watchColours, []);
   const slots = Object.keys(mixes).map(Number).sort((a, b) => a - b);
   const full = slotFilaments(s).length >= SLOTS_MAX;
   const removeAll = () => void confirmDialog('Mixed filament', `Remove all ${slots.length} mixed filaments?`).then((ok) => ok && deleteMixes(slots, undefined, 'Remove all mixed filaments'));

@@ -12,7 +12,6 @@ const About = preloadable(() => import('./About'));
 const PlateSettings = preloadable(() => import('./PlateSettings'));
 const CloneDialog = preloadable(() => import('./CloneDialog'));
 const SimplifyDialog = preloadable(() => import('./SimplifyDialog'));
-const FilamentsDialog = preloadable(() => import('./FilamentsDialog'));
 const ObjectTable = preloadable(() => import('./ObjectTable'));
 const CreatePrinter = preloadable(() => import('./CreatePrinter'));
 const SendDialog = preloadable(() => import('./SendDialog'));
@@ -140,7 +139,6 @@ export default function AppDialog({ which }: { which: 'about' | 'preferences' | 
   if (which === 'mixed') return <Suspense fallback={null}><MixedFilaments close={close} /></Suspense>;
   if (which === 'createPrinter') return <Suspense fallback={null}><CreatePrinter close={close} /></Suspense>;
   if (which === 'objectTable') return <Suspense fallback={null}><ObjectTable close={close} /></Suspense>;
-  if (which === 'filaments') return <Suspense fallback={null}><FilamentsDialog close={close} /></Suspense>;
   if (which === 'simplify') return <Suspense fallback={null}><SimplifyDialog close={close} /></Suspense>;
   if (which === 'clone') return <Suspense fallback={null}><CloneDialog close={close} /></Suspense>;
   if (which === 'plate') return <Suspense fallback={null}><PlateSettings close={close} /></Suspense>;

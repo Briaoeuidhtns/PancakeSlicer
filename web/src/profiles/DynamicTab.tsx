@@ -6,7 +6,8 @@ import { Glyph } from '../components/Glyph';
 import { effectiveShells, heightsFor, scaledValue, type ScaleBasis, type ScaleRow } from './auto-rules';
 import type { Config } from '../api/types';
 import { SPEED_FEATURES, SPEED_KEYS, type SpeedModel, type SpeedDetail } from './speed-rules';
-import { labelOf } from './PrintOverrides';
+import { labelOf, overrideText } from './PrintOverrides';
+import type { PrinterRecord } from './records';
 import { SEP } from '../separator';
 
 const GROUPS: { name: string; basis: ScaleBasis; keys: string[] }[] = [
@@ -82,7 +83,7 @@ export function DynamicTab({ speedModel, speeds: firstSpeeds = {}, nozzleSpeeds,
   speedModel?: SpeedModel; speeds?: Record<string, SpeedDetail>;  nozzleSpeeds?: { label: string; speeds: Record<string, SpeedDetail> }[]; missingReference?: boolean;  slowerNote?: boolean; onSpeedModel?(model: SpeedModel): void; onUseMultiplier?(key: string): void;
   rows: ScaleRow[]; nozzle: number; height: number; minHeight?: number; maxHeight?: number; readOnly?: boolean; onChange(rows: ScaleRow[]): void;
    config?: Config;
-   fromPrinter?: { name: string; values: Record<string, unknown> };
+   fromPrinter?: { name: string; values: Config; printer?: PrinterRecord };
 }) {
   const [split, setSplit] = useState<ReadonlySet<string>>(() => new Set());
   const [adding, setAdding] = useState<{ key: string; basis: ScaleBasis } | null>(null);
@@ -138,7 +139,7 @@ export function DynamicTab({ speedModel, speeds: firstSpeeds = {}, nozzleSpeeds,
     </ul>
     {fromPrinter && Object.keys(fromPrinter.values).length > 0 && <ul className="dyn-formulas dyn-printer" aria-label={`From ${fromPrinter.name}`}>
       <li className="dyn-group">From {fromPrinter.name}</li>
-      {Object.entries(fromPrinter.values).filter(([k]) => !speedModel || !SPEED_KEYS.has(k) && !SPEED_FEATURES.some(f => f.acceleration === k)).map(([k, v]) => <li key={k} className="dyn-formula"><span className="dyn-name">{labelOf(k)}</span><span className="dyn-eq">=</span><span className="dyn-expr"><span className="dyn-ceil" data-hidden>⌈</span>{String(Array.isArray(v) ? v[0] : v)}{OPTIONS[k]?.sidetext ? ` ${OPTIONS[k]?.sidetext}` : ''}</span></li>)}
+      {Object.entries(fromPrinter.values).filter(([k]) => !speedModel || !SPEED_KEYS.has(k) && !SPEED_FEATURES.some(f => f.acceleration === k)).map(([k, v]) => <li key={k} className="dyn-formula"><span className="dyn-name">{labelOf(k)}</span><span className="dyn-eq">=</span><span className="dyn-expr"><span className="dyn-ceil" data-hidden>⌈</span>{overrideText(k, v, config, fromPrinter.printer)}{OPTIONS[k]?.sidetext ? ` ${OPTIONS[k]?.sidetext}` : ''}</span></li>)}
     </ul>}</div>
     <div className="dyn-table-scroll"><table className="dyn-table">
       <thead><tr><th>Layer</th>{formulas.map((f) => <th key={f.keys.join()} className="n">{f.name}</th>)}<th className="n">Top shells</th></tr></thead>

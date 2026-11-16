@@ -17,7 +17,6 @@ export function useCatalog(type: 'machine' | 'filament' | 'process', adding: boo
 }
 
 const plain = (name: string) => name.replace(/\s+@.*$/, '').trim();
-const anchor = (name: string, vendor: string) => ({ name, engineName: name, version: '', vendor });
 
 export type PrinterIntent = 'add' | 'another';
 export interface PrinterChoice { vendor: string; model: CatalogModel; nozzle: string; intent?: PrinterIntent }
@@ -42,11 +41,6 @@ export function catalogPrinterSetup(record: PrinterRecord): PrinterRecord {
   const feed = feedOf(record.model);
   return feed ? layoutSetup(record, [{ nozzle: 0 }]) : { ...record, slots: [{ id: `slot:${randomId()}`, filament: '' }] };
 }
-const owned = (s: State) => s.userPresets.filter((p) => !p.archived);
-const namer = (s: State) => {
-  const planned: UserPreset[] = [];
-  return { name: (type: 'machine' | 'filament', wanted: string) => uniqueName({ ...s, userPresets: [...s.userPresets, ...planned] }, type, wanted), keep: (p: UserPreset) => { planned.push(p); return p; } };
-};
 
 export async function addCatalogPrinters(choices: PrinterChoice[]): Promise<AddResult> {
   const variants = await Promise.all(choices.map(async ({ model, nozzle }) => defaultVariant(await catalogLine('printers', model.id), Number(nozzle))));

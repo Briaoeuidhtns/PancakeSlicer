@@ -3,7 +3,7 @@ import { Caret } from './Caret';
 import { Fragment, memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Glyph } from './Glyph';
 import { requestAddSettings } from './add-settings-request';
-import { showSettings } from '../workspace-sheet';
+import { objectLabels } from '../plater/object-names';
 import { useTab } from '../options';
 import { effectiveConfig, getState, isSelected, selectedObjectIds, selectionOf, setState, toggleSelection, updateInstance, updateVolume, togglePrintable, useStore } from '../state/store';
 import type { Config } from '../api/types';
@@ -78,9 +78,9 @@ const clickObject = (e: React.MouseEvent, object: number) => {
 };
 const settingsCell = (n: number, name: string, pick: () => void) => (
   <span role="gridcell" className="ol-set">
-    <button type="button" className={`ol-set-btn${n ? ' has' : ''}`} aria-label={n ? `${name}: ${n} setting${n === 1 ? '' : 's'}` : `Add settings to ${name}`}
-      onClick={(e) => { e.stopPropagation(); pick(); showSettings(); if (!n) requestAddSettings(); }}>
-      {n ? <><Icon name="cog" size={14} />{n}</> : <Glyph name="plus" size={14} />}
+    <button type="button" className={`ol-set-btn${n ? ' has' : ''}`} aria-label={n ? `${n} change${n === 1 ? '' : 's'} to ${name}` : `Add settings to ${name}`}
+      onClick={(e) => { e.stopPropagation(); pick(); requestAddSettings(); }}>
+      {n ? n : <Glyph name="plus" size={14} />}
     </button>
   </span>
 );
@@ -97,7 +97,7 @@ const ObjectRows = memo(function ObjectRows({ o, label, selected, linkedInstance
   const sinking = !o.project?.placeholder && o.instances.some((i) => { const b = instanceBox(o, i); return b.min.z < -0.001 && b.max.z >= -0.001; });
   const expandable = multi || !!o.volumes?.length || !!o.ranges?.length;
   const nSettings = expanded ? Object.keys(o.settings).length : overrideCount(o);
-  const pickSettings = () => setState((st) => ({ processScope: 'objects',
+  const pickSettings = () => setState((st) => ({ 
     selected: objSelected && st.selected?.all ? st.selected : { object: o.id, instance: o.instances[0].id, allInstances: true } }));
   const style = o.project || !Object.keys(o.settings).length ? plateStyle : styleOf({ ...global, ...o.settings });
   return (
@@ -139,8 +139,8 @@ const ObjectRows = memo(function ObjectRows({ o, label, selected, linkedInstance
                 else if (e.key === 'Escape') setState({ renaming: null });
               }} />
           ) : (
-            <span className="ol-text" title={o.name}>
-              {o.name}
+            <span className="ol-text" title={label}>
+              {label}
             </span>
           )}
           {style !== plateStyle && (
@@ -170,7 +170,7 @@ const ObjectRows = memo(function ObjectRows({ o, label, selected, linkedInstance
         </button>}</span>
       </div>
       {expanded && o.volumes?.map((v) => {
-        const pick = (scope?: 'objects') => setState({ selected: { object: o.id, instance: o.instances[0].id, allInstances: true, volume: v.id }, ...(scope ? { processScope: scope } : {}) });
+        const pick = () => setState({ selected: { object: o.id, instance: o.instances[0].id, allInstances: true, volume: v.id },  });
         const nv = Object.keys(v.settings).length;
         const volSelected = selected?.object === o.id && selected.volume === v.id;
         return (
@@ -194,7 +194,7 @@ const ObjectRows = memo(function ObjectRows({ o, label, selected, linkedInstance
                     }} />
                 ) : <span className="ol-text" title={v.name}>{v.name}</span>}
               </span>
-              {v.type === 'part' || v.type === 'modifier' ? settingsCell(nv, v.name, () => pick('objects')) : <span role="gridcell" className="ol-set" />}
+              {v.type === 'part' || v.type === 'modifier' ? settingsCell(nv, v.name, () => pick()) : <span role="gridcell" className="ol-set" />}
               {v.type === 'part' ? (
                 <span role="gridcell" className="ol-fila"><SlotPicker label="Filament" value={v.extruder} inherit={o.extruder || 1}
                   onChange={(next) => updateVolume(o.id, v.id, { extruder: next })} /></span>
@@ -209,7 +209,7 @@ const ObjectRows = memo(function ObjectRows({ o, label, selected, linkedInstance
           <div role="row" className="ol-row ol-child ol-group"><span role="gridcell" className="ol-name"><Icon name="height_range_layer" size={14} /><span className="ol-text">Layers</span></span></div>
           {o.ranges.map((r) => {
             const on = selected?.object === o.id && selected.range === r.id;
-            const pickRange = () => setState({ selected: { object: o.id, instance: o.instances[0].id, allInstances: true, range: r.id }, processScope: 'objects' });
+            const pickRange = () => setState({ selected: { object: o.id, instance: o.instances[0].id, allInstances: true, range: r.id } });
             return (
               <div key={`r${r.id}`} role="row" className={`ol-row ol-child2 ${on ? 'selected' : ''}`} aria-selected={on} {...rowKeys(pickRange, o.id)} onClick={pickRange}
                >
@@ -248,6 +248,7 @@ const ObjectRows = memo(function ObjectRows({ o, label, selected, linkedInstance
 export const ObjectList = memo(function ObjectList() {
   useTab('process');
   const objects = useStore((s) => s.objects);
+  const labels = useMemo(() => objectLabels(objects), [objects]);
   const results = useStore(plateResults);
   const selected = useStore((s) => s.selected);
   const project = useStore((s) => s.project);
@@ -334,7 +335,7 @@ export const ObjectList = memo(function ObjectList() {
       <div className="ol-body" ref={grid} role="grid" aria-label="Objects" aria-multiselectable="true" aria-rowcount={totalHeight / viewport.row + (project && record?.objects ? record.objects.length + 1 : 0)}>
         {visible.map(({o, expanded, index, top}, at) => <Fragment key={o.id}>
           <div aria-hidden="true" style={{height: top - (at ? visible[at - 1].top + visible[at - 1].height : 0), flexShrink: 0}}/>
-          <ObjectRows o={o} rowIndex={index} onFocus={setFocused}
+          <ObjectRows o={o} label={labels.get(o.id) ?? o.name} rowIndex={index} onFocus={setFocused}
           selected={selected && (selected.object === o.id || o.instances.some(i => isSelected(selected, o.id, i.id))) ? selected : null}
           linkedInstance={link?.object === o.id ? link.instance ?? null : undefined}
           expanded={expanded} onToggle={toggleOpen}

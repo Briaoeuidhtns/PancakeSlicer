@@ -28,6 +28,7 @@ const ControlHints = preloadable(() => import('./components/ControlHints').then(
 const BrimEarsPanel = preloadable(() => import('./components/BrimEarsPanel'));
 const TransformPanel = preloadable(() => import('./components/Transform').then(m => ({ default: m.TransformPanel })));
 const ObjectsPanel = preloadable(() => import('./components/ObjectsPanel'));
+const ProfileSlideOut = preloadable(() => import('./profiles/ProfileSlideOut'));
 const ObjectInfo = preloadable(() => import('./components/ObjectInfo'));
 const BooleanPanel = preloadable(() => import('./components/BooleanPanel'));
 const TextPanel = preloadable(() => import('./components/TextPanel'));
@@ -60,6 +61,7 @@ import { loadedPreviewView, loadPreviewView } from './components/preview-loader'
 const PresetDialog = preloadable(() => import('./components/Dialogs').then((m) => ({ default: m.PresetDialog })));
 const PresetUx = preloadable(() => import('./components/PresetUx'));
 const FlushDialog = preloadable(() => import('./components/FlushDialog').then((m) => ({ default: m.FlushDialog })));
+const LibraryPage = preloadable(() => import('./profiles/LibraryPage').then((m) => ({ default: m.LibraryPage })));
 const DeviceView = preloadable(() => import('./printers/DeviceView').then((m) => ({ default: m.DeviceView })));
 const PreviewView = preloadable(() => loadPreviewView().then((viewer) => ({ default: viewer })));
 const ProjectsView = preloadable(() => import('./projects/ProjectsView'));
@@ -129,6 +131,8 @@ export default function App() {
   const contextMenu = useStore((s) => !!s.contextMenu);
   const sessionDialog = useStore((s) => s.sessionDialog);
   const tab = useStore((s) => s.tab);
+  const [libraryOpened, setLibraryOpened] = useState(false);
+  useEffect(() => { if (tab === 'library') setLibraryOpened(true); }, [tab]);
   const gizmo = useStore((s) => s.gizmo);
   const loading = useStore((s) => s.loading);
   const [platerLoaded, setPlaterLoaded] = useState(false);
@@ -139,6 +143,8 @@ export default function App() {
   const sidebarHidden = useSidebarHidden();
   const [dragOver, setDragOver] = useState(false);
   const previewOpened = useRef(false);
+  const slideOutOpened = useRef(false);
+  if (useStore((s) => !!s.slideOut)) slideOutOpened.current = true;
   if (tab === 'preview' || jobDone) previewOpened.current = true;
   const previewViewer = useRef<ComponentType>(undefined);
   if (previewOpened.current) previewViewer.current ??= loadedPreviewView() ?? PreviewView;

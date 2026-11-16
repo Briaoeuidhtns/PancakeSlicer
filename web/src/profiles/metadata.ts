@@ -1,10 +1,9 @@
 import type { Config, PresetType } from '../api/types';
 import { SEP } from '../separator';
 const first = (v: unknown) => String(Array.isArray(v) ? v[0] ?? '' : v ?? '');
-export const PROFILE_ROLE: Record<PresetType, string> = {machine: 'Printer', filament: 'Filament', process: 'Print settings'};
 export function profileSummary(type: PresetType, config: Config, model?: string): string {
   if (type === 'machine') return [model || first(config.printer_model), first(config.nozzle_diameter) && `${first(config.nozzle_diameter)} mm nozzle`].filter(Boolean).join(SEP);
-  if (type === 'filament') return [first(config.filament_type), first(config.filament_vendor) !== 'Generic' ? first(config.filament_vendor) : ''].filter(Boolean).join(SEP);
+  if (type === 'filament') return first(config.filament_type);
   const height = Number(first(config.layer_height));
   const mode = first(config.nonplanar_mode), wave = first(config.nonplanar_wave);
   const top = wave && wave !== 'off' ? 'Waves' : mode === 'nonplanar_top' ? 'Curved top' : mode === 'off' || !mode ? 'Flat' : mode === 'auto' ? 'Automatic' : 'Custom surface';
@@ -35,13 +34,6 @@ export function printerLine(config: Config, vendor: string, model?: string): str
 }
 export function processMode(config: Config): string {
   return profileSummary('process', config).split(SEP).pop() ?? '';
-}
-export function processTitle(name: string, config: Config, scoped: boolean): string {
-  let title = name;
-  const lead = /^(\d+(?:\.\d+)?)\s*mm\s+/i.exec(title);
-  if (lead && Number(lead[1]) === Number(first(config.layer_height))) title = title.slice(lead[0].length);
-  if (scoped) title = title.replace(/\s*@.*$/, '');
-  return title.trim() || name;
 }
 
 export const DEFAULT_FILAMENT_COLOUR = '#F2754E';

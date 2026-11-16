@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useStore } from '../state/store';
 import { narrowQuery } from '../workspace-sheet';
 import { ObjectList } from './ObjectList';
+import { preloadable } from '../preloadable';
 import { Caret } from './Caret';
+import { Skeleton } from './Skeleton';
+const ObjectSettings = preloadable(() => import('./ObjectOverrides'));
 
 const KEY = 'orca.objects-panel';
 const saved = () => { try { return sessionStorage.getItem(KEY); } catch { return null; } };

@@ -27,6 +27,8 @@ import (
 	"sync"
 	"time"
 	"unicode"
+
+	"github.com/OrcaSlicer/OrcaSlicer/server/resolve"
 )
 
 type Server struct {
@@ -131,10 +133,8 @@ func NewServer(c Config, jobs *JobManager, catalog *resolve.Catalog) http.Handle
 	mux.HandleFunc("POST /api/printer-connections/{printer}/device", s.deviceControl)
 	mux.HandleFunc("GET /api/printer-sends", s.listSends)
 	s.printerSlotRoutes(mux)
-	mux.HandleFunc("GET /api/presets", s.listPresets)
-	s.printerCatalogRoutes(mux)
+	s.catalogRoutes(mux)
 	s.updateRoutes(mux)
-	mux.HandleFunc("GET /api/filament-catalog", s.filamentCatalog)
 	s.libraryRoutes(mux)
 	mux.HandleFunc("POST /api/resolve", s.postResolve)
 	registerOptions(mux, c.Options, s.catalog, devResetEnabled())
@@ -281,7 +281,7 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 		fail(w, status, "invalid_file_upload", err.Error())
 		return
 	}
-	req := JobRequest{Orient: r.FormValue("operation") == "orient" || r.FormValue("operation") == "orient-scores", Vendor: r.FormValue("vendor"), Printer: r.FormValue("printer"), Process: r.FormValue("process"), Filaments: r.MultipartForm.Value["filament[]"], Output: r.FormValue("output"), Filename: r.FormValue("filename")}
+	req := JobRequest{Orient: r.FormValue("operation") == "orient" || r.FormValue("operation") == "orient-scores", Output: r.FormValue("output"), Filename: r.FormValue("filename")}
 	if v := r.Header.Get(sessionHeader); len(v) <= 256 {
 		req.Session = v
 	}
@@ -309,7 +309,7 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 			libraryFailure(w, 422, code, err.Error(), "choose_profiles", 0)
 			return
 		}
-		req.Vendor, req.Printer, req.Process, req.Filaments = resolved.Engine.Vendor, resolved.Engine.Printer, resolved.Engine.Process, resolved.Engine.Filaments
+		req.Printer, req.Process, req.Filaments = resolved.Engine.Printer, resolved.Engine.Process, resolved.Engine.Filaments
 		req.Library = &in
 	}
 	switch op := r.FormValue("operation"); op {
@@ -472,7 +472,7 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "output_must_gcode_gcode")
 		return
 	}
-	vendor, problem := s.resolveJobProfiles(&req)
+	presets, problem := s.resolveJobProfiles(&req)
 	if problem != nil {
 		problem.write(w)
 		return
@@ -490,7 +490,7 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(req.Events) > 0 {
-		rawHeight := vendor.machines[req.Printer].Config["printable_height"]
+		rawHeight := presets.machine.Config["printable_height"]
 		heightText := stringValue(rawHeight)
 		if heightText == "" {
 			heightText = string(rawHeight)
@@ -685,10 +685,10 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 		req.ProjectSettings = settings
 	}
 	if !req.Plate && strings.EqualFold(filepath.Ext(req.Files[0]), ".3mf") {
-		machine := vendor.machines[req.Printer]
+		machine := presets.machine
 		selected := make([][2]string, 0, len(machine.Config)+len(req.Overrides))
 		for key, raw := range machine.Config {
-			if configKinds[key] == "" || hiddenSetting.MatchString(key) {
+			if resolve.OptionKind(key) == "" || resolve.HiddenSetting(key) {
 				continue
 			}
 			value, err := configValue(key, raw)
@@ -743,12 +743,12 @@ var calibHead = regexp.MustCompile(`^[a-z0-9_-]{0,64}$`)
 var calibParams = regexp.MustCompile(`^([a-z_]+=[A-Za-z0-9_.;-]*(,[a-z_]+=[A-Za-z0-9_.;-]*)*)?$`)
 
 func (s *Server) startJob(w http.ResponseWriter, j *Job, req JobRequest, started *bool) {
-	vendor, problem := s.resolveJobProfiles(&req)
+	presets, problem := s.resolveJobProfiles(&req)
 	if problem != nil {
 		problem.write(w)
 		return
 	}
-	if problem := s.validateJobMethods(j, req, vendor); problem != nil {
+	if problem := s.validateJobMethods(j, req, presets); problem != nil {
 		writeJSON(w, 409, problem)
 		return
 	}
@@ -1269,20 +1269,20 @@ func (s *Server) retryJob(w http.ResponseWriter, r *http.Request) {
 	}
 	j.IdempotencyKey = key
 	req := j.Request
-	vendor, problem := s.resolveJobProfiles(&req)
+	presets, problem := s.resolveJobProfiles(&req)
 	if problem != nil {
 		s.jobs.releaseUpload(j)
 		os.RemoveAll(j.Dir)
 		problem.write(w)
 		return
 	}
-	if problem := s.validateJobMethods(j, req, vendor); problem != nil {
+	if problem := s.validateJobMethods(j, req, presets); problem != nil {
 		s.jobs.releaseUpload(j)
 		os.RemoveAll(j.Dir)
 		writeJSON(w, 409, problem)
 		return
 	}
-	if err := s.captureSubmission(j, &req, vendor); err != nil {
+	if err := s.captureSubmission(j, &req, presets); err != nil {
 		s.jobs.releaseUpload(j)
 		os.RemoveAll(j.Dir)
 		fail(w, 500, "couldnt_save_retry_settings")

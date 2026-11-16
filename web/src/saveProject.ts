@@ -5,7 +5,6 @@ import { markSaved, snapshot } from './state/history';
 import { output } from './flow/output';
 import type { OperationTicket } from './flow/operation';
 import { waitForJob } from './flow/job';
-import { stampProjectProfiles } from './profiles/project';
 
 
 export async function projectBlob(s: State, task?: OperationTicket): Promise<Blob> {

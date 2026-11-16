@@ -109,8 +109,6 @@ export interface PreviewUi {
 export function PreviewView() {
   const job = useStore((s) => s.job);
   const objects = useStore((s) => s.objects);
-  const printer = useStore((s) => s.printer);
-  const machines = useStore((s) => s.machines);
   const host = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<PreviewScene | null>(null);
   const [, bump] = useReducer((x: number) => x + 1, 0);

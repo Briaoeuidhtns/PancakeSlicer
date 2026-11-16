@@ -58,8 +58,12 @@ function printerMoves(s:State,library:LibraryRecords,a:PrinterRecord|undefined,b
   for(let i=0;i<Math.max(ma.length,mb.length);i++)if(ma[i]!==mb[i])out.push({label:`Flushing multiplier${Math.max(ma.length,mb.length)>1?` (nozzle ${i+1})`:''}`,from:String(ma[i] ?? 1),to:String(mb[i] ?? 1)});
   return out;
 }
-export function acknowledgePendingProfileWrite():Promise<void>{
-  return serialize(async()=>{if(pending)await acknowledge(pending);});
+export const adoptingLibrary=()=>adopting;
+
+function working(doc:LibraryRecords,pending:readonly LibraryWriteIntent[]):LibraryRecords{
+  let out=doc;
+  for(const intent of pending)if(intent.optimistic)for(const [key,next] of intent.change?.next ?? [])out=setRecord(out,key,next);
+  return out;
 }
 function adoptLibrary(doc:LibraryRecords,published:LibraryWriteIntent[],written:Set<EntityKey>,pending:LibraryWriteIntent[]){
   if(doc.revision<getState().profileLibraryRevision && doc.epoch===getState().records.epoch){
@@ -114,9 +118,17 @@ function adoptLibrary(doc:LibraryRecords,published:LibraryWriteIntent[],written:
   was.forEach((id,i)=>{if(gone('filament',id))told.push(`${name('filament',id)} was removed in another window; slot ${i+1} ${now('filament',is[i]) ? `now uses ${now('filament',is[i])}` : 'is empty'}.`);});
   if(told.length)librarySync.send({type:'IN_USE_REMOVED_ELSEWHERE',lines:told});
 }
-export function profileCreation(factory:(s:State)=>UserPreset|string):ProfileCreation{
-  const batch=profileBatchCreation(s=>{const created=factory(s);return typeof created==='string' ? {records:[],reused:[created]} : {records:[created]};});
-  return {get retryable(){return batch.retryable;},commit:()=>batch.commit().then(result=>result.keys[0])};
+
+const ready=(s:State)=>{if(s.profileLibraryLoad.state==='failed')throw new Error(s.profileLibraryLoad.error);};
+const put=(change:LibraryChange,doc:LibraryRecords,record:AnyRecord|undefined,key:EntityKey)=>{if(!change.base.has(key))change.base.set(key,getRecord(doc,key));change.next.set(key,record);};
+
+export function commitRecords(records:{kind:RecordKind;record:AnyRecord;remove?:boolean; base?:AnyRecord}[],options:{label?:string;optimistic?:boolean;apply?(s:State):Partial<State>}={}):Promise<LibraryRecords>{
+  const s=getState();
+  try{ready(s);}catch(error){return Promise.reject(error);}
+  const change:LibraryChange={base:new Map(),next:new Map()};
+  for(const {kind,record,remove,base} of records){const key=recordKey(kind,record.id);if(base!==undefined)change.base.set(key,base);put(change,s.records,remove ? undefined : record,key);}
+  const apply=options.apply;
+  return submitLibraryWrite({label:options.label ?? 'Library',change,optimistic:options.optimistic,publish:apply?st=>apply(st):undefined});
 }
 
 type CreationState = 'idle' | 'committing' | 'done' | 'failed';
@@ -140,46 +152,21 @@ function creationMachine(write:()=>Promise<CreationResult>):CreationMachine{
   }});
   return machine;
 }
-async function performSave(s:State,records:UserPreset[],operationId?:string,printers?:PrinterProfileLibrary,catalog?:SystemPreset[],setup?:PrinterSetupSaveContext):Promise<Acknowledgement>{
-  ready(s);ready(getState());
-  const requestSignature=signature(records,printers,catalog),outstanding=pending;
-  const priorAck=outstanding?await acknowledge(outstanding):undefined;
-  if(priorAck && outstanding!.signature===requestSignature){
-    if(priorAck.changed.size || priorAck.setupsChanged){publishAcknowledgement(priorAck);throw conflict('This profile or printer setup was updated in another window right after you saved. We kept your draft so you can compare them.');}
-    return priorAck;
-  }
-  if(priorAck)publishAcknowledgement(priorAck);
-  const current=()=>{if(setup && !setup.isCurrent())throw Object.assign(new Error('Your printer setup changed in the meantime—we kept your newest setup.'),{code:'setup_context_changed'});};
-  current();
-  const remote=priorAck?.document ?? await readProfileLibrary(s.api?.mock);
-  current();
-  ready(getState());if(getState().api!==s.api)throw new Error('The profile library updated while saving. Don\'t worry, your draft edits are still here!');
-  const profiles=new Map(remote.profiles.map(p=>[p.id,p]));
-  if(profiles.size!==remote.profiles.length || remote.profiles.some(p=>!p.id))throw conflict('Oops! Your profile library has duplicate or missing IDs that need a quick repair.');
-  const submitted:UserPreset[]=[];
-  for(const p of records){
-    const id=profileKey(p),prior=findProfile(s,p.type,id),raw=profiles.get(id),actual=raw && normalizeUserPreset(raw);
-    if(prior && !actual)throw Object.assign(new Error('This profile was deleted elsewhere, but we kept your unsaved edits right here.'),{code:'profile_missing',recovery:'reload_profiles'});
-    const own=prior && ownAcknowledgements.get(prior),ownAdvance=!!actual && !!own && equal(stored(actual),stored(own));
-    if(prior && actual && (actual.revision ?? 0)>(prior.revision ?? 0) && !ownAdvance)throw conflict('Heads up: this profile was updated in another window. Your current draft edits are still kept here.');
-    if(prior && (p.revision ?? 0)<(prior.revision ?? 0) && !ownAdvance)throw conflict('This profile was updated elsewhere since you started editing. Your draft edits are still kept here.');
-    let prepared=prepareProfile(s,p);
-    if(actual && equal({...stored(prepared),revision:0},{...stored(actual),revision:0})){submitted.push(actual);continue;}
-    if(actual)prepared={...prepared,revision:Math.max(prepared.revision ?? 0,(actual.revision ?? 0)+1)};
-    profiles.set(id,storedProfile(prepared));submitted.push(prepared);
-  }
-  if(printers && (setup ? !sameSetups(remote.printers,ownSetupAcknowledgements.get(setup.baseline) ?? setup.baseline)
-    : !sameSetups(remote.printers,s.printerLibrary) && !(priorAck && sameSetups(remote.printers,priorAck.request.write.document.printers))))throw conflict('The saved printer setups changed. Reload before replacing them; your working setup is kept.');
-  const catalogKeys=new Set(catalog?.map(catalogKey));
-  const document={...remote,profiles:[...profiles.values()],...(catalog?.length?{catalog:[...(remote.catalog ?? []).filter(p=>!catalogKeys.has(catalogKey(p))),...catalog]}:{}),printers:printers ?? remote.printers ?? s.printerLibrary ?? emptyPrinterLibrary()};
-  if(equal(document,remote))return {request:freezeWrite(s,{operationId:operationId ?? '',expectedRevision:remote.revision,document},submitted,requestSignature),document:remote,records:submitted,changed:new Set()};
-  const request=freezeWrite(s,{operationId:operationId ?? `save:${randomId()}`,expectedRevision:remote.revision,document},submitted,requestSignature,printers ? setup?.baseline ?? s.printerLibrary : undefined);
-  const ack=await acknowledge(request);
-  if(ack.changed.size || ack.setupsChanged){publishAcknowledgement(ack);throw conflict('This profile or printer setup changed in another window. We kept your draft so you can compare them.');}
-  return ack;
+function commitCreation(machine:CreationMachine):Promise<CreationResult>{
+  const {value,context}=machine.get();
+  if(value==='done')return Promise.resolve(context.result!);
+  machine.send({type:'COMMIT'});
+  return machine.get().context.flight!;
 }
-export function saveProfileRecords(s:State,records:UserPreset[],operationId?:string,printers?:PrinterProfileLibrary,catalog?:SystemPreset[],setup?:PrinterSetupSaveContext):Promise<void>{
-  return serialize(async()=>{const ack=await performSave(s,records,operationId,printers,catalog,setup);publishAcknowledgement(ack);});
+export function recordCreation(make:(doc:LibraryRecords)=>{kind:RecordKind;record:AnyRecord}[],label='Add profile'):ProfileCreation{
+  let keys:string[]=[];
+  const write=async()=>{
+    ready(getState());
+    await submitLibraryWrite({label,make(doc){const planned=make(doc);keys=planned.map(p=>p.record.id);return {base:new Map(),next:new Map(planned.map(p=>[recordKey(p.kind,p.record.id),p.record]))};}});
+    return {keys};
+  };
+  const machine=creationMachine(write);
+  return {machine,commit:()=>commitCreation(machine).then(r=>r.keys[0])};
 }
 
 type NamedKind = 'printer' | 'filament' | 'process';
@@ -192,36 +179,53 @@ export function recordCopy<R extends AnyRecord>(kind:RecordKind,record:R,id:stri
   if(kind==='filament')delete (copy as unknown as FilamentRecord).aliases;
   return copy;
 }
-const masterCreations=new Map<string,ProfileCreation>();
-export async function ensureEditableMaster(type:PresetType,baseKey:string):Promise<string>{
-  const s=getState(),existing=findProfile(s,type,baseKey);
-  if(existing?.kind==='master' && profileKey(existing)===baseKey)return profileKey(existing);
-  const base=findCatalogBase(s,type,baseKey).base;
-  if(!base)throw new Error('Pick the exact catalog template before editing its base profile.');
-  const token=catalogKey(base);
-  let creation=masterCreations.get(token);
-  if(!creation){
-    creation=profileCreation(latest=>{
-      const master=editableMaster(latest,type,token);
-      return findProfile(latest,type,profileKey(master)) ? profileKey(master) : master;
-    });
-    masterCreations.set(token,creation);
-  }
-  try{
-    const key=await creation.commit();
-    if(masterCreations.get(token)===creation)masterCreations.delete(token);
-    return key;
-  }catch(error){
-    if(!creation.retryable && masterCreations.get(token)===creation)masterCreations.delete(token);
-    throw error;
-  }
+export function copyRecord(kind:NamedKind,id:string,name:string):ProfileCreation{
+  const copyId=`profile:${randomId()}`,origin=getRecord(getState().records,recordKey(kind,id));
+  return recordCreation(doc=>{
+    const current=getRecord(doc,recordKey(kind,id)) as Named|undefined;
+    if(!current || !name.trim())throw new Error('Pick a profile to copy and give your new copy a name.');
+    if(!sameRecord(current,origin))throw conflict('The profile you\'re copying was just updated elsewhere. Give it a quick look before duplicating.');
+    if(listOf(doc,kind).some(r=>!r.archived && r.name===name && r.id!==copyId))throw new LibraryWriteError(`Oops! There's already a ${kind==='process'?'print profile':kind} named ${name}.`,'name_taken');
+    const copy=recordCopy(kind,current,copyId,name);
+    const out:{kind:RecordKind;record:AnyRecord}[]=[{kind,record:copy}];
+    if(kind==='printer' || kind==='filament')for(const c of doc.calibrations.filter(c=>(kind==='printer'?c.printer:c.filament)===id))
+      out.push({kind:'calibration',record:{...c,id:`calibration:${randomId()}`,...(kind==='printer'?{printer:copyId}:{filament:copyId}),revision:0}});
+    return out;
+  },'Duplicate');
 }
-export interface ProfileArchiveUndo {type:PresetType;keys:string[];operationId:string}
-export async function archiveProfiles(type:PresetType,keys:readonly string[]):Promise<ProfileArchiveUndo>{
-  const s=getState(),operationId=`archive:${randomId()}`,records=keys.map(key=>archiveProfile(s,type,key,operationId));
-  await commitProfileRecords(records,{operationId});return{type,keys:records.map(profileKey),operationId};
+
+export interface RecordRemoval {kind:NamedKind;ids:string[];operationId:string;slots:{printer:string;slot:string;filament:string}[]}
+export async function removeRecords(kind:NamedKind,ids:readonly string[]):Promise<RecordRemoval>{
+  const s=getState(),operationId=`archive:${randomId()}`,gone=new Set(ids),at=Date.now();
+  const records:{kind:RecordKind;record:AnyRecord}[]=listOf(s.records,kind).filter(r=>gone.has(r.id) && !r.archived).map(r=>({kind,record:{...r,archived:{at,operationId}}}));
+  if(records.length!==gone.size)throw new Error('That profile is out of sync—refresh your library before removing it.');
+  const slots:RecordRemoval['slots']=[];
+  if(kind==='filament')for(const p of s.records.printers)if(p.slots.some(slot=>gone.has(slot.filament))){
+    for(const slot of p.slots)if(gone.has(slot.filament))slots.push({printer:p.id,slot:slot.id,filament:slot.filament});
+    records.push({kind:'printer',record:{...p,slots:p.slots.map(slot=>gone.has(slot.filament)?{...slot,filament:''}:slot)}});
+  }
+  await commitRecords(records,{label:'Remove'});
+  return {kind,ids:[...ids],operationId,slots};
 }
-export async function restoreProfiles(undo:ProfileArchiveUndo):Promise<void>{
-  const s=getState(),records=undo.keys.flatMap(key=>{const p=findProfile(s,undo.type,key);return p?.archived?.operationId===undo.operationId?[restoreArchivedProfile(p)]:[];});
-  if(records.length)await commitProfileRecords(records);
+export async function restoreRecords(removal:RecordRemoval):Promise<void>{
+  const s=getState();
+  const records:{kind:RecordKind;record:AnyRecord}[]=listOf(s.records,removal.kind).filter(r=>removal.ids.includes(r.id) && r.archived?.operationId===removal.operationId)
+    .map(r=>{const {archived:_a,...rest}=r;return {kind:removal.kind,record:rest as AnyRecord};});
+  if(!records.length)return;
+  for(const p of s.records.printers){
+    const back=removal.slots.filter(x=>x.printer===p.id);
+    if(back.some(x=>p.slots.some(slot=>slot.id===x.slot && !slot.filament)))
+      records.push({kind:'printer',record:{...p,slots:p.slots.map(slot=>!slot.filament ? {...slot,filament:back.find(x=>x.slot===slot.id)?.filament ?? ''} : slot)}});
+  }
+  await commitRecords(records,{label:'Restore'});
+}
+
+let following:Promise<void>=Promise.resolve();
+export function followLibraryRevision(revision:number):Promise<void>{
+  return following=following.then(async()=>{
+    if(getState().profileLibraryLoad.state!=='ready' || revision<=getState().profileLibraryRevision || libraryWritesPending())return;
+    const document=await readLibrary();
+    if(libraryWritesPending() || document.revision<=getState().profileLibraryRevision)return;
+    knowLibrary(document);adoptLibrary(document,[],new Set(),[]);
+  }).catch(()=>{});
 }

@@ -96,7 +96,6 @@
 :where(.orca-parity) .plate-add { align-self: flex-start; }
 @media (max-width: 599px) { :where(.orca-parity) .plate-order { margin-left: 0; } }
 
-:where(.orca-parity) .filament-filters { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); }
 :where(.orca-parity) .modal-pick { display: flex; flex-direction: column; min-height: 0; }
 :where(.orca-parity) .modal-pick-head { display: flex; gap: var(--s-4); }
 :where(.orca-parity) .modal-pick-list { max-height: 320px; overflow: auto; }

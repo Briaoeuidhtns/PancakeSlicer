@@ -89,7 +89,6 @@ function SendView({ close, printer, head, edit }: { close: () => void; printer: 
   const output = useStore(outputKind);
   const kind = connection.kind, bambu = kind === 'bambu-lan';
   const fits = connectionOutput(kind) === output;
-  const single = useStore((s) => s.filamentSlots.length === 1);
   const machineConfig = useStore((s) => effectiveConfig(s, 'machine'));
   const record = useStore((s) => setupOf(s, printer));
   const capabilities = printerCapabilities(useStore((s) => printerModel(s, printer)) || connection.model || '');

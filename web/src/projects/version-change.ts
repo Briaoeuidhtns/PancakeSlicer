@@ -46,7 +46,6 @@ export function describeChange(before: Doc, after: Doc): VersionChange[] {
     else b.forEach((k, i) => k !== a[i] && out.push({ key: `filament:${i}`, label: b.length > 1 ? `Filament ${i + 1}` : 'Filament', from: profileName('filament', a[i]), to: profileName('filament', k) }));
   }
   if (before.dirty !== after.dirty && before.printer === after.printer && before.process === after.process) {
-    const s = getState();
     for (const type of ['process', 'machine'] as const) {
       const a = before.dirty[type] ?? {}, b = after.dirty[type] ?? {};
       if (a === b) continue;

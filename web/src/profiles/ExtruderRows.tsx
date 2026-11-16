@@ -1,4 +1,3 @@
-import type { Config, ConfigValue } from '../api/types';
 import { Dropdown } from '../components/Dropdown';
 import { resolvePreset, toast, useStore } from '../state/store';
 import { selectionValues } from './view';
@@ -9,33 +8,6 @@ import { setPrinterNozzle } from './record-edits';
 
 const TYPES = ['Direct Drive', 'Bowden'];
 const split = (variant: string) => { const type = TYPES.find((t) => variant.startsWith(`${t} `)) ?? 'Direct Drive'; return { type, volume: variant.slice(type.length).trim() || 'Standard' }; };
-export function extruderChoices(config: Config) {
-  const count = extruderCount(config), lists = valuesOf(config.extruder_variant_list);
-  const volume = config.nozzle_volume_type ?? config.default_nozzle_volume_type;
-  const rows = Array.from({ length: count }, (_, i) => {
-    const installed = `${valueAt(config.extruder_type, i, 'Direct Drive')} ${valueAt(volume, i, 'Standard')}`;
-    const options = [...new Set([installed, ...(lists[i] ?? '').split(',').map((v) => v.trim()).filter(Boolean)])];
-    return { installed, options, nozzle: valueAt(config.nozzle_diameter, i) };
-  });
-  return count > 1 || rows.some((r) => r.options.length > 1) ? rows : null;
-}
-export function installVariant(config: Config, i: number, variant: string): Record<string, ConfigValue> {
-  const count = extruderCount(config), { type, volume } = split(variant);
-  return { nozzle_volume_type: replaceAt(config.nozzle_volume_type ?? config.default_nozzle_volume_type, i, volume, count),
-    extruder_type: replaceAt(config.extruder_type, i, type, count) };
-}
-async function saveOnPrinter(i: number, variant: string) {
-  const s = getState(), source = findProfile(s, 'machine', s.printer);
-  if (!source || source.archived) throw new Error('Please select a saved printer first.');
-  const key = profileKey(source), config = resolvePreset(s, 'machine', key).config;
-  const [{ saveProfile }, { commitProfileRecords }] = await Promise.all([import('./model'), import('./transactions')]);
-  const record = { ...saveProfile(s, 'machine', source.name, key, { ...config, ...installVariant(config, i, variant) }), id: key };
-  await commitProfileRecords([record], { apply: (st: State) => {
-    if (st.printer !== key || !('nozzle_volume_type' in st.dirty.machine || 'extruder_type' in st.dirty.machine)) return {};
-    const { nozzle_volume_type: _volume, extruder_type: _type, ...rest } = st.dirty.machine;
-    return { dirty: { ...st.dirty, machine: rest } };
-  } });
-}
 
 export function ExtruderRows({ printerId, disabled, grid }: { printerId?: string; disabled?: boolean; grid?: boolean }) {
   const selected = useStore((s) => s.printer), id = printerId ?? selected;

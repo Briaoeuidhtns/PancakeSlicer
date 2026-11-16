@@ -7,6 +7,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+
+	"github.com/OrcaSlicer/OrcaSlicer/server/resolve"
 )
 
 func livePrinterProfiles(catalog *resolve.Catalog, doc map[string]json.RawMessage) (map[string]*resolve.Printer, error) {
@@ -57,7 +59,7 @@ func (s *Server) reconcileConnections(doc map[string]json.RawMessage, reason str
 	if m.store == nil {
 		return
 	}
-	live, err := livePrinterProfiles(doc)
+	live, err := livePrinterProfiles(s.catalog, doc)
 	if err != nil {
 		log.Printf("printer connections: not reconciled with the library (%s): %v", reason, err)
 		return
@@ -121,7 +123,7 @@ func (s *Server) connectionConflict(key, serial string, self *PrinterConfig) str
 	if err != nil {
 		return "the printer profiles could not be read; try again"
 	}
-	live, err := livePrinterProfiles(doc)
+	live, err := livePrinterProfiles(s.catalog, doc)
 	if err != nil {
 		return "the printer profiles could not be read; try again"
 	}

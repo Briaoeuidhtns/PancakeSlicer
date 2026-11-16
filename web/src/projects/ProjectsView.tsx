@@ -9,7 +9,7 @@ import { useMachine } from '../flow/fsm';
 import { projectsOps, runProjectsOp } from '../flow/projects-ops';
 import { createSelection, reduceSelection, selectedVisible, type SelectionEvent } from '../profiles/selection';
 import { deleteProject, duplicateProject, listTrash, openProject, useProjects, type ListedProject } from './api';
-import { childFolders, createFolder, deleteFolder, folderPath, folderTree, moveFolder, moveProjects, renameFolder, useFolders, type Folder } from './folders';
+import { childFolders, createFolder, deleteFolder, FOLDER_NAME_MAX, folderPath, folderTree, moveFolder, moveProjects, renameFolder, useFolders, type Folder } from './folders';
 import { fileVerbs, newProjectFrom } from './verbs';
 import { setProjectsQuery, useProjectsQuery } from './query';
 import { projectStore, type ProjectCommandStatus, type ProjectStore } from '../persist/backend';
@@ -74,8 +74,11 @@ function FolderName({f,editing,done}:{f:Folder;editing:boolean;done(name:string|
   const settled=useRef(false);
   useEffect(()=>{if(editing)settled.current=false;},[editing]);
   const finish=(name:string|null)=>{if(settled.current)return;settled.current=true;done(name);};
-  return editing ? <input className="text pj-folder-input" autoFocus defaultValue={f.name} aria-label="Folder name" onFocus={e=>e.currentTarget.select()} onClick={e=>e.stopPropagation()}
-    onBlur={e=>finish(e.currentTarget.value)} onKeyDown={e=>{e.stopPropagation();if(e.key==='Enter')finish(e.currentTarget.value);else if(e.key==='Escape')finish(null);}}/> : <span className="pj-name">{f.name}</span>;
+  const [length,setLength]=useState(f.name.length),tooLong=length>FOLDER_NAME_MAX,errorId=useId();
+  return editing ? <span className="pj-folder-edit"><input className="text pj-folder-input" autoFocus defaultValue={f.name} aria-label="Folder name" aria-invalid={tooLong} aria-describedby={tooLong?errorId:undefined}
+    onFocus={e=>e.currentTarget.select()} onClick={e=>e.stopPropagation()} onChange={e=>setLength(e.currentTarget.value.trim().length)}
+    onBlur={e=>finish(tooLong?null:e.currentTarget.value)} onKeyDown={e=>{e.stopPropagation();if(e.key==='Enter'){if(!tooLong)finish(e.currentTarget.value);}else if(e.key==='Escape')finish(null);}}/>
+    {tooLong && <span className="control-error" id={errorId} role="status">Keep the name to {FOLDER_NAME_MAX} characters (now {length}).</span>}</span> : <span className="pj-name">{f.name}</span>;
 }
 function Star({on}:{on:boolean}) {
   return <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden><path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9L12 3.5Z" fill={on?'currentColor':'none'} stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/></svg>;
@@ -303,7 +306,7 @@ function Projects() {
   };
   const named=(f:Folder)=>async(name:string|null)=>{
     setEditing(null);const next=name?.trim();if(!next || next===f.name)return;
-    try{await renameFolder(f.id,next);}catch(error){setError(`Oops! Couldn't rename: ${message(error)}`);}
+    try{await renameFolder(f.id,next);setError(null);}catch(error){setError(`Oops! Couldn't rename: ${message(error)}`);}
   };
   const nest=async(id:string,parent:string|null)=>{
     const f=folders.find(x=>x.id===id);if(!f || (f.parentId ?? null)===parent || id===parent)return;

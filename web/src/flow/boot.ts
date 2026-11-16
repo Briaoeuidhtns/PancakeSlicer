@@ -4,7 +4,6 @@ import { plateSignature } from '../slice-input';
 import { followJob, job, jobTerminal, type TrackedJob } from './job';
 import { project } from './project';
 import { probeEngine } from './engine-health';
-import { startProfileEdits } from './profile-edit';
 import { initialiseRecovery, readRecovery, recoverySignature, rememberRecovery } from './recovery';
 import { restorePrinterSend, printerSend } from './transfer';
 import { startSliceTracking } from './slice';
@@ -87,5 +86,5 @@ export async function startFlows() {
     rememberRecovery({ job: undefined, send: undefined });
     printerSend.reset(); loadSource(null);
   });
-  startSliceTracking(); startProfileEdits(); restorePrinterSend(); void probeEngine();
+  startSliceTracking(); restorePrinterSend(); void probeEngine();
 }

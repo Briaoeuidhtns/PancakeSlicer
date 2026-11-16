@@ -1,6 +1,8 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useStore, setState, getState } from '../state/store';
-import { listProfiles } from '../profiles/pickerSource';
+import { SEP } from '../separator';
+import { openLibrary } from '../navigation';
+import { useStore, getState } from '../state/store';
+import { profileInfo } from '../profiles/view';
 import { printerCover } from '../profiles/metadata';
 import { confirmDialog } from '../components/Ask';
 import { Check } from '../components/Check';
@@ -104,7 +106,7 @@ function PrinterRender({ cover }: { cover?: string }) {
 }
 
 const HISTORY_PAGE = 20;
-const jobReason = (job: History) => job.job_end === 'failed' ? (job.job_errors ?? []).map((e) => e.message ? `${e.message} (${e.code})` : `Error ${e.code}`).join(' · ') : '';
+const jobReason = (job: History) => job.job_end === 'failed' ? (job.job_errors ?? []).map((e) => e.message ? `${e.message} (${e.code})` : `Error ${e.code}`).join(SEP) : '';
 
 function HistoryRow({ job, running, printer }: { job: History; running: boolean; printer?: boolean }) {
   const reason = jobReason(job);

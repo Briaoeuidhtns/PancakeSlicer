@@ -183,23 +183,19 @@ func main() {
 	if err := configureResolve(cfg.Options.plain); err != nil {
 		log.Fatal(err)
 	}
-	cfg.Features, cfg.Options = features, options
-	if placementErr != nil {
-		log.Printf("R238 placement unavailable; plate z/printable and loaded project saves require an upgraded tool: %v", placementErr)
-	} else {
-		cfg.Features.PlatePlacement = true
+	catalog, err := loadCatalog(filepath.Join(cfg.Resources, "catalog"))
+	if err != nil {
+		log.Fatal(err)
 	}
 	if err := checkStarters(catalog); err != nil {
 		log.Fatal(err)
 	}
-	cfg.Features.ColourChange = colour
-	log.Printf("tool operations: step %v, edit %v, force_planar %v, cut %v, volumes %v, patch_preview %v, surface_grid %v, calib %v", cfg.Features.Step, cfg.Features.Edit, cfg.Features.ForcePlanar, cfg.Features.Cut, cfg.Features.Volumes, cfg.Features.PatchPreview, cfg.Features.SurfaceGrid, cfg.Features.Calib)
+	log.Printf("catalog %s: %d printers, %d prints, %d filaments", catalog.Version, len(catalog.Printers), len(catalog.Prints), len(catalog.Filaments))
 	jobs, err := NewJobManager(cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
-	go printerCatalogResponse(presets.root)
-	srv := &http.Server{Addr: cfg.Listen, Handler: NewServer(cfg, jobs, presets), ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 10 * time.Second, MaxHeaderBytes: 2 << 20}
+	srv := &http.Server{Addr: cfg.Listen, Handler: NewServer(cfg, jobs, catalog), ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 10 * time.Second, MaxHeaderBytes: 2 << 20}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -222,22 +218,4 @@ func main() {
 		log.Fatal(err)
 	}
 	<-shutdownDone
-}
-
-func warmPresets(presets *PresetIndex) error {
-	if _, err := presets.names(); err != nil {
-		return err
-	}
-	go func() {
-		for _, name := range []string{"BBL", "Prusa", "Custom"} {
-			vendor, err := presets.vendor(name)
-			if err == nil {
-				_, err = filamentCatalogResponse(vendor)
-			}
-			if err != nil {
-				log.Printf("cannot preload %s presets: %v", name, err)
-			}
-		}
-	}()
-	return nil
 }
