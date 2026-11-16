@@ -155,21 +155,6 @@ export function effectiveProfileValues(s: ProfileContextState, type: PresetType,
   const chosen = type === 'process' && s.processVariant && key === s.process ? { layer_height: config.layer_height } : empty;
   const merged = canonicalKeys({...config, ...project, ...plate, ...edits, ...chosen}), value = merged; editsCache.set(edits,value); const final = type === 'process' ? withSpeeds(s, resolved, value, {...project, ...plate, ...edits}) : value; snapshot.set(selection,final); return final;
 }
-export interface ContextProfile extends ResolvedProfile { id?: string; revision: number; baseName?: string; baseVendor?: string; parentName?: string }
-const first = (value: Config[string] | undefined) => String(Array.isArray(value) ? value[0] ?? '' : value ?? '');
-export function profileContext(s: ProfileContextState, overrides: {printer?: string; process?: string; nozzle?: string | number} = {}) {
-  const printerKey = overrides.printer ?? s.printer, processKey = overrides.process ?? s.process;
-  const entry = (type: PresetType, key: string, slot = 0): ContextProfile => {
-    const resolved = resolveProfile(s, type, key), raw = resolved.source;
-    const selected = type === 'machine' ? key === s.printer : type === 'process' ? key === s.process : key === s.filamentSlots?.[slot];
-    return {...resolved, id: resolved.key, revision: raw?.revision ?? 0, baseName: resolved.base?.name, baseVendor: resolved.base?.vendor,
-      parentName: raw?.parent ?? raw?.inherits,
-      config: selected ? effectiveProfileValues(s,type,key,slot) : resolved.config};
-  };
-  const printer = entry('machine', printerKey), process = entry('process', processKey);
-  if (overrides.nozzle !== undefined) printer.config = {...printer.config, nozzle_diameter:[String(overrides.nozzle)]};
-  const nozzleDiameters = [printer.config.nozzle_diameter ?? []].flat().map(Number).filter(n => Number.isFinite(n) && n > 0);
-  return {ownerPrinterId: printer.id, printer, process, filaments:(s.filamentSlots ?? []).map((key,slot) => entry('filament',key,slot)),
-    nozzleDiameters, printerModel:first(printer.config.printer_model), printerVariant:first(printer.config.printer_variant),
-    kinematics:first(printer.config.nonplanar_kinematics ?? printer.config.printer_kinematics ?? printer.config.printer_structure)};
+export function calibrationFor(s: State, key: string, slot = 0, printerKey = s.printer): CalibrationRow | undefined {
+  return calibrationAt(s, key, printerKey, slotNozzle(s, printerKey, slot));
 }

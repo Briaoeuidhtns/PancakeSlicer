@@ -8,7 +8,7 @@ import { display } from '../profiles/format';
 import { effectiveConfig, getState, removeObjectOptions, removeVolumeOptions, selectionOf, setObjectOption, setState, setVolumeOption, useStore,
   isSelected, type LayerRange, type PlateObject, type State } from '../state/store';
 import { undoable } from '../state/history';
-import { overrideCount } from '../plater/overrides';
+import { selectionValues } from '../profiles/view';
 import { addRangeAfter, canAddAfter, deleteRange, editRange, rangeLabel, removeRangeOptions, setRangeOption } from '../plater/ranges';
 import { Caret } from './Caret';
 import { SettingsTab, type ProfileFields } from './SettingsTab';
@@ -65,34 +65,8 @@ function overridesOf(s: State, project: Config): ObjectOverrides | null {
 export function useObjectOverrides(): ObjectOverrides | null {
   const objects = useStore((s) => s.objects), selected = useStore((s) => s.selected);
   const project = useStore((s) => effectiveConfig(s, 'process'));
-  return useMemo(() => overridesOf(getState(), project), [objects, selected, project]);
-}
-
-export function ObjectPicker({ overrides }: { overrides: ObjectOverrides | null }) {
-  const objects = useStore((s) => s.objects), selected = useStore((s) => s.selected);
-  const [open, setOpen] = useState(false);
-  const usable = objects.filter(editable);
-  const chosen = new Set(usable.filter((o) => o.instances.some((i) => isSelected(selected, o.id, i.id)) && selected?.volume === undefined && selected?.range === undefined).map((o) => o.id));
-  const pickObjects = (ids: number[]) => setState((s) => ({ selected: selectionOf(s, s.objects.filter((o) => ids.includes(o.id)).flatMap(instanceKeys)) }));
-  const toggle = (o: PlateObject) => pickObjects(chosen.has(o.id) ? [...chosen].filter((id) => id !== o.id) : [...chosen, o.id]);
-  const count = (n: number) => n > 0 && <span className="obj-pick-count" aria-label={`${n} ${n === 1 ? 'override' : 'overrides'}`}>{n}</span>;
-  const row = (key: string, label: string, checked: boolean, n: number, onPick: () => void, depth = 0, check = true) =>
-    <button key={key} type="button" role={check ? 'menuitemcheckbox' : 'menuitemradio'} aria-checked={checked} className="menu-item obj-pick-row" data-depth={depth || undefined}
-      onClick={onPick}><span className="menu-check" aria-hidden>{checked ? '✓' : ''}</span><span className="orca-menu-label">{label}</span>{count(n)}</button>;
-  return <Popover.Root open={open} onOpenChange={setOpen}>
-    <Popover.Trigger asChild><button type="button" className="pk-trigger dropdown obj-pick" aria-label={`Objects: ${overrides?.name ?? 'none selected'}`}>
-      <span className="pk-name">{overrides?.name ?? 'Select objects'}</span><Caret className="pk-caret"/></button></Popover.Trigger>
-    <Popover.Portal><Popover.Content className="orca-menu obj-pick-pop" data-menu-family="orca" role="menu" aria-label="Objects" align="start" sideOffset={4} collisionPadding={8}
-      onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); e.stopPropagation(); pickObjects(usable.map((o) => o.id)); } }}>
-      {usable.map((o) => [
-        row(`o${o.id}`, plain(o.name), chosen.has(o.id), overrideCount(o), () => toggle(o)),
-        ...(o.volumes ?? []).filter((v) => v.type === 'part' || v.type === 'modifier').map((v) => row(`v${o.id}:${v.id}`, v.name, selected?.object === o.id && selected.volume === v.id, Object.keys(v.settings ?? {}).length,
-          () => { setState({ selected: { object: o.id, instance: o.instances[0].id, volume: v.id } }); setOpen(false); }, 1, false)),
-        ...(o.ranges ?? []).map((r) => row(`r${o.id}:${r.id}`, rangeLabel(r), selected?.object === o.id && selected.range === r.id, Object.keys(r.settings).length,
-          () => { setState({ selected: { object: o.id, instance: o.instances[0].id, range: r.id } }); setOpen(false); }, 1, false)),
-      ])}
-    </Popover.Content></Popover.Portal>
-  </Popover.Root>;
+  const answer = { state: useStore((s) => selectionValues(s, 'process').state), error: useStore((s) => selectionValues(s, 'process').error) };
+  return useMemo(() => { const o = overridesOf(getState(), project); return o && { ...o, state: answer.state, error: answer.error }; }, [objects, selected, project, answer.state, answer.error]);
 }
 
 export function RangeEditor({ objectId, range }: { objectId: number; range: LayerRange }) {

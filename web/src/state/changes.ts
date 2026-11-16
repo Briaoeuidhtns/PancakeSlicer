@@ -1,8 +1,9 @@
 import type { ConfigValue, PresetType } from '../api/types';
 import { sameValue } from './value-equality';
 export { sameValue } from './value-equality';
-import { isHidden, OPTIONS } from '../options';
-import { effectiveConfig, PRESET_META, presetEdits, resolvePreset, type State } from './store';
+import { isHidden, profileHolds } from '../options';
+import { effectiveConfig, PRESET_META, presetEdits, type State } from './store';
+import { valueBelow, selectionValues } from '../profiles/view';
 
 export type ChangeScope = 'project' | 'object' | 'part' | 'range';
 export interface ChangeTarget { object?: number; volume?: number; range?: number }
@@ -19,8 +20,8 @@ export interface SettingChange {
 
 
 export function presetValue(s: State, type: PresetType, key: string, slot = 0): ConfigValue | undefined {
-  const name = type === 'machine' ? s.printer : type === 'process' ? s.process : s.filamentSlots[slot];
-  return resolvePreset(s, type, name ?? '').config[key] ?? OPTIONS[key]?.default as ConfigValue | undefined;
+  const layers = selectionValues(s, type, slot).layers[key];
+  return layers ? valueBelow(layers, 'project') : undefined;
 }
 
 export function settingValue(s: State, type: PresetType, key: string, slot = 0, target: ChangeTarget = {}): ConfigValue | undefined {

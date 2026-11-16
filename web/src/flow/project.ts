@@ -39,7 +39,7 @@ export type ProjectEvent =
   | { type: 'DRAFT'; id: string; durability: Exclude<DraftDurability, { state: 'none' }> }
   | { type: 'RECOVERED'; meta: ProjectMeta; draft: ProjectDraftMeta; failure: ProjectFailure; baseObjects: number }
   | { type: 'OPENED'; meta: ProjectMeta } | { type: 'MISSING'; id: string } | { type: 'DELETED' }
-  | { type: 'REBASE'; revision: number } | { type: 'REMOTE' } | { type: 'EMPTIED' };
+  | { type: 'REBASE'; revision: number } | { type: 'REMOTE' } | { type: 'EMPTIED' } | { type: 'RESTORED'; revision: number } | { type: 'SAVE_AS_NEW' };
 let recoveryCore: typeof import('./project-recovery');
 const projectFailure = (...args: Parameters<typeof recoveryCore.projectFailure>) => recoveryCore.projectFailure(...args);
 const conflictFailure = (...args: Parameters<typeof recoveryCore.conflictFailure>) => recoveryCore.conflictFailure(...args);
@@ -228,7 +228,10 @@ export const project = createMachine<ProjectStateName, ProjectEvent, ProjectCont
     saved: { on: { ...leave, ...notices(false), EDIT: 'editing' } },
     failed: {
       on: { ...leave, ...notices(true), EDIT: { action: () => ({ dirty: true }) },
-        RETRY: { target: 'saving', guard: (c) => c.failure?.kind !== 'deleted', action: () => ({ failure: null, error: null }) } } },
+        RETRY: { target: 'saving', guard: (c) => c.failure?.kind !== 'deleted', action: () => ({ failure: null, error: null }) },
+        RESTORED: { target: 'saving', guard: (c) => c.failure?.kind === 'deleted', action: (c, e) => ({ revision: e.revision, loaded: c.loaded && { ...c.loaded, revision: e.revision }, failure: null, error: null }) },
+        SAVE_AS_NEW: { target: 'saving', guard: (c) => c.failure?.kind === 'deleted',
+          action: () => ({ id: newKey(), revision: 0, savedAt: 0, origin: 'new' as const, failure: null, error: null, loaded: { revision: 0, objects: 0 }, allowEmpty: true }) } } },
     conflict: {
       on: { ...leave, REMOTE: {}, EDIT: { action: () => ({ dirty: true }) },
         ERROR: { action: (c, e) => { const failure = c.failure ?? failureOf(c, e); return { error: failure.message, failure, dirty: true }; } },
@@ -279,7 +282,7 @@ function remote(message: { type?: string; id?: string; sender?: string }) {
   if (message.type === 'deleted') {
     removed.add(message.id); epoch++; opening++;
     if (hasUnsavedProject()) {
-      const failure = projectFailure({ name: 'ProjectDeletedError', message: 'This project was deleted elsewhere, but we still have your local draft! Recover it to save a new copy.' }, message.id, project.get().context.revision);
+      const failure = projectFailure({ name: 'ProjectDeletedError', message: recoveryCore.TRASHED }, message.id, project.get().context.revision);
       project.send({ type: 'ERROR', error: failure.message, failure }); checkpointProject();
     } else project.send({ type: 'MISSING', id: message.id });
   } else if (message.type === 'saved') {
@@ -419,6 +422,7 @@ async function start(ready: Promise<unknown>) {
 
 export const storing = () => !!store;
 export const previousProject = () => previous;
+export const openWithUnsaved = (id: string) => project.get().context.id === id && hasUnsavedProject();
 export async function flushProjectDraft(): Promise<void> {
   const id = project.get().context.id;
   if (hasUnsavedProject()) await checkpointProject().durable;
@@ -508,6 +512,12 @@ export const renameProject = async (id: string, name: string) => (await recovery
 export const duplicateProject = async (id: string): Promise<ProjectMeta | null> => (await recoveryActions()).duplicateProject(recoveryRuntime, id);
 export const deleteProject = async (id: string): Promise<() => Promise<void>> => (await recoveryActions()).deleteProject(recoveryRuntime, id);
 export const restoreArchivedProject = async (id: string, expectedRevision?: number) => (await recoveryActions()).restoreArchivedProject(recoveryRuntime, id, expectedRevision);
+export async function restoreAndSave() {
+  const c = project.get().context;
+  try { const ack = await restoreArchivedProject(c.id); removed.delete(c.id); project.send({ type: 'RESTORED', revision: ack.revision }); await flushProject(); }
+  catch (e) { const failure = projectFailure(e, c.id, c.revision); project.send({ type: 'ERROR', error: failure.message, failure }); }
+}
+export async function saveAsNewProject() { project.send({ type: 'SAVE_AS_NEW' }); await flushProject(); writeProjectRoute(true); }
 export const discardRejectedProjectCommand = async (operationId: string) => (await recoveryActions()).discardRejectedProjectCommand(recoveryRuntime, operationId);
 
 export type ProjectSnapshot = Snapshot<ProjectStateName, ProjectContext>;

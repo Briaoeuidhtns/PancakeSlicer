@@ -5,7 +5,6 @@ import { filamentColor } from './filamentColor';
 import { remapObject } from '../components/RemapFilaments';
 import { blend } from './mixColour';
 import type { PaintNode, Painting } from './paint';
-import { remapNozzleAssignments } from '../multinozzle/assignments';
 import { insertFlushSlots, retainFlushSlots } from '../multinozzle/flush-mapping';
 import { allFlush, flushReady } from '../flush-state';
 
@@ -19,7 +18,9 @@ export const filamentType = (s: State, c: number) => String([effectiveConfig(s, 
 
 export function broken(s: State, m: Mix) {
   const n = physicalCount(s);
-  return m.components.length < 2 || m.components.some((c) => c < 1 || c > n) || new Set(m.components.map((c) => filamentType(s, c))).size > 1;
+  const printer = s.records.printers.find((p) => p.id === s.printer), count = printer?.nozzles.length ?? 1;
+  return m.components.length < 2 || m.components.some((c) => c < 1 || c > n) || new Set(m.components.map((c) => filamentType(s, c))).size > 1
+    || count > 1 && new Set(m.components.map((c) => slotExtruder(printer, count, c - 1))).size > 1;
 }
 
 export function remapAll(st: State, map: number[]): Partial<State> {
@@ -27,8 +28,7 @@ export function remapAll(st: State, map: number[]): Partial<State> {
   const events = (es: State['events']) => es.flatMap((e) => (e.type !== 'change' ? [e] : map[Number(e.text) - 1] ? [{ ...e, text: String(map[Number(e.text) - 1]) }] : []));
   return {
     objects: each(st.objects), events: events(st.events),
-    ...(kept ? { flush: { ...st.flush, matrix: retainFlushSlots(st.flush.matrix ?? st.projectMaterials?.matrix, st.filamentSlots.length, kept) } } : {}),
-    projectPlates: st.projectPlates.map((p) => ({ ...p, settings: remapNozzleAssignments(p.settings, map, kept),
+    projectPlates: st.projectPlates.map((p) => ({ ...p,
       ...(p.index === st.plateIndex ? {} : { objects: each(p.objects), events: p.events && events(p.events) }) })),
     job: markStale(st.job),
   };

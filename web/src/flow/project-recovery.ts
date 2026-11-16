@@ -12,7 +12,7 @@ export function projectFailure(error: unknown, projectId: string, expectedRevisi
   const name = typeof source.name === 'string' ? source.name : 'Error';
   const kind = name === 'ProjectConflictError' ? 'conflict' : name === 'ProjectDeletedError' ? 'deleted'
     : name === 'QuotaExceededError' ? 'quota' : name === 'ProjectServiceError' ? 'unavailable' : loading ? 'decode' : 'unavailable';
-  const message = kind === 'quota' ? 'Oops! Server storage is full. Keep this tab open and export your project as a file, or free up space and try saving again.'
+  const message = kind === 'deleted' && !loading ? TRASHED : kind === 'quota' ? 'Oops! Server storage is full. Keep this tab open and export your project as a file, or free up space and try saving again.'
     : typeof source.message === 'string' ? source.message : String(error);
   return { kind, name, message, projectId, expectedRevision };
 }

@@ -40,17 +40,17 @@ export function FilamentMenu({ extra = [] }: { extra?: MenuEntry[] }) {
   const slots = useStore((s) => slotFilaments(s).length);
   const physical = slots - Object.keys(useStore((s) => slotMixes(s))).length;
   const flushChanged = useStore((st) => flushModified(st));
-  const amsPrinter = useStore((st) => st.printerConnections.connections.some((c) => c.printer === st.printer && c.kind === 'bambu-lan') ? st.printer : undefined);
-  const [syncing, setSyncing] = useState(false);
-  const sync = () => {
-    if (!amsPrinter || syncing) return;
-    setSyncing(true);
-    void import('../plater/amsSync').then((m) => m.syncAms(amsPrinter)).finally(() => setSyncing(false));
-  };
-  const items: MenuEntry[] = [
-    ...(physical > 1 ? [{ label: flushChanged ? 'Flushing volumes (edited)…' : 'Flushing volumes…', action: () => setState({ flushDialog: true }) }] : []),
-    ...(amsPrinter ? [{ label: syncing ? 'Syncing from AMS…' : 'Sync from AMS', disabled: syncing, action: sync }] : []),
-    ...(physical > 1 ? [{ label: 'Mixed filament…', action: () => setState({ appDialog: 'mixed' }) }] : []),
+  const flushReason = useStore(flushUnavailable);
+  const mixable = useStore((st) => {
+    const printer = st.records.printers.find((p) => p.id === st.printer), count = printer?.nozzles.length ?? 1, n = slotFilaments(st).length - Object.keys(slotMixes(st)).length;
+    const sides = Array.from({ length: n }, (_, i) => slotExtruder(printer, count, i));
+    return sides.some((e, i) => e !== undefined && sides.indexOf(e) !== i);
+  });
+  const items: MenuEntry[] = [...extra,
+    ...(physical > 1 ? [flushReason ? { label: 'Flushing volumes…', disabled: true, reason: flushReason }
+      : { label: flushChanged ? 'Flushing volumes (edited)…' : 'Flushing volumes…', action: () => setState({ flushDialog: true }) }] : []),
+    ...(physical > 1 ? [mixable ? { label: 'Mixed filament…', action: () => setState({ appDialog: 'mixed' }) }
+      : { label: 'You\'ll need two slots on one nozzle to mix filaments!', disabled: true }] : []),
   ];
   return items.length ? <MenuButton className="icon-btn rail-act" label="Slot tools" items={items}><Glyph name="more"/></MenuButton> : null;
 }

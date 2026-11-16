@@ -144,6 +144,9 @@ export function PrinterPicker() {
     return byVendorRail(byVendor);
   };
   const selected = resolvePreset(getState(), 'machine', printer), pending = usePickerPending(!!selected.name);
+  const record = useStore((s) => s.records.printers.find((p) => p.id === s.printer));
+  const lines = record?.nozzles[0] ? printerTrigger({ vendor: record.vendor, model: record.model, variant: record.nozzles[0].variant, nozzle: record.nozzles[0].diameter, ...(record.nozzles.length > 1 ? { nozzles: record.nozzles.map((n) => n.diameter) } : {}) }) : null;
+  const removed = useStore((s) => { const p = findProfile(s, 'machine', s.printer); return p?.archived ? p.name : ''; });
   return (
     <Picker label="Printer" value={printer} memory="orca.web.picker.printers" groups={sameStateGroups('printer', profileGroups)} onPick={(name) => name !== printer && requestPreset('machine', 0, name)}
       footer={[{ label: 'Add printer', run: () => setState({ presetUx: { kind: 'presets', type: 'machine', add: true } }) }, presets('machine', printer)]}>

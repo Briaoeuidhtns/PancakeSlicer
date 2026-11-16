@@ -46,6 +46,7 @@ export function createServiceDocument<D extends ServiceDocument>(path: string, m
     },
   });
   if (typeof window !== 'undefined') window.addEventListener('online', () => { if (sync.get().value === 'failed') sync.send({ type: 'ONLINE' }); });
+  if (typeof window !== 'undefined') window.addEventListener('pagehide', () => { if (sync.get().value === 'debounced') void flush().catch(() => {}); });
   const publish = (patch: Partial<DocumentSnapshot<D>>) => { current = { ...current, ...patch }; listeners.forEach((listener) => listener()); };
   sync.subscribe(({ value, context }) => publish({ state: value, error: context.error }));
   const message = (error: unknown) => error instanceof Error ? error.message : String(error);

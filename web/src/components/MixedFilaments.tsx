@@ -9,6 +9,9 @@ import { filamentColor } from '../plater/filamentColor';
 import { confirmDialog } from '../actions';
 import { Modal, ModalBody, ModalFooter, ModalTitle } from './Modal';
 import './MixedFilaments.css';
+import { slotExtruder } from '../printers/feeds';
+import { extruderLabel } from '../multinozzle/config';
+import { slotFilaments, slotMixes } from '../profiles/slots';
 
 const MIN_RATIO = 10;
 const ramp = (s: State, m: Mix) => {
@@ -75,8 +78,12 @@ function MixDialog({ slot, close }: { slot: number | null; close(): void }) {
   const three = m.components.length === 3;
   const colours = m.components.map((c) => componentColour(s, c));
   const types = m.components.map((c) => (c >= 1 && c <= n ? filamentType(s, c) : ''));
-  const mismatch = new Set(types.filter(Boolean)).size > 1;
   const unset = m.components.some((c) => c < 1 || c > n);
+  const unknownType = !unset && types.some((t) => !t), mismatch = new Set(types.filter(Boolean)).size > 1;
+  const printer = s.records.printers.find((p) => p.id === s.printer), count = printer?.nozzles.length ?? 1;
+  const sides = m.components.map((c) => slotExtruder(printer, count, c - 1));
+  const split = !unset && count > 1 && new Set(sides).size > 1;
+  const strip = slotFilaments(s), same = !unset && new Set(m.components.map((c) => `${strip[c - 1]}|${colours[m.components.indexOf(c)]}`)).size === 1;
   const setRatio = (k: number, v: number) => {
     if (!three) return setM({ ...m, ratios: k ? [100 - v, v] : [v, 100 - v] });
     const r = [...m.ratios];
@@ -141,10 +148,12 @@ function MixDialog({ slot, close }: { slot: number | null; close(): void }) {
           </div>
         </>}
         {mismatch && <p className="modal-error" role="alert">Mix filaments of one type ({m.components.map((c, k) => `${c}: ${types[k]}`).join(', ')}).</p>}
+        {!mismatch && unknownType && <p className="hint-text" role="status">Checking filament types…</p>}
+        {split && <p className="modal-error" role="alert">Mix filaments on one nozzle ({m.components.map((c, k) => `${c}: ${sides[k] === undefined ? 'no nozzle' : extruderLabel(sides[k]!, count, printer?.vendor === 'BBL')}`).join(', ')}).</p>}
       </ModalBody>
       <ModalFooter>
         <button type="button" className="btn" onClick={close}>Cancel</button>
-        <button type="button" className="btn-primary" disabled={unset || mismatch} onClick={ok}>{slot === null ? 'Add' : 'Save'}</button>
+        <button type="button" className="btn-primary" disabled={unset || mismatch || unknownType || split} onClick={ok}>{slot === null ? 'Add' : 'Save'}</button>
       </ModalFooter>
     </Modal>
   );

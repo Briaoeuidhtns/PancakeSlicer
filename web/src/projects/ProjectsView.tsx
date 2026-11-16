@@ -4,7 +4,7 @@ import { Check } from '../components/Check';
 import { Dropdown } from '../components/Dropdown';
 import { confirmDialog } from '../components/Ask';
 import { toast } from '../state/store';
-import { projectListSnapshot, refreshProjects, subscribeProjectList, useProject } from '../flow/project';
+import { openWithUnsaved, projectListSnapshot, refreshProjects, subscribeProjectList, useProject } from '../flow/project';
 import { useMachine } from '../flow/fsm';
 import { projectsOps, runProjectsOp } from '../flow/projects-ops';
 import { createSelection, reduceSelection, selectedVisible, type SelectionEvent } from '../profiles/selection';
@@ -241,7 +241,9 @@ function Projects() {
   },command.operationId);
   const remove=async(ids:readonly string[],ask=true)=>{
     const targets=(list??[]).filter(p=>ids.includes(p.id));if(projectsOps.get().value!=='idle' || !targets.length || targets.some(p=>blocked(p.id)))return;
-    if(ask && !await confirmDialog(targets.length===1?'Move to Trash?':`Move ${targets.length} projects to Trash?`,names(targets),['Move to Trash','Cancel'],true))return;
+    const unsaved=targets.find(p=>openWithUnsaved(p.id));
+    if(unsaved && !await confirmDialog('Discard your unsaved changes?',`Heads up! ${unsaved.name} is open with unsaved changes — moving it to Trash will discard them.`,['Discard and move to Trash','Cancel'],true))return;
+    if(ask && !unsaved && !await confirmDialog(targets.length===1?'Move to Trash?':`Move ${targets.length} projects to Trash?`,names(targets),['Move to Trash','Cancel'],true))return;
     await runProjectsOp('deleting',async()=>{
     setError(null);const undo:ProjectUndo[]=[],failed:string[]=[];
     for(const p of targets){const run=await deleteProject(p.id);if(run){const entry={id:p.id,name:p.name,run};undo.push(entry);projectUndos.set(p.id,entry);}else failed.push(p.name);}

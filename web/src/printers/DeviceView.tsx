@@ -67,11 +67,7 @@ function Spool({ printer, tray, trays, report, chosen, choices, busy, choose, sw
   const colour = /^#[0-9a-f]{6}$/i.test(tray.color) ? tray.color : undefined;
   const remaining = tray.type && tray.remaining != null && tray.remaining >= 0 ? Math.min(100, tray.remaining) : undefined;
   const where = trayCode(tray, trays);
-  const chosen = match?.rule === 'remembered' || match?.rule === 'spool';
-  const same = (c: { type: string }) => c.type.toUpperCase() === tray.type.toUpperCase();
-  const options = match && [...(match.filament ? [] : [{ value: '', label: match.name }]),
-    ...[...choices].sort((a, b) => Number(same(b)) - Number(same(a))).map((c) => ({ value: c.key, label: c.name, search: `${c.name} ${c.type}` })),
-    ...(chosen ? [{ value: AUTO, label: 'Match automatically' }] : [])];
+  const mine = choices.find((c) => c.key === chosen), mineType = useFilamentType(printer, chosen, tray.extruder ?? 0), note = mine ? materialNote(tray.type, mine.name, mineType) : null, earlier = !chosen && report?.earlier ? choices.find((c) => c.key === report.earlier) : undefined;
   return <div className="device-spool" data-active={tray.active || undefined} aria-label={`${where}, ${tray.type || 'empty'}${tray.active ? ', in use' : ''}`}>
     {swatch ? <span className="device-spool-swatch"><FilamentColourMenu printer={swatch.printer} slot={swatch.slot}/></span>
       : <span className="device-spool-disc" style={{ backgroundColor: tray.type ? colour : undefined }} data-empty={!tray.type || undefined} aria-hidden="true" />}
@@ -187,8 +183,8 @@ function DevicePanel({ connection, model, cover, status, live }: { connection: P
   const phrase = !live ? 'Reconnecting…' : canStop ? status?.state === 'paused' ? 'Paused' : status?.state === 'busy' ? 'Printer busy' : 'Printing' : end.label;
   const tone = !live ? 'offline' : canStop ? status?.state === 'busy' ? undefined : 'printing' : end.tone;
   const progress = canStop ? status?.progress : status?.state === 'finished' && filename ? 1 : undefined;
-  const ams = bambu && trays.length > 0 && <Card title="AMS & filament" className="device-ams" action={platePrinter === connection.printer && <button type="button" className="btn slant device-action" disabled={syncing} onClick={useFilaments}>{syncing ? 'Reading…' : 'Use printer\'s filaments'}</button>}>{[...units].sort(([a], [b]) => a - b).map(([id, slots]) => <div className="device-ams-unit" key={id}>{units.size > 1 && <h3>AMS {id + 1}</h3>}<div className="device-slots">{slots.sort((a, b) => a.slot - b.slot).map((tray) => <Spool key={tray.id} tray={tray} trays={trays} dual={dual} match={matchOf(tray)} choices={choices} busy={busy || choosing} choose={choose(tray)} />)}</div></div>)}
-          {trays.filter((t) => t.kind === 'external').map((tray) => <div className="device-external" key={tray.id}><Spool tray={tray} trays={trays} dual={dual} external match={matchOf(tray)} choices={choices} busy={busy || choosing} choose={choose(tray)} /></div>)}
+  const ams = bambu && trays.length > 0 && <Card title="AMS & filament" className="device-ams">{[...units].sort(([a], [b]) => a - b).map(([id, slots]) => <div className="device-ams-unit" key={id}>{units.size > 1 && <h3>AMS {id + 1}</h3>}<div className="device-slots">{slots.sort((a, b) => a.slot - b.slot).map((tray) => <Spool key={tray.id} printer={connection.printer} tray={tray} trays={trays} report={reportOf(tray)} chosen={chosenOf(tray)} swatch={swatchOf(tray)} choices={choices} busy={busy || choosing} choose={choose(tray)} />)}</div></div>)}
+          {trays.filter((t) => t.kind === 'external' && !(feedOf(model)?.external === 'exclusive' && units.size > 0)).map((tray) => <div className="device-external" key={tray.id}><Spool printer={connection.printer} tray={tray} trays={trays} report={reportOf(tray)} chosen={chosenOf(tray)} swatch={swatchOf(tray)} choices={choices} busy={busy || choosing} choose={choose(tray)} /></div>)}
         </Card>;
   const temperatures = !!(status?.nozzle || status?.nozzle_temps?.length || status?.bed || (capabilities.chamber && status?.chamber));
   return <article className="device-panel" aria-label={connection.name}>

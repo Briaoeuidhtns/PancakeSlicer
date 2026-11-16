@@ -21,6 +21,12 @@ const useLabel = () => ({ 'aria-labelledby': useContext(LabelId) });
 
 const NUMERIC = new Set(['float', 'floats', 'int', 'ints', 'percent', 'percents', 'float_or_percent', 'floats_or_percents']);
 
+function bounded(def: OptionDef): OptionDef {
+  if (def.sidetext?.trim() !== 'mm/s' || !def.key.endsWith('_speed')) return def;
+  const machine = effectiveConfig(getState(), 'machine');
+  const top = Math.max(...['machine_max_speed_x', 'machine_max_speed_y'].map((k) => Number([machine[k]].flat()[0]) || 0));
+  return top > 0 && (def.max === undefined || top < def.max) ? { ...def, max: top } : def;
+}
 function rejectField(text: string, previous: string, def: OptionDef, label: string): boolean {
   const issue = fieldIssue(text, def);
   if (!issue) return false;
@@ -263,13 +269,15 @@ function TextBox(props: { value: string; label?: string; multiline?: boolean; nu
   const latest = useRef(text), byKey = useRef(false);
   latest.current = text;
   useEffect(() => setText(shown(props.value)), [props.value]);
+  const stored = useRef(props.value); stored.current = props.value;
+  const settle = () => requestAnimationFrame(() => setTimeout(() => { latest.current = shown(stored.current); setText(shown(stored.current)); }, 0));
   const commit = () => {
     const keyed = byKey.current; byKey.current = false;
     const text = percentOnly && latest.current.trim() && !latest.current.trim().endsWith('%') ? `${latest.current.trim()}%` : latest.current;
     if (props.readOnly || text === props.value) return;
-    if (props.numeric && props.def && rejectField(text, props.value, props.def, label)) return;
-    if (keyed) { const commitText = props.onCommit; afterPaint(() => commitText(text)); }
-    else props.onCommit(text);
+    if (props.numeric && props.def && rejectField(text, props.value, props.def, label)) { settle(); return; }
+    if (keyed) { const commitText = props.onCommit; afterPaint(() => { commitText(text); settle(); }); }
+    else { props.onCommit(text); settle(); }
   };
   const stepNumber = (direction: number, big = false, keyboard = false) => {
     if (props.readOnly || !props.def) return;

@@ -57,7 +57,12 @@ export function SettingsTab({ type, slot = 0, compact, hidePreset, editor, overr
   };
   const [bedDialog, setBedDialog] = useState(false);
   const [pageIdx, setPageIdx] = useState(0);
-  const [extruderSelection, setExtruderSelection] = useState<ExtruderSelection>({ extruder: 0, variant: 0 });
+  const usedNozzles = useStore((s) => { const printer = s.records.printers.find((p) => p.id === s.printer), count = printer?.nozzles.length ?? 1;
+    return [...new Set(plateSlots(s).map((slot) => slotExtruder(printer, count, slot - 1)).filter((e): e is number => e !== undefined))].sort().join(','); });
+  const firstUsed = usedNozzles ? Number(usedNozzles.split(',')[0]) : 0;
+  const [extruderSelection, setExtruderSelection] = useState<ExtruderSelection>(() => ({ extruder: firstUsed, variant: 0 }));
+  useEffect(() => { if (usedNozzles && !usedNozzles.split(',').map(Number).includes(extruderSelection.extruder)) setExtruderSelection((sel) => ({ ...sel, extruder: firstUsed })); }, [usedNozzles]); // eslint-disable-line react-hooks/exhaustive-deps
+  const variantKeys = perExtruderKeys(type);
   const auxes = auxiliary ? [auxiliary].flat() : [];
   const [auxIdx, setAuxIdx] = useState<number | null>(() => { const i = auxes.findIndex((a) => a.initial); return i < 0 ? null : i; });
   const aux = auxIdx !== null ? auxes[auxIdx] : undefined, auxiliaryOn = !!aux;

@@ -13,11 +13,11 @@ export function AutoInputs() {
   const custom = height !== null && !heights.some((h) => Math.abs(h - height) < 0.0005);
   const value = height === null ? '' : custom ? 'custom' : label(height);
   const choose = (id: string) => { if (id !== 'custom') setLayerHeight(Number(id)); };
-  const extra = custom ? [{ id: 'custom', label: 'Custom' }] : [];
+  const extra = custom ? [{ id: 'custom', label: label(height!) }] : [];
   return <>
     {heights.length > 0 && <div className="rail-row rail-row-wide layer-heights">
       {heights.length > 6
-        ? <Dropdown className="combo" aria-label="Layer height" value={value} onValueChange={choose} options={[...heights.map((h) => ({ value: label(h), label: `${label(h)} mm` })), ...extra.map((o) => ({ value: o.id, label: `Custom (${label(height!)} mm)` }))]}/>
+        ? <Dropdown className="combo" aria-label="Layer height" value={value} onValueChange={choose} options={[...heights.map((h) => ({ value: label(h), label: `${label(h)} mm` })), ...extra.map((o) => ({ value: o.id, label: `${o.label} mm` }))]}/>
         : <Choice label="Layer height" value={value} options={[...heights.map((h) => ({ id: label(h), label: label(h) })), ...extra]} onChange={choose}/>}
     </div>}
   </>;

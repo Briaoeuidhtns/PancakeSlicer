@@ -78,8 +78,8 @@ function FormulaLine({ f, nozzle, height, readOnly, onFactor, onRemove }: { f: F
   </li>;
 }
 
-export function DynamicTab({ speedModel, speeds = {}, onSpeedModel, onUseMultiplier, rows, nozzle, height, minHeight, maxHeight, readOnly, onChange, fromPrinter, config = {} }: {
-  speedModel?: SpeedModel; speeds?: Record<string, SpeedDetail>; onSpeedModel?(model: SpeedModel): void; onUseMultiplier?(key: string): void;
+export function DynamicTab({ speedModel, speeds: firstSpeeds = {}, nozzleSpeeds, missingReference, slowerNote, onSpeedModel, onUseMultiplier, rows, nozzle, height, minHeight, maxHeight, readOnly, onChange, fromPrinter, config = {} }: {
+  speedModel?: SpeedModel; speeds?: Record<string, SpeedDetail>;  nozzleSpeeds?: { label: string; speeds: Record<string, SpeedDetail> }[]; missingReference?: boolean;  slowerNote?: boolean; onSpeedModel?(model: SpeedModel): void; onUseMultiplier?(key: string): void;
   rows: ScaleRow[]; nozzle: number; height: number; minHeight?: number; maxHeight?: number; readOnly?: boolean; onChange(rows: ScaleRow[]): void;
    config?: Config;
    fromPrinter?: { name: string; values: Record<string, unknown> };

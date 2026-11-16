@@ -14,7 +14,7 @@ import { PresetCombo, requestPreset } from './PresetCombo';
 import { ChangesMark, PresetActions, PrinterChangesMark } from '../profiles/PresetBar';
 import { MenuButton, type MenuEntry } from './Menu';
 import { Caret } from './Caret';
-import { preferenceText, savePreferences, usePreference } from '../saved-preferences';
+import { flushSavedPreferences, preferenceText, savePreferences, usePreference } from '../saved-preferences';
 import { printerCover } from '../profiles/metadata';
 import './settings.css';
 import { Glyph, type GlyphName } from './Glyph';
@@ -35,6 +35,7 @@ function RailSection({title, summary, meta, actions, className = '', children}: 
   const fold = () => {
     const rest = (preferenceText('orca.rail_folded') ?? '').split(',').filter(t => t && t !== title);
     savePreferences({'orca.rail_folded': (folded ? rest : [...rest, title]).join(',')});
+    void flushSavedPreferences().catch(() => {});
     if (folded) { setOpening(true); setTimeout(() => setOpening(false), 150); }
   };
   return <section className={`rail-section ${className}${folded ? ' folded' : ''}${opening ? ' opening' : ''}`} aria-label={title}>

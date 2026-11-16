@@ -1,8 +1,9 @@
 import { Dropdown, EditableDropdown } from './Dropdown';
-import { useEffect, useState } from 'react';
-import type { Config, SystemPreset } from '../api/types';
-import { effectiveConfig, getState, printerPreset, resolvePreset, setState, toast, useStore, type State } from '../state/store';
-import { catalogKey, findCatalogBase, saveProfile } from '../profiles/model';
+import { useMemo, useState } from 'react';
+import { createMachine, useMachine } from '../flow/fsm';
+import { NAME_MAX, nameLength, type PrinterRecord } from '../profiles/records';
+import { getState, toast, useStore } from '../state/store';
+import { profileInfo, recordOf } from '../profiles/view';
 import { useCatalog } from '../profiles/catalog-add';
 import type { CatalogModel } from '../profiles/catalog-reads';
 import { catalogLine } from '../catalog/read';
@@ -55,24 +56,24 @@ export default function CreatePrinter({ close }: { close(): void }) {
     : !(Number(nozzle) > 0) ? 'Please enter a nozzle diameter.'
     : mode === 'printer' && s.userPresets.some((u) => u.type === 'machine' && !u.archived && u.name === name) ? `“${name}” already exists.` : '';
   const create = async () => {
-    if (!base || missing) return;
-    if (getState().profileLibraryLoad.state !== 'ready') return;
-    const nd = base.config.nozzle_diameter;
-    const overrides: Config = {
-      printable_area: `${-ox}x${-oy},${w - ox}x${-oy},${w - ox}x${d - oy},${-ox}x${d - oy}`,
-      printable_height: String(h),
-      nozzle_diameter: Array.isArray(nd) ? (nd as unknown[]).map(() => nozzle) : nozzle,
-    };
-    try {
-      if (!findCatalogBase(getState(), 'machine', base.name).base) setState((st) => ({ machines: [...st.machines.filter((m) => catalogKey(m) !== catalogKey(base)), base] }));
-      const profile=saveProfile(getState(),'machine',name,mode === 'nozzle' ? s.printer : base.name,{...shape,...overrides});
-      await commitProfileRecords([profile]);
-      if(mode === 'printer')switchPreset('machine',0,profileKey(profile));
-      toast(`Added printer ${name}!`);
-      close();
-    } catch (e) {
-      toast(`Oops! Couldn't create printer: ${e instanceof Error ? e.message : String(e)}`);
+    if (missing || getState().profileLibraryLoad.state !== 'ready' || !intent.can({ type: 'CREATE' })) return;
+    intent.send({ type: 'CREATE' });
+    try { await write(); } catch (e) { intent.send({ type: 'FAILED' }); toast('couldnt_create_printer', { detail: e instanceof Error ? e.message : String(e) }); }
+  };
+  const write = async () => {
+    const id = `profile:${randomId()}`;
+    let record: PrinterRecord;
+    if (fromCurrent) record = { ...current!, id, name, revision: 0, archived: undefined, slots: current!.slots.map((slot, i) => ({ ...slot, id: `slot:${id}:${slot.tray || i}` })) };
+    else {
+      const variant = await variantFor(model!, diameter);
+      if (!variant) throw new Error(`Oops! ${model!.id} doesn't have a nozzle variant in the catalog.`);
+      record = { id, name, revision: 0, vendor: templateVendor, model: model!.id,
+        nozzles: Array.from({ length: Math.max(1, variant.extruders) }, () => ({ variant: variant.id, diameter })), slots: [] };
     }
+    await commitRecords([{ kind: 'printer', record }], { label: 'Add printer' });
+    switchPreset('machine', 0, id);
+    toast('added_printer', { name });
+    close();
   };
   const num = (label: string, v: number, set: (n: number) => void, min = -1000) => <label className="form-row"><span>{label}</span>
     <span className="modal-unit"><input className="text num" type="number" step={1} min={min} value={v} onChange={(e) => { const n = Number(e.target.value); if (Number.isFinite(n)) set(n); }} /><span>mm</span></span></label>;
@@ -109,7 +110,7 @@ export default function CreatePrinter({ close }: { close(): void }) {
       </ModalBody>
       <ModalFooter lead={!missing && <span data-full-text={name}>{name}</span>}>
         <button type="button" className="btn" onClick={close}>Cancel</button>
-        <button type="button" className="btn-primary" disabled={!!missing || !ready || !s.api || s.api.mock} onClick={() => void create()}>Create</button>
+        <button type="button" className="btn-primary" disabled={!!missing || !ready || !api || api.mock || creating} onClick={() => void create()}>{creating ? 'Creating…' : 'Create'}</button>
       </ModalFooter>
     </Modal>
   );

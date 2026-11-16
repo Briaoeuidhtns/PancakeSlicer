@@ -316,7 +316,7 @@ export async function deleteProject(runtime: RecoveryRuntime, id: string): Promi
       if (current && id === project.get().context.id && gen === documentGeneration()) {
         runtime.invalidateWrites(); runtime.beginOpen(); project.send({ type: 'DELETED' });
         runtime.adopt(() => { clearPlateJobs(); clearPlate(); newDocument(true); });
-        setState({ tab: 'projects' }); writeRoute('/projects');
+        setState({ tab: 'prepare' }); writeRoute('/');
       }
       runtime.publish('deleted', id); runtime.refreshList(); return undo;
     } };
@@ -327,10 +327,13 @@ export async function restoreArchivedProject(runtime: RecoveryRuntime, id: strin
   const storage = runtime.storage();
   if (!storage) throw new Error('Oops! Project storage isn\'t available right now.');
   const owner = removalOwners.get(runtime)?.get(id), removed = runtime.removed.has(id);
-  await storage.restore(id, expectedRevision);
+  const ack = await storage.restore(id, expectedRevision);
   if (removed && removalOwners.get(runtime)?.get(id) === owner) { removalOwners.get(runtime)?.delete(id); runtime.removed.delete(id); }
   runtime.publish('saved', id); runtime.refreshList();
+  return ack;
 }
+
+const trashed = (id: string, revision: number) => failureError(projectFailure({ name: 'ProjectDeletedError', message: TRASHED }, id, revision));
 
 export async function saveProjectSnapshot(runtime: RecoveryRuntime, capture: {
   id: string; document: Doc; gen: number; version: number; revision: number; storage: ProjectStore | null;
@@ -339,7 +342,7 @@ export async function saveProjectSnapshot(runtime: RecoveryRuntime, capture: {
   const { id, document, gen, version, revision, storage, receipt } = capture;
     if (revision > 0) await receipt.durable.catch(() => null);
     if (!storage) throw new Error('Oops! Project storage isn\'t available right now.');
-    if (runtime.removed.has(id)) return;
+    if (runtime.removed.has(id)) { if (runtime.activeWrite(id, gen, version)) throw trashed(id, revision); return; }
     if (runtime.activeWrite(id, gen, version) && project.get().value === 'conflict') throw failureError(project.get().context.failure ?? conflictFailure(id, revision));
     const { encode, nameOf, plateCount, thumbnail } = await codec();
     const { stored, blobs } = encode(document);
@@ -348,7 +351,7 @@ export async function saveProjectSnapshot(runtime: RecoveryRuntime, capture: {
       await storage.putBlob(id, k, b);
       runtime.known.add(`${id}/${k}`);
     }
-    if (runtime.removed.has(id)) return;
+    if (runtime.removed.has(id)) { if (runtime.activeWrite(id, gen, version)) throw trashed(id, revision); return; }
     const meta = { name: nameOf(document), savedAt: Date.now(), objects: plateCount(document), revision, change: changeForSave(id, document, revision) };
     const committed: CheckpointDocument = { ...stored, recoveryCheckpoint: receipt.checkpoint };
     const acknowledgement = await storage.save(id, meta, committed, meta.objects === 0 ? null : runtime.activeWrite(id, gen, version) ? thumbnail() ?? undefined : undefined);
