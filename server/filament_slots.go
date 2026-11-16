@@ -56,8 +56,14 @@ type spoolChoice struct {
 }
 
 type slotDoc struct {
-	Schema int                              `json:"schema"`
-	Last   map[string]*printerSlots         `json:"last"`
+	Schema int                      `json:"schema"`
+	Last   map[string]*printerSlots `json:"last"`
+	Spools map[string]spoolChoice   `json:"spools"`
+}
+
+const slotDocSchema = 2
+
+type legacySlotDoc struct {
 	Chosen map[string]map[string]slotChoice `json:"chosen"`
 	Spools map[string]spoolChoice           `json:"spools"`
 }
@@ -433,7 +439,7 @@ func (s *Server) printerSlotsFor(key string, profiles map[string]*v4Record) (*pr
 
 func (s *Server) printerSlotRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/printer-slots", func(w http.ResponseWriter, r *http.Request) {
-		profiles, err := s.libraryV4Profiles()
+		lib, err := s.libraryDocument()
 		if err != nil {
 			fail(w, 503, "Your profile library isn't available right now: " + err.Error())
 			return
@@ -443,7 +449,7 @@ func (s *Server) printerSlotRoutes(mux *http.ServeMux) {
 			if p.Printer == "" || out[p.Printer] != nil {
 				continue
 			}
-			slots, err := s.printerSlotsFor(p.Printer, profiles)
+			slots, err := s.printerSlotsFor(p.Printer, lib)
 			if err != nil {
 				slots = &printerSlots{Slots: []slotMatch{}, Error: err.Error()}
 			}
@@ -452,12 +458,12 @@ func (s *Server) printerSlotRoutes(mux *http.ServeMux) {
 		writeJSON(w, 200, map[string]any{"printers": out})
 	})
 	mux.HandleFunc("GET /api/printer-slots/{printer}", func(w http.ResponseWriter, r *http.Request) {
-		profiles, err := s.libraryV4Profiles()
+		lib, err := s.libraryDocument()
 		if err != nil {
 			fail(w, 503, "Your profile library isn't available right now: " + err.Error())
 			return
 		}
-		slots, err := s.printerSlotsFor(r.PathValue("printer"), profiles)
+		slots, err := s.printerSlotsFor(r.PathValue("printer"), lib)
 		if err != nil {
 			fail(w, 409, err.Error())
 			return
@@ -466,7 +472,7 @@ func (s *Server) printerSlotRoutes(mux *http.ServeMux) {
 	})
 	choose := func(w http.ResponseWriter, r *http.Request, filament string) {
 		key, slot := r.PathValue("printer"), r.PathValue("slot")
-		profiles, err := s.libraryV4Profiles()
+		lib, err := s.libraryDocument()
 		if err != nil {
 			fail(w, 503, "Your profile library isn't available right now: " + err.Error())
 			return
@@ -475,7 +481,7 @@ func (s *Server) printerSlotRoutes(mux *http.ServeMux) {
 			fail(w, 400, "Please pick a filament from My filaments.")
 			return
 		}
-		current, err := s.printerSlotsFor(key, profiles)
+		current, err := s.printerSlotsFor(key, lib)
 		if err != nil {
 			fail(w, 409, err.Error())
 			return
@@ -486,26 +492,28 @@ func (s *Server) printerSlotRoutes(mux *http.ServeMux) {
 				tray = &current.Slots[i]
 			}
 		}
-		if tray == nil {
-			fail(w, 404, "This slot doesn't have any filament loaded right now.")
-			return
-		}
-		s.filamentSlots.mu.Lock()
-		doc, err := s.filamentSlots.load()
-		if err == nil {
-			if doc.Chosen[key] == nil {
-				doc.Chosen[key] = map[string]slotChoice{}
-			}
-			if filament == "" {
-				delete(doc.Chosen[key], slot)
-				if tray.Spool != nil {
+		if tray != nil && tray.Spool != nil {
+			s.filamentSlots.mu.Lock()
+			doc, err := s.filamentSlots.load()
+			if err == nil {
+				if filament == "" {
 					delete(doc.Spools, *tray.Spool)
-				}
-			} else {
-				doc.Chosen[key][slot] = slotChoice{Filament: filament, Type: tray.Tray.Type, Colour: tray.Tray.Colour, At: time.Now().UTC()}
-				if tray.Spool != nil {
+				} else {
 					doc.Spools[*tray.Spool] = spoolChoice{Filament: filament, At: time.Now().UTC()}
 				}
+				err = s.filamentSlots.save()
+			}
+			s.filamentSlots.mu.Unlock()
+			if err != nil {
+				fail(w, 500, "filament_slots_internal", err.Error())
+				return
+			}
+			if lib, err = s.libraryDocument(); err == nil {
+				current, err = s.printerSlotsFor(key, lib)
+			}
+			if err != nil {
+				fail(w, 409, "filament_slots_conflict", err.Error())
+				return
 			}
 			err = s.filamentSlots.save()
 		}
@@ -519,7 +527,7 @@ func (s *Server) printerSlotRoutes(mux *http.ServeMux) {
 			fail(w, 409, err.Error())
 			return
 		}
-		writeJSON(w, 200, next)
+		writeJSON(w, 200, current)
 	}
 	mux.HandleFunc("PUT /api/printer-slots/{printer}/{slot}", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {

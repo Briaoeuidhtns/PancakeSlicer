@@ -34,46 +34,17 @@ export interface PrinterMaterialsPlan extends MaterialLibraryPlan {
   mixes: PrinterMaterialSetup['mixes'];
   referenceMap: Record<string, ProfileKey>;
 }
-const libraryOf = (s: MaterialLibraryState) => s.printerLibrary ?? emptyPrinterLibrary();
-const clone = <T>(value: T): T => structuredClone(value);
-const putSetup = (library: PrinterProfileLibrary, setup: PrinterMaterialSetup): PrinterProfileLibrary => ({
-  ...library, revision: library.revision + 1,
-  setups: { ...library.setups, [setup.printerId]: { ...setup, revision: setup.revision + 1 } },
-});
-export function planAddMaterial(s: MaterialLibraryState, sourceKey: string, options: {
-  printerId: ProfileKey; operationId: string; duplicate?: boolean; allowCrossPrinter?: boolean;
-}): MaterialLibraryPlan {
-  const library = libraryOf(s), owner = findProfile(s, 'machine', options.printerId);
-  const unchanged = (recovery: ProfileRecovery): MaterialLibraryPlan => ({ userPresets: s.userPresets, printerLibrary: library, recoveries: [recovery] });
-  if (!owner || profileKey(owner) !== options.printerId)
-    return unchanged({ type: 'machine', key: options.printerId, reason: 'missing-owner' });
-  const setup = library.setups[options.printerId] ?? emptyPrinterSetup(options.printerId);
-  const retry = s.userPresets.find(p => p.type === 'filament' && p.printerId === options.printerId && p.provenance?.operationId === options.operationId);
-  const source = findProfile(s, 'filament', sourceKey, options.printerId) ?? findProfile(s, 'filament', sourceKey);
-  const resolved = resolveProfile(s, 'filament', source ? profileKey(source) : sourceKey);
-  if (!retry && resolved.issue && !resolved.source?.snapshot)
-    return unchanged({ type: 'filament', key: sourceKey, reason: resolved.issue.code });
-  const reusable = retry ?? (!options.duplicate && source ? source : undefined);
-  let material = reusable;
-  if (!material) {
-    const anchor = resolved.base ? catalogAnchor(resolved.base) : source?.snapshot?.base;
-    if (!anchor) return unchanged({ type: 'filament', key: sourceKey, reason: 'missing-base', snapshot: source?.snapshot });
-    const config = clone(resolved.config);
-    const overlay = resolved.base ? changedKeys(config, resolved.base.config) : config;
-    material = {
-      id: `profile:${randomId()}`, type: 'filament', kind: 'profile',
-      name: source?.name ?? resolved.name ?? sourceKey, revision: 0, base: clone(anchor), inherits: anchor.name,
-      overlay, overrides: overlay, baseline: Object.fromEntries(Object.keys(overlay).map(key => [key, resolved.base?.config[key] ?? null])),
-      metadata: source?.metadata && clone(source.metadata), snapshot: { config, base: clone(anchor) },
-      provenance: { source: source ? 'profile' : 'catalog', sourceId: source && profileKey(source), sourceName: resolved.name ?? sourceKey,
-        sourceRevision: source?.revision, operationId: options.operationId },
-    };
-  }
-  const id = profileKey(material), included = setup.materialIds.includes(id);
-  return { userPresets: reusable ? s.userPresets : [...s.userPresets, material], materialId: id,
-    printerLibrary: included ? library : putSetup(library, { ...setup, materialIds: [...setup.materialIds, id] }),
-    recoveries: resolved.issue ? [{ type: 'filament', key: id, reason: resolved.issue.code, snapshot: material.snapshot }] : [],
-  };
+const filamentId = (s: State, key: string) => (recordOf(s, 'filament', key) ?? s.records.filaments.find((f) => f.aliases?.includes(key)))?.id ?? key;
+
+const PAUSES = ['M600', 'M0', 'M1', 'M25', 'PAUSE', 'M601'];
+export function machineSwap(config: Config, vendor: string | undefined): { mode: SwapMode; modes: SwapMode[] } {
+  const nozzles = [config.nozzle_diameter ?? []].flat();
+  if (nozzles.length > 1 && vendor !== 'BBL') return { mode: 'toolheads', modes: ['toolheads'] };
+  const text = (v: Config[string] | undefined) => String(Array.isArray(v) ? v[0] ?? '' : v ?? '').trim();
+  const change = text(config.change_filament_gcode), pause = text(config.machine_pause_gcode);
+  const onlyPause = !change || change === pause || PAUSES.includes(change.toUpperCase());
+  if (vendor === 'BBL' || text(config.single_extruder_multi_material) === '1' && !onlyPause) return { mode: 'ams', modes: ['ams', 'manual'] };
+  return { mode: 'manual', modes: ['manual'] };
 }
 
 export function capturePrinterMaterials(s: MaterialLibraryState): PrinterProfileLibrary {

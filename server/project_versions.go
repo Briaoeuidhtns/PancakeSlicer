@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
@@ -388,8 +389,8 @@ func (s *Server) versionRoutes(mux *http.ServeMux) {
 		})
 	})
 	mux.HandleFunc("GET /api/versions/{id}/{v}/summary", func(w http.ResponseWriter, r *http.Request) {
-		version(w, r, func(_ *workspaceData, id string, _ *versionIndex, v *projectVersion) {
-			etag := `"` + v.Record + `"`
+		version(w, r, func(d *workspaceData, id string, _ *versionIndex, v *projectVersion) {
+			etag := fmt.Sprintf(`"%s.%d"`, v.Record, len(d.Migrations))
 			w.Header().Set("Cache-Control", "private, no-cache")
 			w.Header().Set("ETag", etag)
 			if r.Header.Get("If-None-Match") == etag {
@@ -404,7 +405,7 @@ func (s *Server) versionRoutes(mux *http.ServeMux) {
 				Doc map[string]json.RawMessage `json:"doc"`
 			}
 			if err == nil {
-				err = json.Unmarshal(raw, &rec)
+				err = json.Unmarshal(migrateVersionRecord(d, raw, v.At), &rec)
 			}
 			if err != nil {
 				workspaceFailure(w, 503, "version_unavailable", "This version could not be read.", "retry_storage", 0)

@@ -158,7 +158,7 @@ export function splitKey(k: string): [string, number] {
 const MODE_RANK: Record<OptionMode, number> = { simple: 0, advanced: 1, develop: 2, developer: 3 };
 export const modeVisible = (opt: OptionMode, ui: OptionMode) => MODE_RANK[opt] <= MODE_RANK[ui];
 
-const HIDDEN = /print_host|printhost|printer_agent|host_type|api_key|bbl_use_printhost|upload|cloud|device|octoprint|_plugin_config_overrides/;
+const HIDDEN = /^(default_)?filament_colour$|print_host|printhost|printer_agent|host_type|api_key|bbl_use_printhost|upload|cloud|device|octoprint|_plugin_config_overrides/;
 const REMOVED_KEYS = new Set(removed);
 export const isHidden = (key: string) => REMOVED_KEYS.has(key) || HIDDEN.test(key);
 

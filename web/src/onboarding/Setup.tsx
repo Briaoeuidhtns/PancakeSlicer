@@ -124,8 +124,22 @@ function Printer() {
         </button>
       ))}</div>
     </div>
-    {model && model.nozzles.length > 0 && <div className="setup-row"><span className="setup-k">Nozzle</span><div className="setup-chips">{model.nozzles.map((n) =>
-      <button key={n} type="button" className="setup-chip" aria-pressed={nozzles.includes(n)} onClick={() => toggle(n)}>{n} mm</button>)}</div></div>}
+    {model && model.nozzles.length > 0 && <div className="setup-row"><span className="setup-k">Nozzle</span><div className="setup-chips" role="group" aria-label="Nozzle">{model.nozzles.map((n) =>
+      <label key={n} className="modal-check"><Check checked={nozzles.includes(n)} onCheckedChange={() => toggle(n)} />{n} mm</label>)}</div></div>}
+  </Frame>;
+}
+
+function Profiles() {
+  const { data, error } = usePrintMasters(true);
+  const rows = data ?? [];
+  const [on, setOn] = useState<Set<string> | null>(choices.profiles);
+  const picked = on ?? new Set(rows.map((m) => m.id));
+  const flip = (k: string) => setOn(() => { const n = new Set(picked); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+  const next = () => { choices = { ...choices, profiles: picked }; send({ type: 'NEXT' }); };
+  return <Frame step="profiles" foot={<><Back /><span className="setup-grow" />{error && <span className="setup-test bad">{error}</span>}<span className="setup-count">{picked.size} selected</span><Next disabled={!picked.size} onClick={next} /></>}>
+    <h2>Print profiles</h2>
+    <div className="setup-list">{!data && !error && <span className="setup-count">Loading print profiles…</span>}{rows.map((m) => (
+      <label key={m.id} className="setup-check"><input type="checkbox" checked={picked.has(m.id)} onChange={() => flip(m.id)} /><span>{m.name}</span></label>))}</div>
   </Frame>;
 }
 
@@ -232,18 +246,15 @@ function Filaments({ error }: { error: string | null }) {
 
 async function applyChoices() {
   try {
-    const { model, nozzles, connection } = choices;
-    let printerKey: string | null = null;
-    if (model) for (const n of nozzles) {
-      const preset = model.presets.find((p) => p.name === model.machines[n]);
-      if (!preset) continue;
-      const key = await createProfileFromBase('machine', catalogKey(preset));
-      if (!printerKey) { printerKey = key; requestPreset('machine', 0, key); }
-    }
-    {
-      const s = getState();
-      const first = s.userPresets.find((p) => p.type === 'process' && !p.archived && (p.kind ?? 'profile') === 'profile');
-      if (first && !s.userPresets.some((p) => p.type === 'process' && (p.name === s.process || profileKey(p) === s.process))) requestPreset('process', 0, profileKey(first));
+    const { model, nozzles, profiles, connection } = choices;
+    const sizes = model ? nozzles.map((n) => model.catalog.nozzles.find((k) => Number(k) === n)).filter((k): k is string => !!k) : [];
+    const printers = model && sizes.length ? await addCatalogPrinters(sizes.map((nozzle) => ({ vendor: model.vendor, model: model.catalog, nozzle }))) : undefined;
+    const printerKey = printers?.chosen[0] ?? null;
+    if (printerKey) requestPreset('machine', 0, printerKey);
+    if (profiles?.size) {
+      let first: string | undefined;
+      for (const m of (await printMasters()).filter((m) => profiles.has(m.id))) { const key = await addPrintMaster(m); first ??= key; }
+      if (first) requestPreset('process', 0, first);
     }
     if (connection && printerKey) await saveConnection(printerKey, { ...connection, name: model?.model ?? 'Printer' }).catch((e) => toast('couldnt_save_connection', { detail: e instanceof Error ? e.message : e }));
     const added = choices.products.length ? await addCatalogProducts(choices.products.map((product) => ({ product }))) : undefined;

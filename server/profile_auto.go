@@ -83,8 +83,9 @@ var starterValues = map[string]string{"wall_loops": "2", "sparse_infill_density"
 	"top_shell_thickness": "0.8", "bottom_shell_thickness": "0.6",
 	"seam_position": "aligned", "support_type": "tree(auto)", "support_style": "default"}
 
-func init() {
-	if _, err := v4Profiles(seededLibraryV4("")); err != nil {
-		panic(fmt.Sprint("starter profiles: ", err))
+func checkStarters(catalog *resolve.Catalog) error {
+	starters := []map[string]any{}
+	for i := range starterProfiles {
+		starters = append(starters, starterRecord(i))
 	}
 }

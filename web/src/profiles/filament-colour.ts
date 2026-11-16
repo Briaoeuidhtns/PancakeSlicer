@@ -69,18 +69,3 @@ export function colourName(colour: string): string {
   const hue = (h + 360) % 360, name = COLOUR_NAMES.find(([limit]) => hue < limit)![1];
   return (name === 'Orange' || name === 'Red') && l < 0.35 ? 'Brown' : name;
 }
-
-export async function saveFilamentAsColour(slot: number, colour: string): Promise<string> {
-  const value = hex(colour); if (!value) throw new Error('Pick a color first.');
-  const s = getState(), source = ownedSource(s, slot), key = profileKey(source);
-  const stem = `${source.name.replace(new RegExp(` ${colourName(configColour(resolvePreset(s, 'filament', key).config) ?? '')}$`), '')} ${colourName(value)}`;
-  const [{ saveProfile }, { profileCreation }] = await Promise.all([import('./model'), import('./transactions')]);
-  const id = await profileCreation((st) => {
-    const taken = (name: string) => st.userPresets.some((p) => p.type === 'filament' && p.name === name && !p.archived);
-    let name = stem; for (let n = 2; taken(name); n++) name = `${stem} ${n}`;
-    return { ...saveProfile(st, 'filament', name, key, withColour(resolvePreset(st, 'filament', key).config, value)), id: `profile:${randomId()}`, revision: 0 };
-  }).commit();
-  (await import('../components/PresetCombo')).requestPreset('filament', slot, id);
-  setState((st) => (st.filamentSlots[slot] === id ? followProfile(st, slot) : {}));
-  return id;
-}

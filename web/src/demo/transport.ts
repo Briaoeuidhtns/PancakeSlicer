@@ -212,7 +212,7 @@ export function installDemoTransport() {
     navigator.sendBeacon = (url, data) => String(url).startsWith('/api/') || beacon(url, data);
     if (!location.hash) void state().then(s => {
       const id = s.session.document.demoProject ?? Object.keys(s.projects)[0];
-      if (id && !s.session.document.demoOnboarding && s.library.profiles.some((p: Row) => p.type === 'printer')) history.replaceState(null, '', `${location.pathname}#/p/${id}`);
+      if (id && !s.session.document.demoOnboarding && s.library.printers?.length) history.replaceState(null, '', `${location.pathname}#/p/${id}`);
     });
   }
 }
