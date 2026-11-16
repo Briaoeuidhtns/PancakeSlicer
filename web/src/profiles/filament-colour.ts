@@ -1,7 +1,6 @@
 import type { Config } from '../api/types';
-import { getState, markStale, resolvePreset, setState, type State } from '../state/store';
-import { undoable } from '../state/history';
-import { findProfile, profileKey } from './identity';
+import { getState, type State } from '../state/store';
+import { editSetup } from '../printers/device-slots';
 import { paletteName } from '../components/filament-palette';
 import { DEFAULT_FILAMENT_COLOUR as DEFAULT_COLOUR } from './metadata';
 import { randomId } from '../random-id';
@@ -16,27 +15,21 @@ export function profileSlotColour(s: State, slot: number): string {
   const key = s.filamentSlots[slot] ?? s.filamentSlots[0];
   return key ? configColour(resolvePreset(s, 'filament', key).config) ?? DEFAULT_COLOUR : DEFAULT_COLOUR;
 }
-export function slotColourOverride(s: State, slot: number): string | undefined {
-  if (s.mixes[slot]) return undefined;
-  const key = s.filamentSlots[slot] ?? '';
-  const own = hex(s.slotColours[slot]) ?? configColour({ ...s.projectPresets?.filaments[slot], ...s.filamentEdits[key] });
-  return own && own !== profileSlotColour(s, slot) ? own : undefined;
-}
-const COLOUR_KEYS = ['filament_colour', 'default_filament_colour'];
-const withoutColour = (config: Config | undefined) => config && Object.fromEntries(Object.entries(config).filter(([k]) => !COLOUR_KEYS.includes(k)));
-function followProfile(st: State, slot: number): Partial<State> {
-  const key = st.filamentSlots[slot] ?? '', slotColours = [...st.slotColours]; slotColours[slot] = undefined;
-  const presets = st.projectPresets?.filaments[slot], edits = st.filamentEdits[key];
-  return { slotColours, job: markStale(st.job),
-    ...(presets && COLOUR_KEYS.some((k) => k in presets) ? { projectPresets: { ...st.projectPresets!, filaments: st.projectPresets!.filaments.map((f, i) => (i === slot ? withoutColour(f)! : f)) } } : {}),
-    ...(edits && COLOUR_KEYS.some((k) => k in edits) ? { filamentEdits: { ...st.filamentEdits, [key]: withoutColour(edits)! } } : {}) };
-}
-export function slotColour(s: State, slot: number): string {
-  return (s.mixes[slot] ? hex(s.slotColours[slot]) : slotColourOverride(s, slot)) ?? profileSlotColour(s, slot);
+export function slotColour(s: State, slot: number, printer = s.printer): string {
+  const mix = mixAt(s, printer, slot);
+  if (mix) return blend(mix.components.map((c) => c >= 1 && slotAt(s, printer, c - 1) ? slotColour(s, c - 1, printer) : '#808080'), mix.ratios);
+  const reported = reportedTray(s, slot, printer);
+  if (reported) return 'colour' in reported ? reported.colour : EMPTY_SLOT_COLOUR;
+  return hex(slotAt(s, printer, slot)?.colour) ?? DEFAULT_COLOUR;
 }
 
-export function useProfileColour(slot: number) {
-  undoable('Use profile colour', () => setState((st) => followProfile(st, slot)));
+export function setSlotColour(slot: number, colour: string, printer = getState().printer): Promise<void> {
+  const value = hex(colour), s = getState();
+  if (!value) throw new Error('Pick a color first.');
+  if (printer === s.printer && slotMixes(s)[slot]) throw new Error('A mixed slot gets its colour from the filaments it blends together.');
+  const id = slotAt(s, printer, slot)?.id;
+  if (!id) throw new Error('That slot is no longer on this printer.');
+  return editSetup(printer, (setup) => ({ ...setup, slots: setup.slots.map((x) => (x.id === id ? { ...x, colour: value } : x)) }));
 }
 
 const ownedSource = (s: State, slot: number) => {

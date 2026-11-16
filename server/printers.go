@@ -469,6 +469,54 @@ func (s *Server) cancelSend(w http.ResponseWriter, r *http.Request) {
 
 var errSendCancelled = errors.New("cancelled")
 
+func sendRefusal(row sendSlot, printer string) failure {
+	switch {
+	case row.State == "unassigned":
+		return newFailure("slot_unassigned", row.Filament, printer)
+	case row.tray == nil:
+		return newFailure("slot_tray_missing", row.Filament, row.Tray, printer)
+	case row.tray.Type == "":
+		return newFailure("slot_tray_empty", row.Filament, row.Tray, printer, row.Expected.Type)
+	}
+	return newFailure("slot_mismatch", row.Filament, row.Tray, row.tray.Type, printer, row.Expected.Type)
+}
+
+func (s *Server) getSendPlan(w http.ResponseWriter, r *http.Request) {
+	j := s.job(w, r)
+	if j == nil {
+		return
+	}
+	p := s.sends.printer(r.URL.Query().Get("printer"))
+	if p == nil || p.Kind != "bambu-lan" {
+		fail(w, 404, "printer_isnt_connected_over")
+		return
+	}
+	if j.AwaitFinished(r.Context()) != StateDone || j.Request.Output != "gcode.3mf" {
+		fail(w, 409, "wait_slicing_finish_before")
+		return
+	}
+	sliced, err := readBambuJobMapping(j.OutputPath("gcode.3mf"))
+	if err != nil {
+		fail(w, 422, "couldnt_read_nozzle_assignment", err.Error())
+		return
+	}
+	lib, err := s.libraryDocument()
+	if err != nil {
+		libraryFailure(w, 503, "library_unavailable", "Profiles could not be read.", "retry_storage", 0)
+		return
+	}
+	var trays []AMSTray
+	if status, ok := s.sends.hub.current(p.Printer); ok && status.Online {
+		trays = status.Trays
+	}
+	plan, err := sendPlanOf(lib, j.Request.Library, sliced, trays)
+	if err != nil {
+		fail(w, 409, "slot_identity", err.Error())
+		return
+	}
+	writeJSON(w, 200, plan)
+}
+
 func (s *Server) sendJob(w http.ResponseWriter, r *http.Request) {
 	j := s.job(w, r)
 	if j == nil {
@@ -479,16 +527,14 @@ func (s *Server) sendJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Printer       string `json:"printer"`
-		Start         *bool  `json:"start"`
-		Filename      string `json:"filename"`
-		BedLeveling   *bool  `json:"bed_leveling"`
-		FlowCali      bool   `json:"flow_cali"`
-		Timelapse     bool   `json:"timelapse"`
-		VibrationCali *bool  `json:"vibration_cali"`
-		UseAMS        bool   `json:"use_ams"`
-		AMSMapping  []int              `json:"ams_mapping"`
-		AMSMapping2 []bambuTrayAddress `json:"ams_mapping_2"`
+		Printer       string   `json:"printer"`
+		Start         *bool    `json:"start"`
+		Filename      string   `json:"filename"`
+		BedLeveling   *bool    `json:"bed_leveling"`
+		FlowCali      bool     `json:"flow_cali"`
+		Timelapse     bool     `json:"timelapse"`
+		VibrationCali *bool    `json:"vibration_cali"`
+		Override      []string `json:"override"`
 	}
 	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 4<<10))
 	if err != nil {
@@ -529,19 +575,46 @@ func (s *Server) sendJob(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, fmt.Sprintf("%s needs a .%s export; this job produced .%s", connectionKinds[p.Kind], want, j.Request.Output))
 		return
 	}
-	if body.UseAMS && (p.Kind != "bambu-lan" || len(j.Request.Filaments) != 1) {
-		fail(w, 400, "Single AMS slot selection only applies to single-filament prints on Bambu Lab printers.")
-		return
-	}
-	if body.AMSMapping != nil {
-		_, _, mappingErr := bambuMapping(body.AMSMapping, body.AMSMapping2, len(j.Request.Filaments))
-		if p.Kind != "bambu-lan" || mappingErr != nil {
-			fail(w, 400, "Please assign a valid AMS tray or external spool for each filament used in this Bambu print.")
+	var amsMapping []int
+	var amsMapping2 []bambuTrayAddress
+	if p.Kind == "bambu-lan" && start {
+		sliced, err := readBambuJobMapping(j.OutputPath("gcode.3mf"))
+		if err != nil {
+			fail(w, 422, "couldnt_read_nozzle_assignment", err.Error())
 			return
 		}
-	} else if body.AMSMapping2 != nil {
-		fail(w, 400, "ams_mapping_2 requires ams_mapping")
-		return
+		status, ok := s.sends.hub.current(p.Printer)
+		if !ok || !status.Online || status.Trays == nil {
+			fail(w, 409, "topology_unknown", p.Name)
+			return
+		}
+		lib, err := s.libraryDocument()
+		if err != nil {
+			libraryFailure(w, 503, "library_unavailable", "Profiles could not be read.", "retry_storage", 0)
+			return
+		}
+		plan, err := sendPlanOf(lib, j.Request.Library, sliced, status.Trays)
+		if err != nil {
+			fail(w, 409, "slot_identity", err.Error())
+			return
+		}
+		v0, v1, refused := plan.mapping(body.Override)
+		if refused != nil {
+			refusal := sendRefusal(*refused, p.Name)
+			writeJSON(w, 409, map[string]any{"error": refusal.Error, "code": refusal.Code, "step": refusal.Step, "plan": plan})
+			return
+		}
+		ids := make([]int, len(plan.Slots))
+		for i, row := range plan.Slots {
+			if ids[i] = -1; row.tray != nil {
+				ids[i] = row.tray.ID
+			}
+		}
+		if err := checkSendTopology(sliced, j.submittedFilamentMap(), status, ids, p.Name); err != nil {
+			fail(w, 409, "topology_mismatch", err.Error())
+			return
+		}
+		amsMapping, amsMapping2 = v0, v1
 	}
 	client := s.clientIP(r)
 	if ok, retry := s.sends.allow(client); !ok {
@@ -593,12 +666,9 @@ func (s *Server) sendJob(w http.ResponseWriter, r *http.Request) {
 	m.history.record(view)
 	m.hub.changed()
 	audit(map[string]any{"event": "send_accepted", "job_id": j.ID, "printer": p.Printer, "kind": p.Kind, "client": client, "start_print": start, "bytes": st.Size()})
-	options := bambuOptions{bedLeveling: body.BedLeveling == nil || *body.BedLeveling, flowCali: body.FlowCali, timelapse: body.Timelapse, vibrationCali: body.VibrationCali == nil || *body.VibrationCali, useAMS: body.UseAMS, amsMapping: body.AMSMapping, amsMapping2: body.AMSMapping2}
-	if body.AMSMapping != nil {
-		options.useAMS = false
-		for _, t := range body.AMSMapping {
-			options.useAMS = options.useAMS || !isExternalTray(t)
-		}
+	options := bambuOptions{bedLeveling: body.BedLeveling == nil || *body.BedLeveling, flowCali: body.FlowCali, timelapse: body.Timelapse, vibrationCali: body.VibrationCali == nil || *body.VibrationCali, amsMapping: amsMapping, amsMapping2: amsMapping2}
+	for _, t := range amsMapping {
+		options.useAMS = options.useAMS || t >= 0
 	}
 	go s.runSend(ctx, stopTimeout, j, t, p, f, client, options, resend)
 	w.Header().Set("Location", "/api/jobs/"+j.ID+"/send")

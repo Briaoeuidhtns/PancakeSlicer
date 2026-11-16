@@ -43,8 +43,24 @@ type Server struct {
 	filamentSlots *filamentSlotStore
 }
 
-func NewServer(c Config, jobs *JobManager, presets *PresetIndex) http.Handler {
-	s := &Server{cfg: c, jobs: jobs, presets: presets, libraryV4: &libraryStore{dir: c.DataDir}, sends: NewSendManager(c.PrinterStore), filamentSlots: newFilamentSlotStore(filepath.Join(c.DataDir, "printers"))}
+func NewServer(c Config, jobs *JobManager, catalog *resolve.Catalog) http.Handler {
+	s := &Server{cfg: c, jobs: jobs, catalog: catalog, library: &libraryStore{dir: c.DataDir}, sends: NewSendManager(c.PrinterStore), filamentSlots: newFilamentSlotStore(filepath.Join(c.DataDir, "printers"))}
+	s.library.swap, s.library.catalog = catalog.Swap, catalog
+	s.library.extruders = func(variant string) int {
+		if v := catalog.VariantByID(variant); v != nil {
+			return v.Extruders
+		}
+		return 1
+	}
+	s.library.toolheads = func(vendor, model string, nozzle float64) int {
+		return s.library.extruders(catalog.Variant(model, nozzle))
+	}
+	if _, err := os.Stat(filepath.Join(c.DataDir, libraryFile)); err == nil {
+		if _, err := s.libraryDocument(); err != nil {
+			log.Printf("profile library: %v", err)
+		}
+		s.library.reportLoad()
+	}
 	s.reconcileStoredConnections("startup")
 	desktopReadyNonce := os.Getenv("ORCA_DESKTOP_READY_NONCE")
 	healthProbe := newEngineHealth(c)
@@ -96,6 +112,7 @@ func NewServer(c Config, jobs *JobManager, presets *PresetIndex) http.Handler {
 	mux.HandleFunc("GET /api/jobs/{id}/exploded/{name}", s.exploded)
 	mux.HandleFunc("POST /api/jobs/{id}/send", s.sendJob)
 	mux.HandleFunc("GET /api/jobs/{id}/send", s.getSend)
+	mux.HandleFunc("GET /api/jobs/{id}/send/plan", s.getSendPlan)
 	mux.HandleFunc("POST /api/jobs/{id}/send/cancel", s.cancelSend)
 	mux.HandleFunc("GET /api/printer-connections", s.listConnections)
 	mux.HandleFunc("GET /api/printer-connections/events", s.connectionEvents)
@@ -274,10 +291,13 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 	if v := r.Header.Get("X-Slice-Group"); len(v) <= 256 {
 		req.SliceGroup = v
 	}
-	var resolved *sliceConfig
-	if raw := r.FormValue("library"); raw != "" {
-		var in resolveRequest
-		profiles, err := s.libraryV4Profiles()
+	var resolved *resolve.SliceConfig
+	if raw := r.FormValue("library"); raw == "" {
+		fail(w, 400, "job_names_library_printer")
+		return
+	} else {
+		var in resolve.Request
+		lib, err := s.libraryDocument()
 		if err == nil {
 			err = json.Unmarshal([]byte(raw), &in)
 		}
@@ -285,7 +305,11 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 			resolved, err = s.resolveProfiles(profiles, in)
 		}
 		if err != nil {
-			libraryFailure(w, 422, "resolve_failed", err.Error(), "choose_profiles", 0)
+			code := "resolve_failed"
+			if resolve.ErrorCode(err) == "slot_unpicked" {
+				code = "slot_unpicked"
+			}
+			libraryFailure(w, 422, code, err.Error(), "choose_profiles", 0)
 			return
 		}
 		req.Vendor, req.Printer, req.Process, req.Filaments = resolved.Engine.Vendor, resolved.Engine.Printer, resolved.Engine.Process, resolved.Engine.Filaments
@@ -456,24 +480,11 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 		problem.write(w)
 		return
 	}
-	if raw := r.FormValue("overrides"); resolved != nil {
-		values := map[string]json.RawMessage{}
-		for k, v := range resolved.Config {
-			if (resolved.Sources[k] != "catalog" || resolved.engineOverrides[k]) && !hiddenSetting.MatchString(k) {
-				values[k] = v
-			}
-		}
-		encoded, _ := json.Marshal(values)
-		if req.Overrides, err = overrides(string(encoded)); err != nil {
-			fail(w, 400, err.Error())
-			return
-		}
-	} else if raw != "" {
-		req.Overrides, err = overrides(raw)
-		if err != nil {
-			fail(w, 400, err.Error())
-			return
-		}
+	values := resolved.EngineValues()
+	encoded, _ := json.Marshal(values)
+	if req.Overrides, err = overrides(string(encoded)); err != nil {
+		fail(w, 400, "http_invalid", err.Error())
+		return
 	}
 	if raw := r.FormValue("events"); raw != "" {
 		if json.Unmarshal([]byte(raw), &req.Events) != nil {

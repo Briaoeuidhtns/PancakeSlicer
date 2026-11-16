@@ -17,8 +17,9 @@ import { printerSend, usePrinterSend } from '../flow/transfer';
 import { filamentColor } from '../plater/filamentColor';
 import { effectiveConfig, getState, resolvePreset, toast, useStore } from '../state/store';
 import { ConnectionEditor } from '../printers/ConnectionEditor';
-import { slotOf, usePrinterSlots } from '../printers/slots';
-import { connectionOf, connectionOutput, KIND_LABEL, presenceStatus, readTrays, type Tray } from '../printers/connections';
+import { materialNote, slotOf } from '../printers/slots';
+import { setupOf } from '../printers/device-slots';
+import { connectionOf, connectionOutput, KIND_LABEL, presenceStatus, readSendPlan, readTrays, type SendPlanSlot, type Tray } from '../printers/connections';
 import { printerCapabilities } from '../printers/capabilities';
 import { noticeSend, openDevice, sendOutcome } from '../printers/sendOutcome';
 import '../printers/printers.css';
@@ -105,10 +106,23 @@ function SendView({ close, printer, head, edit }: { close: () => void; printer: 
   const [readTraysList, setReadTrays] = useState<Tray[] | null>(null);
   const trays = liveTrays ?? readTraysList;
   const [amsError, setAmsError] = useState('');
-  const [mapping, setMapping] = useState<number[] | null>(null);
-  const slotMatches = usePrinterSlots(bambu ? printer : undefined);
-  const matchOf = (t: Tray) => slotMatches.slots?.slots.find((m) => m.slot === slotOf(t));
-  const shown = mapping && mapping.length === filaments.length ? mapping : trays ? autoMap(filaments, trays, (t) => matchOf(t)?.filament) : [];
+  const [plan, setPlan] = useState<SendPlanSlot[] | null>(null);
+  const [planError, setPlanError] = useState('');
+  const trayKey = JSON.stringify(trays?.map((t) => [t.id, t.type]) ?? null);
+  useEffect(() => {
+    setPlan(null); setPlanError('');
+    if (!bambu || !jobId || !jobReady) return;
+    let live = true;
+    readSendPlan(jobId, printer).then((rows) => { if (live) setPlan(rows); }, (e) => { if (live) setPlanError(errorText(e)); });
+    return () => { live = false; };
+  }, [bambu, jobId, jobReady, printer, trayKey]);
+  const trayOf = (row: SendPlanSlot | undefined) => row?.tray ? trays?.find((t) => slotOf(t) === row.tray) : undefined;
+  const shown = useMemo(() => (plan ?? []).map((row) => trayOf(row)?.id ?? -1), [plan, trays]); // eslint-disable-line react-hooks/exhaustive-deps
+  const where = (row: SendPlanSlot) => { const t = trayOf(row); return t && trays ? trayCode(t, trays) : row.tray ?? ''; };
+  const used = (plan ?? []).filter((row) => row.used);
+  const unmapped = used.flatMap((row) => row.state === 'unassigned' ? [`Filament ${row.filament}'s slot isn't on a tray of this printer.`]
+    : row.state === 'mismatch' && !row.reported?.type ? [`Filament ${row.filament}'s tray (${where(row)}) ${row.reported ? 'is empty' : "isn't reported by the printer"}.`] : []);
+  const mismatched = used.filter((row) => row.state === 'mismatch' && !!row.reported?.type);
   const sendState = usePrinterSend();
   const { transfer, error } = sendState.context;
   const busy = sendState.value === 'connecting' || sendState.value === 'sending';
@@ -133,7 +147,10 @@ function SendView({ close, printer, head, edit }: { close: () => void; printer: 
   const send = async (start: boolean) => {
     if (!jobId) return;
     if (start && warnings.length && !await confirmDialog('Check printer setup', warnings.join('\n'), ['Print anyway', 'Cancel'])) return;
-    const options = !bambu ? {} : { bed_leveling: leveling, flow_cali: flowCali, vibration_cali: vibration, timelapse: capabilities.timelapse && timelapse, ...(trays && shown.length === filaments.length && shown.every((id) => id >= 0) ? { ams_mapping: shown, ams_mapping_2: physicalMapping(shown, trays) } : {}) };
+    if (start && mismatched.length && !await confirmDialog('Print from these trays?', mismatched.map((row) =>
+      `Filament ${row.filament} (${where(row)}): the printer reports ${row.reported!.type} there; this print expects ${row.expected.type || 'another material'}.`).join('\n'), ['Print anyway', 'Cancel'])) return;
+    const options = !bambu ? {} : { bed_leveling: leveling, flow_cali: flowCali, vibration_cali: vibration, timelapse: capabilities.timelapse && timelapse,
+      ...(start && mismatched.length ? { override: mismatched.map((row) => row.slot) } : {}) };
     await printerSend.submit(printer, jobId, { start, filename: exportFilename(), ...options });
   };
   const handOff = async () => {
@@ -149,11 +166,7 @@ function SendView({ close, printer, head, edit }: { close: () => void; printer: 
   const running = status?.online && (status.state === 'printing' || status.state === 'paused' || status.state === 'busy');
   const blocked = !jobId || !jobReady ? 'Slice your plate first before sending it to the printer.' : !fits ? `${KIND_LABEL[kind]} takes .${connectionOutput(kind)} files; this printer profile exports .${output}.` : '';
   const needsNozzleMap = bambu && multiNozzle && (!sliced?.mapping || sliced.mapping.filament_map.length !== filaments.length);
-  const unmapped = bambu && trays ? filaments.flatMap((f, i) => availableTrays(f, trays).some((t) => t.id === shown[i]) ? []
-    : [`Filament ${i + 1} (${f.type}): ${availableTrays(f, trays).some((t) => t.type.toUpperCase() === f.type.toUpperCase()) ? 'choose a tray' : `no ${f.type} loaded${f.extruder !== undefined ? ' on its nozzle' : ''}; load it or choose another tray`}.`]) : [];
-  const needsMap = needsNozzleMap || bambu && (trays ? unmapped.length > 0 : !single || multiNozzle);
-  const [syncing, setSyncing] = useState(false);
-  const syncFromPrinter = () => { setSyncing(true); void import('../plater/amsSync').then((m) => m.syncAms(printer)).finally(() => setSyncing(false)); };
+  const needsMap = needsNozzleMap || bambu && (!plan || unmapped.length > 0);
   const file = <p className="send-file" title={exportFilename()}><span>{exportFilename()}</span><span>Plate {plateIndex}</span></p>;
 
   if (outcome && (busy || sendState.value === 'sent' || mine?.state === 'failed' || mine?.state === 'cancelled')) {
@@ -201,22 +214,14 @@ function SendView({ close, printer, head, edit }: { close: () => void; printer: 
         {capabilities.timelapse && <label className="modal-check"><Check checked={timelapse} disabled={busy} onCheckedChange={setTimelapse} />Timelapse</label>}
       </div>}
       {bambu && fits && (
-        <section className="send-section" aria-label="Filaments"><div className="send-section-head"><h3>Filaments</h3>
-          <button type="button" className="btn slant send-action" disabled={busy || syncing || !trays?.length} onClick={syncFromPrinter}>{syncing ? 'Checking printer…' : 'Match from printer'}</button></div>
-          {trays ? <div className="ams-map">{filaments.map((f, i) => {
-            const t = trays.find((x) => x.id === shown[i]);
-            return (
-              <div key={i} className="send-map-row">
-                <span className="send-project-filament"><SlotChip n={i + 1} colour={f.color} /><span title={f.name}>{f.name || f.type}</span></span>
-                <span className="send-tray-select" data-colour={!!t || undefined} data-missing={!t || undefined}>
-                  <Dropdown className="combo" value={shown[i] ?? -1} disabled={busy} aria-label={`Tray for filament ${i + 1}`}
-                    onValueChange={(next) => setMapping(shown.map((m, k) => (k === i ? Number(next) : m)))} options={[{ value: -1, label: 'Choose a tray', disabled: true }, ...availableTrays(f, trays).map((x) => ({ value: x.id, label: <><span className="ams-swatch tray-dot" style={{ background: x.color }} />{trayCode(x, trays)}<span className="sep">{SEP}</span><span className="tray-filament">{matchOf(x)?.name ?? trayFilament(x)}</span></> }))]} />
-                  {t && <span className="ams-swatch" aria-label={`${trayCode(t, trays)} colour ${t.color}`} role="img" style={{ background: t.color }} />}
-                </span>
-              </div>
-            );
-          })}</div> : <p className={amsError ? 'warning-text' : 'hint-text'}>{amsError ? `Couldn't read AMS: ${amsError}` : 'Checking printer\'s AMS…'}</p>}
-          {unmapped.map((line) => <p key={line} className="warning-text">{line}</p>)}
+        <section className="send-section" aria-label="Filaments"><div className="send-section-head"><h3>Filaments</h3></div>
+          {plan ? <ul className="send-filaments">{filaments.map((f, i) => {
+            const row = plan[i], t = trayOf(row);
+            return <li key={i}><SlotChip n={i + 1} colour={f.color} /><span className="send-filament-name" title={f.name}>{f.name || f.type}</span>
+              {row?.used && row.tray && <><span className="send-arrow" aria-hidden>→</span>{t && <span className="ams-swatch" style={{ background: t.color }} aria-hidden />}{where(row)}</>}</li>;
+          })}</ul> : planError || amsError ? <p className="warning-text">{`Oops! Couldn't read your printer's slots: ${planError || amsError}`}</p>
+            : <ul className="send-filaments" role="status" aria-busy="true" aria-label="Checking your printer's slots…">{filaments.map((f, i) => <li key={i}><SlotChip n={i + 1} colour={f.color} /><span className="send-filament-name">{f.name || f.type}</span><Skeleton width={96} height={12}/></li>)}</ul>}
+          {unmapped.map((line) => <p key={line} className="warning-text">{line} <button type="button" className="link" onClick={() => { close(); openDevice(); }}>Change slots</button></p>)}
         </section>
       )}
       {materialBlocks.map((row) => <div key={row.message} className="warning-text" role="alert">{row.message}</div>)}

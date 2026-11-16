@@ -66,11 +66,10 @@ const realApi: Api = {
     if (DEMO) throw new Error(NO_ENGINE);
     const fd = new FormData();
     await attachFiles(fd, req.files, signal, onUpload);
-    const { printer, print, filaments } = req.library;
-    if (!printer) throw new Error('Pick a printer first to get started.');
-    if (!print) throw new Error('Pick a print profile first.');
-    if (!filaments.length || filaments.some((f) => !f)) throw new Error('Please pick a filament for each slot before continuing.');
-    fd.append('library', JSON.stringify({ ...req.library, project: req.overrides }));
+    const { printer, print } = req.library;
+    if (!printer) throw refusal('slice_refused', 'Pick a printer first to get started.');
+    if (!print) throw refusal('slice_refused', 'Pick a print profile first.');
+    fd.append('library', JSON.stringify({ ...req.library, project: req.project }));
     if (req.plate_index !== undefined) fd.append('plate_index', String(req.plate_index));
     if (req.plate) fd.append('plate', JSON.stringify({ ...req.plate, objects: req.plate.objects.map((o) => ({ ...o,
       ...(o.settings ? { settings: o.settings } : {}),

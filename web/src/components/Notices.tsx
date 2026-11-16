@@ -81,7 +81,7 @@ export function SliceFailed({ error, onClose }: { error: string; onClose(): void
         <Glyph name="close" size={14} />
       </button>
       <div className="notif-title">{title}</div>
-      <div className="notif-body">{step}</div>
+      <div className="notif-body">{step ?? error}</div>
       <div className="slice-failed-actions">
         {canRetry && <button type="button" className="btn-primary" onClick={() => void slice()}>Slice again</button>}
         <details>

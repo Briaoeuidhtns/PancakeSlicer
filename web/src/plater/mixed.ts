@@ -119,8 +119,8 @@ export async function addPhysical(colour?: string, name?: string) {
     slotColours.splice(p, 0, colour);
     const next = { filamentSlots, slotColours, mixes: shifted(st.mixes, p, 1) };
     const previous = Array.from({ length: n + 1 }, (_, k) => k === p ? -1 : k > p ? k - 1 : k);
-    return { ...remapAll(st, Array.from({ length: n }, (_, k) => (k >= p ? k + 2 : k + 1))), ...next, ...insertedFlush(st, next, previous) };
-  }));
+    if (writeStrip(next, 'Add filament', st, insertedFlush(st, previous))) setState(remapAll(st, Array.from({ length: n }, (_, k) => (k >= p ? k + 2 : k + 1))));
+  });
 }
 
 export function removePhysical() {
@@ -133,21 +133,8 @@ export function removePhysical() {
     const mixes = Object.fromEntries(Object.entries(shifted(st.mixes, p, -1)).map(([i, m]) =>
       [i, { ...m, components: m.components.map((c) => (c === p ? 0 : c > p ? c - 1 : c)) }]));
     const kept = Array.from({ length: n }, (_, k) => k).filter((k) => k !== p - 1);
-    return { ...remapAll(st, Array.from({ length: n }, (_, k) => (k === p - 1 ? 1 : k >= p ? k : k + 1)), kept), filamentSlots, slotColours, mixes };
-  }));
-}
-
-let watching = false;
-export function watchColours() {
-  if (watching) return;
-  watching = true;
-  subscribeStore(() => {
-    const s = getState();
-    const changed = Object.entries(s.mixes).filter(([i, m]) => s.slotColours[Number(i)] !== mixColour(s, m));
-    if (!changed.length) return;
-    const slotColours = [...s.slotColours];
-    for (const [i, m] of changed) slotColours[Number(i)] = mixColour(s, m);
-    setState({ slotColours });
+    setState(remapAll(st, Array.from({ length: n }, (_, k) => (k === p - 1 ? 1 : k >= p ? k : k + 1))));
+    writeStrip({ ids, filaments, colours, mixes }, 'Remove filament', st, retainedFlushing(st, kept));
   });
 }
 

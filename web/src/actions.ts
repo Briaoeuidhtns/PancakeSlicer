@@ -201,7 +201,7 @@ async function loadStep(f: File, signal?: AbortSignal): Promise<{ geometry: THRE
 async function meshStep(s: ReturnType<typeof getState>, f: File, signal?: AbortSignal): Promise<{ geometry: THREE.BufferGeometry; source: File }> {
   if (!s.api) throw new Error(`Oops! Importing STEP files (${f.name}) requires a connection to the slicing service.`);
   const { library } = jobFields(s, true);
-  const id = await s.api.submit({ library, overrides: {}, events: [], output: '3mf', files: [{ name: f.name, blob: f }] }, signal);
+  const id = await s.api.submit({ library: { ...library, filaments: [], slots: [] }, project: {}, events: [], output: '3mf', files: [{ name: f.name, blob: f }] }, signal);
   if (signal?.aborted) { void s.api.cancel(id).catch(() => {}); throw new DOMException('Import canceled', 'AbortError'); }
   await new Promise<void>((resolve, reject) => {
     let unsubscribe = () => {};
@@ -503,12 +503,20 @@ export function runJob(api: Api, request: JobRequest, signature: string, sink: J
 export async function plateJob(s = getState(), ask = true): Promise<JobRequest | string | null> {
   const outside = outsideVolumeWarning(s);
   if (outside) return outside;
+  const slots = await import('./printers/slot-check'), issues = slots.slotIssues(s);
+  if (issues.missing.size) {
+    const text = [`${slots.missingText(issues)}.`, ...(issues.empty.size ? [`${slots.emptyText(issues)}. Choose its filament under the printer.`] : [])].join('\n');
+    if (!ask || !(await confirmDialog('Oops, that slot isn\'t available', text, ['Move to a free slot', 'Cancel']))) return ask ? null : text;
+    slots.remapMissing(issues);
+    return plateJob(getState(), ask);
+  }
+  if (issues.empty.size) return `${slots.emptyText(issues)}. Choose its filament under the printer first.`;
   if (nativeSupportCapable(s) && (String(effectiveConfig(s, 'process').support_style) === 'native' || s.objects.some((o) => o.settings.support_style === 'native'))) {
     const conflicts = (await import('./plater/nativeSupport')).nativeSupportConflicts(s);
     if (conflicts && !ask) return conflicts;
     if (conflicts && !(await confirmDialog('Native support', `${conflicts} Would you like to slice anyway?`))) return null;
   }
-  return jobRequest(s);
+  return jobRequest(slots.slicedSlots(s));
 }
 
 let cancelJob: (() => void) | null = null;
@@ -519,7 +527,7 @@ export async function slice(calib?: { kind: string; params: string; head?: strin
   const s = getState();
   if (!s.api || !s.objects.length && !calib || s.job.state === 'running' || s.job.state === 'submitting') return;
   const methodProblem = methodSelectionProblem(methodAvailability(s), effectiveConfig(s,'process'));
-  if(methodProblem) return void setState({job:{state:'failed',pct:0,stage:'',error:`That slicing method isn't available right now: ${methodProblem.reason}`}});
+  if(methodProblem) return void setState({job:{state:'failed',pct:0,stage:'',error:`That slicing method isn't available right now: ${methodProblem.reason}`,errorCode:'slice_refused'}});
   const generation = ++sliceGeneration, document = documentGeneration(), projectId = projectFlow.get().context.id, plate = s.plateIndex;
   const current = () => generation === sliceGeneration && document === documentGeneration() && projectId === projectFlow.get().context.id && plate === getState().plateIndex;
   const signature = plateSignature(s);
@@ -527,7 +535,7 @@ export async function slice(calib?: { kind: string; params: string; head?: strin
   const request = calib ? { library, overrides: calibOverrides(s, calib.kind), output, events: [], files: [], calib: calib.kind, calib_params: calib.params, calib_head: calib.head }
     : await plateJob(s).catch((e: unknown) => String(e));
   if (!current() || request === null) return;
-  if (typeof request === 'string') return void setState({ job: { state: 'failed', pct: 0, stage: '', error: request } });
+  if (typeof request === 'string') return void setState({ job: { state: 'failed', pct: 0, stage: '', error: request, errorCode: 'slice_refused' } });
   const navigation = beginSlicePreview(signature);
   void loadPreviewView();
   setState({ tab: 'prepare', job: { state: 'submitting', pct: 0, stage: 'uploading', plateSignature: signature, calib: calib?.kind } });

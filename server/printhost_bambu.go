@@ -404,15 +404,9 @@ func mqttProjectFile(ctx context.Context, p *PrinterConfig, u *upload, plate, md
 	defer conn.Close()
 	sequence := strconv.FormatInt(time.Now().UnixMilli()%1_000_000_000, 10)
 	name := strings.TrimSuffix(u.filename, ".gcode.3mf")
-	mapping := []int{}
-	if u.options.amsMapping != nil {
-		mapping = u.options.amsMapping
-	} else if u.options.useAMS {
-		mapping = []int{0}
-	}
-	legacyMapping, addresses, err := bambuMapping(mapping, u.options.amsMapping2, len(mapping))
-	if err != nil {
-		return fail(err)
+	legacyMapping, addresses := u.options.amsMapping, u.options.amsMapping2
+	if legacyMapping == nil {
+		legacyMapping, addresses = []int{}, []bambuTrayAddress{}
 	}
 	if err := mqttPublish(conn, p, map[string]any{"print": map[string]any{
 		"sequence_id": sequence, "command": "project_file", "param": plate,
