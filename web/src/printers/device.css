@@ -159,6 +159,11 @@
 
 .device-slot-map { display: grid; grid-template-columns: minmax(40px, max-content) minmax(0, 280px); align-items: center; gap: var(--s-2); align-content: start; }
 .device-slot-map > h2 { grid-column: 1 / -1; }
+.device-nozzles { display: grid; grid-template-columns: minmax(40px, max-content) minmax(0, 280px); align-items: center; gap: var(--s-2); align-content: start; }
+.device-nozzles > h2 { grid-column: 1 / -1; }
+.device-nozzles :is(.nozzle-sizes, .nozzle-row, .extruder-rows, .extruder-row, .opt-field) { display: contents; }
+.device-nozzles :is(.opt-label, .extruder-name) { padding-right: var(--s-2); color: var(--ink-2); font: var(--t-body); white-space: nowrap; }
+.device-nozzles .combo { width: 100%; }
 .device-slots-units, .device-slot-row { display: contents; }
 .device-slots-units > span, .device-slot-label { display: inline-flex; align-items: center; gap: var(--s-2); color: var(--ink-2); font: var(--t-body); white-space: nowrap; }
 .device-slot-label { justify-content: center; }

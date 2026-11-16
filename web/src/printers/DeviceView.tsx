@@ -23,7 +23,7 @@ import { useDeviceControl, type DeviceCommand } from './device-controls';
 import './printers.css';
 import './device.css';
 import { pickSlotFilament, reportedUnits, setupOf } from './device-slots';
-import { SlotsCard } from './DeviceSlots';
+import { NozzlesCard, SlotsCard } from './DeviceSlots';
 import { feedOf } from './feeds';
 import { RecordProblem } from '../profiles/RecordProblem';
 
@@ -207,6 +207,7 @@ function DevicePanel({ connection, model, cover, status, live }: { connection: P
     <div className="device-layout">
       <div className="device-left"><DeviceCamera printer={connection.printer} cover={cover} light={light} lightLabel={lightLabel} cameraLabel={capabilities.cameraLabel} busy={offline} onLight={() => lightCtl.commit(light ? 0 : 1)} />
         {ams || amsSkeleton || <SlotsCard printer={connection.printer} live={live}/>}
+        <NozzlesCard printer={connection.printer}/>
       </div>
       <div className="device-status">
         <section className="device-job" aria-label="Print job">
@@ -252,6 +253,7 @@ function OfflinePanel({ printer, name, cover }: { printer: string; name: string;
       <p className="device-offline-line"><span className="status-text" data-tone="offline">Not connected</span>{enabled ? <button type="button" className="btn-ghost device-connect" onClick={() => openConnection(printer)}>Connect</button>
         : <span className="device-network-off">Printer connections are switched off on this PancakeSlicer service right now.</span>}</p></div></header>
     <SlotsCard printer={printer} live={false}/>
+    <NozzlesCard printer={printer}/>
   </div>;
 }
 

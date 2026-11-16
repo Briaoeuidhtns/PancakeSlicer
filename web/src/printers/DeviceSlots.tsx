@@ -4,8 +4,19 @@ import { FilamentColourMenu } from '../profiles/FilamentColourMenu';
 import { toast, useStore } from '../state/store';
 import { editSetup, setUnits, setupOf } from './device-slots';
 import { feedOf, slotLabels, unitsOf } from './feeds';
+import { NozzleSize } from '../profiles/NozzleSize';
+import { ExtruderRows } from '../profiles/ExtruderRows';
+import { useAskedValues } from '../profiles/view';
 
 const edit = (...args: Parameters<typeof editSetup>) => { editSetup(...args).catch((e: Error) => toast('deviceslots_failed', { detail: e.message })); };
+
+export function NozzlesCard({ printer }: { printer: string }) {
+  useAskedValues({ type: 'machine', id: printer });
+  return <section className="device-card device-nozzles"><h2>Nozzles</h2>
+    <NozzleSize printerId={printer} label="Size"/>
+    <ExtruderRows printerId={printer}/>
+  </section>;
+}
 
 export function SlotsCard({ printer, live }: { printer: string; live: boolean }) {
   const setup = useStore((s) => setupOf(s, printer)), library = useStore((s) => s.records.filaments);

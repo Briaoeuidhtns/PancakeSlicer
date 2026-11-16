@@ -9,17 +9,17 @@ import type { CatalogPrinter } from '../catalog/types';
 const OTHER = 'other';
 const mm = (n: number) => `${Math.round(n * 1000) / 1000} mm`;
 
-export function NozzleSize({ printerId, disabled, grid }: { printerId: string; disabled?: boolean; grid?: boolean }) {
+export function NozzleSize({ printerId, disabled, grid, label }: { printerId: string; disabled?: boolean; grid?: boolean; label?: string }) {
   const model = useStore((s) => s.records.printers.find((p) => p.id === printerId && !p.archived)?.model);
-  return model ? <NozzleSizes printerId={printerId} model={model} disabled={disabled} grid={grid}/> : null;
+  return model ? <NozzleSizes printerId={printerId} model={model} disabled={disabled} grid={grid} label={label}/> : null;
 }
-function NozzleSizes({ printerId, model, disabled, grid }: { printerId: string; model: string; disabled?: boolean; grid?: boolean }) {
+function NozzleSizes({ printerId, model, disabled, grid, label }: { printerId: string; model: string; disabled?: boolean; grid?: boolean; label?: string }) {
   const printer = useStore((s) => s.records.printers.find((p) => p.id === printerId));
   const line = useCatalogRead(lineRead('printers', model)).value as CatalogPrinter | null;
   if (!printer || !line) return null;
   const n = printer.nozzles[0];
   return <div className={grid ? 'nozzle-sizes grid' : 'nozzle-sizes'}>
-    <NozzleRow printerId={printerId} label={printer.nozzles.length === 1 ? 'Nozzle' : 'Nozzles'} diameter={n.diameter}
+    <NozzleRow printerId={printerId} label={label ?? (printer.nozzles.length === 1 ? 'Nozzle' : 'Nozzles')} diameter={n.diameter}
       based={Number(line.variants.find((v) => v.id === n.variant)?.nozzle)} sizes={[...new Set(line.variants.filter((v) => v.default).map((v) => Number(v.nozzle)))].sort((a, b) => a - b)}
       disabled={disabled} grid={grid}/>
   </div>;
