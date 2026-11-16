@@ -104,17 +104,27 @@ export function profileCreation(factory:(s:State)=>UserPreset|string):ProfileCre
   const batch=profileBatchCreation(s=>{const created=factory(s);return typeof created==='string' ? {records:[],reused:[created]} : {records:[created]};});
   return {get retryable(){return batch.retryable;},commit:()=>batch.commit().then(result=>result.keys[0])};
 }
-export function profileCopyCreation(source:UserPreset,name:string):ProfileCreation{
-  const captured=structuredClone(source),service=getState().api;
-  return profileCreation(s=>{
-    if(!captured.id || !name.trim())throw new Error('Pick a profile to copy and give your new copy a name.');
-    if(!s.api || s.api!==service)throw conflict('The profile service changed before copying. Reopen the saved source; your requested copy is kept.');
-    const current=findProfile(s,captured.type,captured.id);
-    if(!current || !equal(stored(current),stored(captured)))throw conflict('The profile you\'re copying was just updated elsewhere. Give it a quick look before duplicating.');
-    if(s.userPresets.some(p=>p.type===captured.type && p.name===name))throw new Error('You already have a profile with that name—try a different one!');
-    return {...captured,id:`profile:${randomId()}`,kind:'profile',name,revision:0,aliases:[],archived:undefined,
-      provenance:{source:'profile',sourceId:captured.id,sourceName:captured.name,sourceRevision:captured.revision,operationId:randomId()}};
-  });
+
+type CreationState = 'idle' | 'committing' | 'done' | 'failed';
+export interface CreationResult {keys:string[]}
+type CreationEvent = { type: 'COMMIT' } | { type: 'DONE'; result: CreationResult } | { type: 'FAIL'; error: string };
+interface CreationContext { result: CreationResult | null; error: string | null; flight: Promise<CreationResult> | null }
+export type CreationMachine = Machine<CreationState, CreationEvent, CreationContext>;
+export interface ProfileCreation {readonly machine:CreationMachine;commit():Promise<string>}
+export const creationPending=(c:{machine:CreationMachine})=>c.machine.get().value==='committing';
+function creationMachine(write:()=>Promise<CreationResult>):CreationMachine{
+  const start={target:'committing' as const,action:()=>{
+    const flight=write();
+    flight.then(result=>machine.send({type:'DONE',result}),error=>machine.send({type:'FAIL',error:error instanceof Error?error.message:String(error)}));
+    return {flight,error:null};
+  }};
+  const machine:CreationMachine=createMachine<CreationState,CreationEvent,CreationContext>({id:'profile-creation',initial:'idle',strict:true,context:{result:null,error:null,flight:null},states:{
+    idle:{on:{COMMIT:start}},
+    committing:{on:{COMMIT:{},DONE:{target:'done',action:(_,e)=>({result:e.result,flight:null})},FAIL:{target:'failed',action:(_,e)=>({error:e.error,flight:null})}}},
+    done:{on:{COMMIT:{}}},
+    failed:{on:{COMMIT:start}},
+  }});
+  return machine;
 }
 async function performSave(s:State,records:UserPreset[],operationId?:string,printers?:PrinterProfileLibrary,catalog?:SystemPreset[],setup?:PrinterSetupSaveContext):Promise<Acknowledgement>{
   ready(s);ready(getState());

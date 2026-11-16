@@ -361,7 +361,7 @@ export async function jobRequest(s = getState(), saving = false): Promise<JobReq
   await flushReady();
   if (!saving) {
     if(s.profileLibraryLoad.state!=='ready')throw new Error(s.profileLibraryLoad.state==='failed'?s.profileLibraryLoad.error:'Hang tight—finishing profile setup before slicing.');
-    const {flushPrinterSetups}=await import('./profiles/printer-setups');await flushPrinterSetups();
+    const {flushLibraryWrites}=await import('./profiles/library-writes');await flushLibraryWrites();
     validateProfileSubmission(s);
     const [{methodAvailability},{methodSelectionProblem}]=await Promise.all([import('./profiles/method-context'),import('./profiles/capabilities')]);
     const availability=methodAvailability(s), global=effectiveConfig(s,'process');

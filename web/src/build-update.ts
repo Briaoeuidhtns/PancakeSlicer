@@ -3,11 +3,18 @@ import { getState, toast } from './state/store';
 
 const CHECK_MS = 5 * 60_000, MIN_GAP_MS = 15_000;
 
+const writers = new Set<() => boolean>();
+export const holdReloadWhile = (busy: () => boolean) => { writers.add(busy); };
+
 export function watchForNewBuild(): void {
   const loaded = document.querySelector<HTMLMetaElement>('meta[name="orca-build"]')?.content;
   if (!loaded) return;
   let last = 0, newer = false, held = false;
-  const safe = () => { const drafts = projectDraftMutationSnapshot(); return !held && drafts.pending === 0 && drafts.error === null && !['submitting', 'running'].includes(getState().job.state); };
+  const safe = () => {
+    const drafts = projectDraftMutationSnapshot(), s = getState();
+    return !held && drafts.pending === 0 && drafts.error === null && !['submitting', 'running'].includes(s.job.state)
+      && ![...writers].some((busy) => busy()) && !Object.keys(s.libraryDrafts).length;
+  };
   const apply = () => {
     if (!newer) return;
     if (safe()) location.reload();

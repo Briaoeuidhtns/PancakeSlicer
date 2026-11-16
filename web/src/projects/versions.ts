@@ -112,7 +112,8 @@ export async function restoreVersion() {
   if (!v || !id) return;
   override = { id, change: [{ key: `restore:${v.until}`, label: 'Restored' }] };
   try {
-    await post(`${path(id)}/seal`, { revision: project.get().context.revision }).catch(() => null);
+    await flushProject();
+    await post(`${path(id)}/seal`, { revision: project.get().context.revision });
     await restoreProjectVersion();
     await attachSlice(finishedJob());
   } catch (e) {

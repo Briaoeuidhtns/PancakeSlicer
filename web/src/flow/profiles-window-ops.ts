@@ -1,5 +1,5 @@
-import type { UserPreset } from '../api/types';
-import type { ProfileCreation } from '../profiles/transactions';
+import type { LibraryProfile } from '../profiles/identity';
+import { creationPending, type ProfileCreation } from '../profiles/transactions';
 import { createMachine, type StateNode } from './fsm';
 
 export type WindowOp = 'adding' | 'copying' | 'exporting' | 'deleting' | 'editor-saving';
@@ -25,7 +25,7 @@ export const createWindowOps = () => createMachine<WindowOpsState, WindowOpsEven
         { target: 'exporting', guard: (_, e) => e.op === 'exporting' }, { target: 'deleting', guard: (_, e) => e.op === 'deleting' },
         { target: 'editor-saving', guard: (_, e) => e.op === 'editor-saving' }],
       COPY: { action: (_, e) => ({ copy: { source: e.source, name: e.name, creation: e.creation } }) },
-      DISCARD: { guard: (c) => !!c.copy && !c.copy.creation.retryable, action: () => ({ copy: null }) },
+      DISCARD: { guard: (c) => !!c.copy && !creationPending(c.copy.creation), action: () => ({ copy: null }) },
     } },
     adding: op('adding'), copying: op('copying'), exporting: op('exporting'), deleting: op('deleting'), 'editor-saving': op('editor-saving'),
   },

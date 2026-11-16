@@ -32,20 +32,12 @@ type libraryReceipt struct {
 
 const maxReceipts = 256
 
-func (r libraryReceipt) seq() uint64                         { return r.Seq }
-func (r libraryReceipt) withSeq(n uint64) libraryReceipt     { r.Seq = n; return r }
-func (r workspaceReceipt) seq() uint64                       { return r.Seq }
-func (r workspaceReceipt) withSeq(n uint64) workspaceReceipt { r.Seq = n; return r }
-
-func putReceipt[R interface {
-	seq() uint64
-	withSeq(uint64) R
-}](ops map[string]R, op string, receipt R) {
+func putReceipt[R any](ops map[string]R, op string, receipt R, seq func(R) uint64, withSeq func(R, uint64) R) {
 	next := uint64(0)
 	for _, r := range ops {
-		next = max(next, r.seq())
+		next = max(next, seq(r))
 	}
-	ops[op] = receipt.withSeq(next + 1)
+	ops[op] = withSeq(receipt, next+1)
 	if len(ops) <= maxReceipts {
 		return
 	}
@@ -53,9 +45,7 @@ func putReceipt[R interface {
 	for k := range ops {
 		keys = append(keys, k)
 	}
-	slices.SortFunc(keys, func(a, b string) int {
-		return cmp.Or(cmp.Compare(ops[a].seq(), ops[b].seq()), strings.Compare(a, b))
-	})
+	slices.SortFunc(keys, func(a, b string) int { return cmp.Or(cmp.Compare(seq(ops[a]), seq(ops[b])), strings.Compare(a, b)) })
 	for _, k := range keys[:len(ops)-maxReceipts] {
 		delete(ops, k)
 	}

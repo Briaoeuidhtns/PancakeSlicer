@@ -54,9 +54,10 @@ export async function loadCatalog() {
   const settings = loadTab('process');
   const library = catalogLibraryTail.then(async () => {
     try {
-      const [storage,{prepareProfileLibraryHydration},{acceptHydratedPrinterSetups},{acknowledgePendingProfileWrite}]=await Promise.all([
-        import('../persist/profile-library'),import('./library-hydration'),import('./printer-setups'),import('./transactions')]);
-      await acknowledgePendingProfileWrite().catch(error=>{if((error as {code?:string}).code!=='library_reset')throw error;});
+      const [storage,{prepareProfileLibraryHydration},{watchPrinterSetups},{libraryWritesIdle,knowLibrary}]=await Promise.all([
+        import('../persist/profile-library'),import('./library-hydration'),import('./printer-setups'),import('./library-writes'),import('./transactions')]);
+      const {libraryWrites}=await import('./library-writes');
+      await libraryWritesIdle();
       if(!current())return;
       const [document]=await Promise.all([storage.readProfileLibrary(),settings]);
       if(!current())return;
