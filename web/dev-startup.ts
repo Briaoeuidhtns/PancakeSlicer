@@ -4,7 +4,7 @@ import type { DevEnvironment, HtmlTagDescriptor, Plugin } from 'vite';
 import { parseAst } from 'vite';
 
 const STARTUP_MODULES = [
-  '/@vite/client', '/src/bootstrap.ts', '/src/main.tsx', '/src/persist/preferences.ts', '/src/flush.ts', '/src/components/SavedPreferencesNotice.tsx',
+  '/@vite/client', '/src/bootstrap.ts', '/src/main.tsx', '/src/persist/preferences.ts',
   '/src/plater/Plater3D.tsx', '/src/components/WorkspaceRail.tsx', '/src/components/Navigator.tsx', '/src/projects/ProjectStatus.tsx',
   '/src/plater/orientPrompt.ts', '/src/profiles/catalog-startup.ts', '/src/preflight/marks.ts',
   '/src/profiles/library-hydration.ts', '/src/profiles/printer-setups.ts', '/src/flow/project-recovery.ts',

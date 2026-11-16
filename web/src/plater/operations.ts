@@ -1,7 +1,6 @@
 import { beginBusy } from '../state/busy';
 import { Box3, Matrix4, Vector3, type BufferGeometry } from 'three';
 import { arrangeSettings } from './arrangeSettings';
-import { flushReady } from '../flush-state';
 import { appendLibrary, firstLayer, plateSignature } from '../slice-input';
 import { jobValue } from '../options';
 import { responseError } from '../api/access';
@@ -20,7 +19,6 @@ export async function orientJob(o: PlateObject, operation: 'orient' | 'orient-sc
   const fd = new FormData();
   fd.append('operation', operation);
   await attachFiles(fd, [{ name: 'orient.stl', blob: await bakeStl(o) }]);
-  await flushReady();
   appendLibrary(fd, s, Object.fromEntries(Object.entries(o.settings).map(([key, value]) => [key, jobValue(key, value)])));
   const response = await postJob(fd);
   if (!response.ok) throw await responseError(response);
@@ -133,7 +131,6 @@ export async function run(operation: 'orient' | 'split' | 'split-parts', all: bo
 }
 
 export async function plateForm(s: State, operation: string): Promise<FormData> {
-  await flushReady();
   const { plate, files } = await plateJson(s.objects, firstLayer(s));
   const fd = new FormData();
   fd.append('operation', operation);

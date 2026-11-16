@@ -1,29 +1,17 @@
-import type { Config } from './api/types';
-import { OPTIONS } from './options';
-import { filamentColor } from './plater/filamentColor';
-import { effectiveConfig, setState, type State } from './state/store';
-import { extruderCount, installedVariant, valueAt } from './multinozzle/config';
-import { filament_options_with_variant, printer_options_with_variant_1 } from './multinozzle/variant-keys';
+import type { State } from './state/store';
+import { plateSetup } from './profiles/plate-setup';
+import { slotFilaments } from './profiles/slots';
 
-let flush: typeof import('./flush') | null = null;
-export const flushReady = () => (flush ? Promise.resolve() : import('./flush').then((m) => { if (!flush) { flush = m; setState({}); } }));
-setTimeout(() => void flushReady());
+export const MULTIPLIER_RANGE: [number, number] = [0, 3];
+export const MAX_FLUSH_VOLUME = 20000;
 
-export function flushInputs(s: State, nozzle = 0) {
-  const colours = s.filamentSlots.map((_, i) => filamentColor(s, i + 1));
-  const machine = effectiveConfig(s, 'machine');
-  const variant = installedVariant(machine, 'machine', machine, nozzle);
-  const printer = { ...machine, ...Object.fromEntries([...printer_options_with_variant_1].filter((k) => machine[k] !== undefined).map((k) => [k, [valueAt(machine[k], variant)]])) };
-  const filaments: Config[] = s.filamentSlots.map((_, i) => {
-    const config = effectiveConfig(s, 'filament', i), variant = installedVariant(config, 'filament', machine, nozzle);
-    return { ...config, ...Object.fromEntries([...filament_options_with_variant].filter((k) => config[k] !== undefined).map((k) => [k, [valueAt(config[k], variant)]])) };
-  });
-  return { colours, printer, filaments };
+export function nozzleFlush(s: State, nozzle = 0) {
+  return plateSetup(s)?.flushing?.nozzles[nozzle] ?? null;
 }
 
-export function autoFlushMatrix(s: State, nozzle = 0): number[] {
-  const { colours, printer, filaments } = flushInputs(s, nozzle);
-  return flush ? flush.calcFlushingVolumes(colours, printer, filaments) : [];
+export function allFlush(s: State): { matrix: number[]; multipliers: number[] } | null {
+  const nozzles = plateSetup(s)?.flushing?.nozzles;
+  return nozzles ? { matrix: nozzles.flatMap((n) => n.matrix), multipliers: nozzles.map((n) => n.multiplier) } : null;
 }
 
 export function defaultMultiplier(s: State, nozzle = 0): number {
@@ -46,11 +34,6 @@ export function allFlush(s: State): { matrix: number[]; multipliers: number[] } 
 }
 
 export function flushModified(s: State): boolean {
-  if (s.filamentSlots.length < 2 || !flush) return false;
-  const { flush_multiplier: _multiplier, ...process } = s.dirty.process;
-  const unedited = { ...s, dirty: { ...s.dirty, process } };
-  return Array.from({ length: extruderCount(effectiveConfig(s, 'machine')) }, (_, nozzle) => {
-    const { matrix, multiplier } = currentFlush(s, nozzle), auto = autoFlushMatrix(s, nozzle);
-    return multiplier !== defaultMultiplier(unedited, nozzle) || matrix.some((v, i) => v !== auto[i]);
-  }).some(Boolean);
+  const flushing = s.records.printers.find((p) => p.id === s.printer)?.flushing;
+  return !!plateSetup(s)?.flushing && !!(flushing?.volumes?.length || flushing?.multipliers?.length);
 }

@@ -1,3 +1,7 @@
+import { noticeText } from '../notice-codes';
+import { currentPlate } from '../settings/common';
+import { plateLabel, plateSetup } from '../profiles/plate-setup';
+import type * as THREE from 'three';
 import type { PlateObject, State } from '../state/store';
 import type { ProjectItem } from './threemf';
 import { markStale, newId, setState, toast } from '../state/store';

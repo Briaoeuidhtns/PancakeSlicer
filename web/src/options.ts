@@ -34,6 +34,7 @@ export interface OptionDef {
   gui_type?: string;
   multiline?: boolean;
   full_width?: boolean;
+  records?: ('printer' | 'filament' | 'print')[];
 }
 
 export interface TabLine {
@@ -160,6 +161,11 @@ export const modeVisible = (opt: OptionMode, ui: OptionMode) => MODE_RANK[opt] <
 
 const HIDDEN = /^(default_)?filament_colour$|print_host|printhost|printer_agent|host_type|api_key|bbl_use_printhost|upload|cloud|device|octoprint|_plugin_config_overrides/;
 const REMOVED_KEYS = new Set(removed);
+const RECORD_OF = { machine: 'printer', filament: 'filament', process: 'print' } as const;
+export const profileHolds = (type: 'machine' | 'filament' | 'process', key: string) => {
+  const records = OPTIONS[key]?.records;
+  return records ? records.includes(RECORD_OF[type]) : !!OPTIONS[key];
+};
 export const isHidden = (key: string) => REMOVED_KEYS.has(key) || HIDDEN.test(key);
 
 export const DESKTOP_ONLY = new Set(['post_process', 'slicing_pipeline_plugin']);

@@ -192,7 +192,7 @@ function sync() {
     if (current) (current = null), emit();
     return;
   }
-  const inputs = [s.objects, s.dirty, s.printer, s.process, s.filamentSlots, s.filamentEdits, s.bedType, s.projectPresets, s.userPresets, s.events, s.flush];
+  const inputs = [s.objects, s.dirty, s.printer, s.process, slotFilaments(s), s.filamentEdits, s.projectPresets, s.records, s.resolved, s.events];
   if (lastInputs.length && inputs.every((v, i) => v === lastInputs[i]) && lastKey) return;
   lastInputs = inputs;
   const key = plateSignature(s);

@@ -43,8 +43,10 @@ const groupSwitch = (g: { title: string; lines: TabLine[] }) => !g.title ? -1 : 
 const TAB_OF: Record<PresetType, TabDesc['tab']> = { process: 'process', filament: 'filament', machine: 'printer' };
 const TYPE_NAME: Record<PresetType, string> = { process: 'Process', filament: 'Filament', machine: 'Printer' };
 
-export interface ProfileFields { readOnlyKeys?: ReadonlySet<string>; name: string; config: Config; baseline: Config; changes: Config; mode?: OptionMode; set(key: string, value: ConfigValue): void; reset(key: string): void;
-  sources?: Record<string, SettingSource>; sourceText?: Record<string, string>; resetToBase?(key: string): void }
+export interface ProfileFields { readOnlyKeys?: ReadonlySet<string>; name: string;
+  state?: 'resolving' | 'ready' | 'failed'; error?: string;  printer?: string; config: Config; baseline: Config; changes: Config; mode?: OptionMode; set(key: string, value: ConfigValue): void; reset(key: string): void;
+  sources?: Record<string, SettingSource>; sourceText?: Record<string, string>; resetToBase?(key: string): void;
+  overridden?(key: string): boolean | undefined }
 export interface Aux { label: string; icon?: string; content: React.ReactNode; modified?: boolean; initial?: boolean }
 export function SettingsTab({ type, slot = 0, compact, hidePreset, editor, overrides, readOnly = false, auxiliary }: { type: PresetType; slot?: number; compact?: boolean; hidePreset?: boolean; editor?: ProfileFields;
   overrides?: ObjectOverrides | null; readOnly?: boolean; auxiliary?: Aux | Aux[] }) {
@@ -70,7 +72,7 @@ export function SettingsTab({ type, slot = 0, compact, hidePreset, editor, overr
   const processConfig = useStore((s) => effectiveConfig(s, 'process'));
   const engine = useEngineHealth();
   const printer = useStore((s) => s.printer);
-  const bedType = useStore((s) => s.bedType);
+  const bedType = useStore(currentPlate);
   const projectMode = useStore(effectiveMode);
   const uiMode = editor?.mode ?? projectMode;
   const projectDirty = useStore((s) => presetEdits(s, type, slot));
@@ -91,8 +93,8 @@ export function SettingsTab({ type, slot = 0, compact, hidePreset, editor, overr
 
   const env = useMemo(() => {
     const state = getState();
-    if (overrides) return environment([machineConfig, config], { printer_vendor: resolvePreset(state, 'machine', state.printer).base?.vendor,
-      extruders_count: Array.isArray(machineConfig.nozzle_diameter) ? machineConfig.nozzle_diameter.length : 1, curr_bed_type: state.bedType,
+    if (overrides) return environment([machineConfig, config], { printer_vendor: profileInfo(state, 'machine', state.printer).vendor,
+      extruders_count: nozzleCount(state, state.printer), curr_bed_type: currentPlate(state),
       settings_scope: 'object', native_support_capable: nativeSupportCapable(state) }, uiMode);
     if (!editor) {
       const context = tabEnvironment(state, type, slot, uiMode);
@@ -223,7 +225,8 @@ export function SettingsTab({ type, slot = 0, compact, hidePreset, editor, overr
               disabled={readOnly || editor?.readOnlyKeys?.has(key) || states[key]?.enabled === false}
               definition={definition(key, line)}
               inheritedValue={env[key.replace(/^filament_/, '')] as ConfigValue}
-              overrideDisabled={readOnly || OPTIONS[key]?.nullable && key !== 'filament_retraction_length' && !key.startsWith('filament_ironing_') && env.filament_retraction_length != null && Number(env.filament_retraction_length) <= 0}
+              overrideChecked={editor?.overridden?.(key)}
+              overrideDisabled={readOnly}
               label={labels?.[i] ?? (shared ? line.overrides?.[key]?.label ?? OPTIONS[key]?.label : line.label)}
               hideLabel={hide || g.lines.length === 1 && keys.length === 1 && !!OPTIONS[key]?.multiline && (line.label ?? OPTIONS[key]?.label ?? '').trim().toLowerCase() === g.title.trim().toLowerCase()}
               tooltip={tooltip} />;

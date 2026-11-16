@@ -1,8 +1,7 @@
-import { useState } from 'react';
-import { OPTIONS } from '../options';
-import { getState, printerPreset, setState, toast, useStore } from '../state/store';
-import { undo, undoable } from '../state/history';
-import { flushModified } from '../flush-state';
+import { setState, toast, useStore } from '../state/store';
+import { undo } from '../state/history';
+import { flushModified, flushUnavailable } from '../flush-state';
+import { plateSetup, setBuildPlate } from './plate-setup';
 import { Dropdown } from '../components/Dropdown';
 import { Glyph } from '../components/Glyph';
 import { MenuButton, type MenuEntry } from '../components/Menu';
@@ -19,8 +18,20 @@ export function NozzleField() {
 const PLATE_SHORT: Record<string, string> = { 'Smooth Cool Plate': 'Cool Plate', 'Engineering Plate': 'Engineering', 'Smooth High Temp Plate': 'High Temp',
   'Smooth PEI Plate': 'Smooth PEI', 'Textured PEI Plate': 'Textured PEI', 'Textured Cool Plate': 'Textured Cool', 'Cool Plate (SuperTack)': 'SuperTack' };
 
-export function addFilament() {
-  void import('../plater/mixed').then((m) => m.addPhysical()).catch((error) => toast(String(error)));
+export function PlateTypeField({ bare = false }: { bare?: boolean }) {
+  const setup = useStore((s) => plateSetup(s));
+  if (!setup?.plates.length) return null;
+  const options = setup.plates.map((p) => ({ value: p.value, label: p.label, short: PLATE_SHORT[p.label] }));
+  const field = <Dropdown className="combo rail-plate-combo" aria-label="Build plate" value={setup.plate}
+    onValueChange={(value) => void setBuildPlate(value)} options={options} />;
+  return bare ? field : <div className="rail-row rail-plate">{field}</div>;}
+
+export function BuildPlateField({ printerId, disabled = false }: { printerId: string; disabled?: boolean }) {
+  const setup = useStore((s) => plateSetup(s, printerId));
+  if (!setup?.plates.length) return null;
+  return <div className="nozzle-row"><span className="opt-label">Build plate</span><span className="opt-field">
+    <Dropdown className="combo" aria-label="Build plate" value={setup.plate} disabled={disabled}
+      onValueChange={(value) => void setBuildPlate(value, printerId)} options={setup.plates.map((p) => ({ value: p.value, label: p.label }))} /></span></div>;
 }
 
 export function addSlot(name: string) {

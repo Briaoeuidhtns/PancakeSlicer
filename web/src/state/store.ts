@@ -233,7 +233,6 @@ export interface State {
   mixes: Record<number, Mix>;
   processVariant: { layerHeight: number } | null;
   projectMaterials: { colours: string[]; matrix: number[] | null; multiplier: number | null; builds?: { object: number; instance: number }[] } | null;
-  flush: { matrix: number[] | null; multiplier: number | null };
   flushDialog: boolean;
   appDialog: 'about' | 'preferences' | 'shortcuts' | 'send' | 'setup' | 'plate' | 'clone' | 'simplify' | 'filaments' | 'objectTable' | 'createPrinter' | 'mixed' | 'what' | null;
   filamentsToUse: string[] | null;
@@ -332,7 +331,6 @@ let state: State = {
   mixes: {},
   processVariant: null,
   projectMaterials: null,
-  flush: { matrix: null, multiplier: null },
   flushDialog: false,
   appDialog: null,
   calibDialog: null,
@@ -468,13 +466,10 @@ export function selectPrinter(name: string) {
   const target=findProfile(initial,'machine',name);
   if(!target || target.archived || target.kind==='master')throw new Error('Add this printer template to your library first so you can customize and use it.');
   setState(s=>{
-    const key=profileKey(target),setup=planPrinterSwitch(s,key),base=resolvePreset(s,'machine',key).base;
-    const projectContext=s.projectProfileContexts[key];
-    const restored={...s,...setup,profileRecoveries:setup.recoveries,process:projectContext?.process ?? setup.printerLibrary.setups[key]?.processId ?? s.process,
-      projectPresets:projectContext?.projectPresets ?? s.projectPresets,profileSnapshots:projectContext?.profileSnapshots ?? null,
-      bedType:base?.default_bed_type || String(base?.config.curr_bed_type ?? s.bedType),dirty:projectContext?.dirty ?? {machine:{},process:s.dirty.process},job:markStale(s.job)};
-    const next={...restored,...reconcilePrinterSelection(s,restored).patch};
-    return {...next,printerLibrary:capturePrinterMaterials(next)};
+    const key=profileKey(target),setup=planPrinterSwitch(s,key);
+    const next={...s,...setup,profileRecoveries:setup.recoveries,profileSnapshots:null,
+      dirty:{machine:{},process:s.dirty.process},job:markStale(s.job)};
+    return next;
   });
 }
 

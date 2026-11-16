@@ -357,7 +357,6 @@ export { outputKind } from './slice-input';
 export { confirmDialog, numberDialog, promptDialog };
 
 export async function jobRequest(s = getState(), saving = false): Promise<JobRequest> {
-  await flushReady();
   if (!saving) {
     if(s.profileLibraryLoad.state!=='ready')throw new Error(s.profileLibraryLoad.state==='failed'?s.profileLibraryLoad.error:'Hang tight—finishing profile setup before slicing.');
     const {flushLibraryWrites}=await import('./profiles/library-writes');await flushLibraryWrites();

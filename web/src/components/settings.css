@@ -9,6 +9,7 @@
 :where(.orca-parity) .optgroup:has(> :is(.optgroup-title, .optgroup-headrow)) { --row-inset: calc(var(--space-section, var(--s-5)) + 12px + var(--s-3)); }
 :where(.orca-parity) :is(.page-flow > .opt-line, .page-flow > .extruder-rows > .opt-line) { --row-inset: calc(var(--space-section, var(--s-5)) + 12px + var(--s-3)); }
 :where(.orca-parity) .optgroup-headrow { display: flex; align-items: center; }
+:where(.orca-parity) .optgroup.optgroup-action { padding: var(--s-3) var(--space-section, var(--s-5)) var(--s-4); }
 :where(.orca-parity) .optgroup-headrow > .optgroup-title { flex: 1; min-width: 0; }
 :where(.orca-parity) .optgroup-aside { flex: none; padding-right: var(--space-section, var(--s-5)); }
 :where(.orca-parity) .optgroup-aside .opt-line { display: flex; align-items: center; gap: var(--s-3); min-height: 0; padding: 0; }

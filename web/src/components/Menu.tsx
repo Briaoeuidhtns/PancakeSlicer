@@ -17,9 +17,11 @@ function MenuRows({ items }: { items: MenuEntry[] }) {
   return items.map((it, i) => {
     if (it === 'sep') return <MenuSeparator key={i} />;
     if (it.header) return <MenuGroup key={i}>{it.label}</MenuGroup>;
-    const content = <>{checks && <span className="menu-check" aria-hidden>{it.checked ? '✓' : ''}</span>}<span className="orca-menu-label">{it.icon}{it.label}</span><span className="orca-menu-key">{it.sub ? '›' : keyLabel(it.shortcut)}</span></>;
-    if (it.sub) return <Menu.Sub key={i}><Menu.SubTrigger className="menu-item" disabled={it.disabled} aria-description={it.disabled || !it.action && !it.sub ? it.tip ?? disabledCommandReason(it.label) : it.tip}>{content}</Menu.SubTrigger><Menu.Portal><Menu.SubContent className="orca-menu" data-menu-family="orca" collisionPadding={8} sideOffset={2}><MenuRows items={it.sub} /></Menu.SubContent></Menu.Portal></Menu.Sub>;
-    return <Menu.Item key={i} className="menu-item" {...(it.checked !== undefined ? { role: it.role ?? 'menuitemcheckbox', 'aria-checked': it.checked } : {})} disabled={it.disabled || !it.action} aria-description={it.disabled || !it.action && !it.sub ? it.tip ?? disabledCommandReason(it.label) : it.tip} onSelect={(e) => { if (it.keepOpen) e.preventDefault(); it.action?.(); }}>{content}</Menu.Item>;
+    const reason = it.disabled ? it.reason : undefined;
+    const label = <span className="orca-menu-label">{it.icon}{it.label}</span>;
+    const content = <>{checks && <span className="menu-check" aria-hidden>{it.checked ? '✓' : ''}</span>}{reason ? <span className="orca-menu-text">{label}<span className="orca-menu-reason">{reason}</span></span> : label}<span className="orca-menu-key">{it.sub ? '›' : keyLabel(it.shortcut)}</span></>;
+    if (it.sub) return <Menu.Sub key={i}><Menu.SubTrigger className="menu-item" disabled={it.disabled} aria-description={it.disabled || !it.action && !it.sub ? it.reason ?? it.tip ?? disabledCommandReason(it.label) : it.tip}>{content}</Menu.SubTrigger><InLayer portal={Menu.Portal}><Menu.SubContent className="orca-menu" data-menu-family="orca" collisionPadding={8} sideOffset={2}><MenuRows items={it.sub} /></Menu.SubContent></InLayer></Menu.Sub>;
+    return <Menu.Item key={i} className="menu-item" {...(it.output ? { 'data-output': '' } : {})} {...(it.checked !== undefined ? { role: it.role ?? 'menuitemcheckbox', 'aria-checked': it.checked } : {})} disabled={it.disabled || !it.action} aria-description={it.disabled || !it.action && !it.sub ? it.reason ?? it.tip ?? disabledCommandReason(it.label) : it.tip} onSelect={(e) => { if (it.keepOpen) e.preventDefault(); it.action?.(); }}>{content}</Menu.Item>;
   });
 }
 export const MenuButton = forwardRef<HTMLButtonElement, Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> & { label: string; items: MenuEntry[]; children?: ReactNode }>(function MenuButton({ label, items, children, ...props }, ref) {

@@ -6,7 +6,10 @@ import { remapObject } from '../components/RemapFilaments';
 import { blend } from './mixColour';
 import type { PaintNode, Painting } from './paint';
 import { insertFlushSlots, retainFlushSlots } from '../multinozzle/flush-mapping';
-import { allFlush, flushReady } from '../flush-state';
+import type { FlushingRecord } from '../profiles/records';
+import { slotFilaments, slotMixes, stripOf, type Strip } from '../profiles/slots';
+import { slotExtruder } from '../printers/feeds';
+import { writeStrip } from '../profiles/slot-writes';
 
 export const SLOTS_MAX = 32;
 export { blend };
@@ -32,6 +35,11 @@ export function remapAll(st: State, map: number[]): Partial<State> {
       ...(p.index === st.plateIndex ? {} : { objects: each(p.objects), events: p.events && events(p.events) }) })),
     job: markStale(st.job),
   };
+}
+
+function retainedFlushing(st: State, kept: number[]): FlushingRecord | undefined {
+  const flushing = st.records.printers.find((p) => p.id === st.printer)?.flushing, volumes = retainFlushSlots(flushing?.volumes, slotFilaments(st).length, kept);
+  return flushing && volumes ? { ...flushing, volumes } : undefined;
 }
 
 const shifted = (mixes: Record<number, Mix>, from: number, by: number) =>
@@ -61,12 +69,10 @@ export function deleteMixes(slots: number[], into?: number, name = 'Delete mixed
     const kept = Array.from({ length: n }, (_, i) => i).filter((i) => !gone.has(i));
     const id = (k: number) => kept.indexOf(k) + 1;
     const map = Array.from({ length: n }, (_, k) => (gone.has(k) ? (into ? id(into - 1) : 1) : id(k)));
-    return {
-      ...remapAll(st, map, kept),
-      filamentSlots: kept.map((k) => st.filamentSlots[k]), slotColours: kept.map((k) => st.slotColours[k]),
-      mixes: Object.fromEntries(kept.flatMap((k, j) => (st.mixes[k] ? [[j, st.mixes[k]]] : []))),
-    };
-  }));
+    setState(remapAll(st, map));
+    writeStrip({ ids: kept.map((k) => strip.ids[k]), filaments: kept.map((k) => strip.filaments[k]), colours: kept.map((k) => strip.colours[k]),
+      mixes: Object.fromEntries(kept.flatMap((k, j) => (strip.mixes[k] ? [[j, strip.mixes[k]]] : []))) }, name, st, retainedFlushing(st, kept));
+  });
 }
 
 const paints = (p: Painting | undefined, n: number): boolean => {
@@ -92,22 +98,18 @@ export function removeSlotAt(n: number): { moved: number; to: number; merged: { 
   undoable('Remove filament', () => {
     const st = getState(), strip = stripOf(st);
     const pick = <T,>(a: T[]) => kept.map((k) => Array.from(a)[k]);
-    return {
-      ...remapAll(st, map, kept),
-      filamentSlots: pick(st.filamentSlots), slotColours: pick(st.slotColours),
-      mixes: Object.fromEntries(remixed.filter(([k]) => !gone.has(k)).map(([k, m]) => [kept.indexOf(k), m])),
-      projectPresets: st.projectPresets && { ...st.projectPresets, filaments: pick(st.projectPresets.filaments) },
-    };
-  }));
+    setState({ ...remapAll(st, map), projectPresets: st.projectPresets && { ...st.projectPresets, filaments: pick(st.projectPresets.filaments) } });
+    writeStrip({ ids: pick(strip.ids), filaments: pick(strip.filaments), colours: pick(strip.colours),
+      mixes: Object.fromEntries(remixed.filter(([k]) => !gone.has(k)).map(([k, m]) => [kept.indexOf(k), m])) }, 'Remove filament', st, retainedFlushing(st, kept));
+  });
   return { moved, to, merged };
 }
 
-function insertedFlush(st: State, changes: Partial<State>, previous: number[]): Partial<State> {
-  const matrix = st.flush.matrix ?? st.projectMaterials?.matrix;
-  const n = st.filamentSlots.length;
-  if (!matrix?.length || !n || matrix.length % (n * n)) return {};
-  const next = { ...st, ...changes, flush: { ...st.flush, matrix: null }, projectMaterials: st.projectMaterials && { ...st.projectMaterials, matrix: null } };
-  return { flush: { ...st.flush, matrix: insertFlushSlots(matrix, n, previous, allFlush(next).matrix) } };
+function insertedFlush(st: State, previous: number[]): FlushingRecord | undefined {
+  const flushing = st.records.printers.find((p) => p.id === st.printer)?.flushing, matrix = flushing?.volumes;
+  const n = slotFilaments(st).length;
+  if (!flushing || !matrix?.length || !n || matrix.length % (n * n)) return undefined;
+  return { ...flushing, volumes: insertFlushSlots(matrix, n, previous) };
 }
 
 export function addPhysical(colour?: string, name?: string) {

@@ -48,9 +48,8 @@ export function selectChanges(s: State, type: PresetType, slot = 0): SettingChan
   const globalValue = (key: string) => global[key] ?? OPTIONS[key]?.default as ConfigValue | undefined;
   for (const key of new Set([...Object.keys(project ?? {}), ...Object.keys(plate?.settings ?? {}), ...Object.keys(edits)])) {
     const now = global[key];
-    if (now === undefined) continue;
-    const owner: ChangeOwner = edits[key] === undefined && plate?.settings[key] !== undefined
-      ? { name: plate.name || `Plate ${plate.index}`, plate: plate.index } : { name: 'Project' };
+    if (now === undefined || !profileHolds(type, key)) continue;
+    const owner: ChangeOwner = plateOwns(edits, plate, key) && plate ? { name: plate.name || `Plate ${plate.index}`, plate: plate.index } : { name: 'Project' };
     add(key, presetValue(s, type, key, slot), now, 'project', owner);
   }
   if (type !== 'process') return rows;

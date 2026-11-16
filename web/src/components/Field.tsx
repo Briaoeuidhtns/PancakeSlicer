@@ -94,6 +94,7 @@ export const Field = memo(function Field(props: {
   definition?: Partial<OptionDef>;
   inheritedValue?: ConfigValue;
   overrideDisabled?: boolean;
+  overrideChecked?: boolean;
   onSet?: (key: string, value: ConfigValue) => void;
   onReset?: (key: string) => void;
   resetTitle?: string;
@@ -132,9 +133,10 @@ export const Field = memo(function Field(props: {
   const modified = props.dirty || props.source === 'set';
   const sourced = props.source === 'auto' || props.source === 'printer', glyph = <SourceGlyph text={props.sourceText}/>;
   const glyphInUnit = sourced && !props.widget && NUMERIC.has(def.type) && !def.multiline && !(props.mixed && !unmixed);
-  const checked = !props.overrideDisabled && value != null && value !== 'nil' && value !== '';
-  const inherited = props.inheritedValue ?? OPTIONS[key.replace(/^filament_/, '')]?.default;
-  const fallback = elementOf(inherited as ConfigValue | undefined, idx, vector) ?? '0';
+  const checked = !props.overrideDisabled && (props.overrideChecked ?? (value != null && value !== 'nil' && value !== ''));
+  const inherited = props.inheritedValue;
+  const real = (v: ConfigValue | undefined) => v != null && v !== 'nil' && v !== '' ? v : undefined;
+  const fallback = real(value) ?? real(elementOf(system, idx, vector)) ?? real(elementOf(inherited as ConfigValue | undefined, idx, vector)) ?? String(def.min !== undefined && Math.abs(def.min) < 1e9 ? def.min : 0);
   const isSwitch = def.type.replace(/s$/, '') === 'bool' && !FILAMENT_SLOT_KEYS.has(key);
   const isOn = value === true || value === 'true' || value === '1' || value === 1;
   const locked = !!props.disabled || !!def.readonly || (def.nullable && !checked);
@@ -148,7 +150,7 @@ export const Field = memo(function Field(props: {
     } : undefined}>
       <span className={`opt-label ${modified ? 'modified' : ''} ${props.hideLabel ? 'field-label-hidden' : ''}`} id={labelId}>
         {def.nullable && <Check className="nullable-toggle" aria-label={`Override ${label}`} checked={checked} disabled={props.overrideDisabled}
-        onCheckedChange={(next) => commit(next ? fallback : 'nil')} />}
+        onCheckedChange={(next) => { if (!next) commit('nil'); else if (!rejectField(asText(fallback), asText(value ?? ''), def, label)) commit(fallback); }} />}
         {props.hideLabel ? <span className="opt-label-text">{label}</span> : <LabelTip label={label} full={fullLabel}>
           <strong>{fullLabel}</strong>{hint && !help?.includes(hint) && <p>{hint}</p>}{help && <HelpText text={help} current={hint}/>}
           {defaultText(def) && <p className="info-meta">Default {defaultText(def)}</p>}

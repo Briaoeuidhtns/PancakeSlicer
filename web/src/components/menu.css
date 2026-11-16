@@ -4,6 +4,8 @@
 :where(.orca-parity) .orca-menu .menu-item:focus-visible { outline-offset: -1px; }
 :where(.orca-parity) .orca-menu .menu-item[data-disabled] { color: var(--disabled); }
 :where(.orca-parity) .orca-menu-label { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+:where(.orca-parity) .orca-menu-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+:where(.orca-parity) .orca-menu-reason { color: var(--ink-3); font: 400 12px/1.2 var(--font-ui); }
 :where(.orca-parity) .orca-menu-key { flex: none; margin-left: auto; padding-left: 16px; color: var(--ink-3); white-space: nowrap; }
 :where(.orca-parity) .menu-check { width: 14px; flex: none; color: var(--ink); font-size: 14px; line-height: 1; text-align: center; }
 :where(.orca-parity) .orca-menu .menu-sep { height: 1px; margin: 4px 0; background: var(--line); }

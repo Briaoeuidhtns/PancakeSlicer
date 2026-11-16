@@ -77,8 +77,8 @@ function keep(r: SliceResult) {
   }
 }
 
-const ALWAYS: (keyof State)[] = ['objects', 'projectPlates', 'plateIndex', 'project', 'events', 'filamentSlots', 'slotColours', 'flush',
-  'printer', 'process', 'filamentEdits', 'bedType', 'wipeTowerPos', 'mixes'];
+const ALWAYS: (keyof State)[] = ['objects', 'projectPlates', 'plateIndex', 'project', 'events', 'records',
+  'printer', 'process', 'filamentEdits', 'wipeTowerPos'];
 const NEVER = new Set<keyof State>(['job', 'tab', 'selected', 'toast', 'toastSeq', 'toastAction', 'toastMs']);
 let watched: (keyof State)[] = ALWAYS;
 let seen: State = getState();

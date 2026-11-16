@@ -137,11 +137,7 @@ func NewServer(c Config, jobs *JobManager, catalog *resolve.Catalog) http.Handle
 	mux.HandleFunc("GET /api/filament-catalog", s.filamentCatalog)
 	s.libraryRoutes(mux)
 	mux.HandleFunc("POST /api/resolve", s.postResolve)
-	options := c.Options
-	if options == nil {
-		options = cacheResponse(optionData)
-	}
-	registerOptions(mux, options, devResetEnabled())
+	registerOptions(mux, c.Options, s.catalog, devResetEnabled())
 	if devResetEnabled() {
 		mux.HandleFunc("POST /api/dev/reset", s.devReset)
 	}
