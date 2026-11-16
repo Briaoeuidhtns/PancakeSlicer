@@ -7,6 +7,7 @@ import { getState, setState, toast, useStore } from '../state/store';
 import { Dropdown } from './Dropdown';
 import { Modal, ModalBody, ModalFooter, ModalTitle } from './Modal';
 import { createMachine, useMachine } from '../flow/fsm';
+import { notice, noticeText, type NoticeKind } from '../notice-codes';
 
 const TYPE_NAME: Record<PresetType, string> = { machine: 'Printer', filament: 'Filament', process: 'Process' };
 const ACCEPT = '.json,.zip,.bbscfg,.orca_printer,.orca_filament,.orca_bundle';

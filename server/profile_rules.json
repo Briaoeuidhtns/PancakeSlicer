@@ -1,6 +1,8 @@
 {
   "comment": "Profile rules shared by the service (profile_resolve.go) and the client resolver (web/src/profiles). One source: edit here only. Spec: profile_spec.json.",
   "schema": 1,
+  "revision": 1,
+  "revisionAbout": "Raise revision on every change: a library saved under a higher revision was saved by a newer PancakeSlicer, which an older one reports when it opens it.",
   "bases": {
     "nozzle": "factor x nozzle diameter",
     "layer": "factor x layer height",

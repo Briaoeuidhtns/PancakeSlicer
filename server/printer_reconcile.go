@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 )
 
-func livePrinterProfiles(doc map[string]json.RawMessage) (map[string]*v4Record, error) {
-	all, err := v4Profiles(doc)
+func livePrinterProfiles(catalog *resolve.Catalog, doc map[string]json.RawMessage) (map[string]*resolve.Printer, error) {
+	lib, err := catalog.ReadLibrary(doc)
 	if err != nil {
 		return nil, err
 	}

@@ -1,58 +1,33 @@
 import { mutation, responseError } from '../api/access';
-import type { Config, ProfileOverlay } from '../api/types';
-import type { ProfileLibraryDocument, ProfileLibraryWrite, ProfileLibraryWriteResult } from '../profiles/ownership';
-import type { SpeedModel } from '../profiles/speed-rules';
-import type { ScaleRow } from '../profiles/auto-rules';
-import { filamentCatalog, printerCatalog } from '../profiles/catalog-reads';
+import { LIBRARY_SCHEMA, type LibraryRecords } from '../profiles/records';
+import { setState, type State } from '../state/store';
 
-type Type = 'printer' | 'filament' | 'print';
-export interface V4Record {
-  id: string; type: Type; name: string; revision: number; archived?: { at: number; operationId: string };
-  vendor?: string; model?: string; nozzle?: number; machine?: Config; printOverrides?: Config;
-  family?: string; brand?: string; material?: string; colour?: string; settings?: Config; fits?: { models?: string[]; nozzles?: number[] };
-  values?: Config; scales?: ScaleRow[]; preferredHeight?: number; heightRule?: string; speedModel?: SpeedModel;
-}
-interface V4Document { schema: 4; revision: number; epoch?: string; profiles: V4Record[]; setups: ProfileLibraryDocument['printers']['setups'] }
+export interface LibraryProblem { code: string; message: string }
+export interface LibraryHealth { problems: Record<string, LibraryProblem>; notices: LibraryProblem[] }
+interface LibraryAnswer { document: LibraryRecords; problems: Record<string, LibraryProblem>; notices: LibraryProblem[] }
 
-const AUTO = { name: 'Auto', engineName: 'Auto', version: 'auto:1' };
-const v3Type = { printer: 'machine', filament: 'filament', print: 'process' } as const;
-const v4Type = { machine: 'printer', filament: 'filament', process: 'print' } as const;
-const first = (v: Config[string] | undefined) => String(Array.isArray(v) ? v[0] ?? '' : v ?? '');
-
-const nozzleKey = (n: number) => String(n);
-const writtenFilaments = new Map<string, { family: string; base: ProfileOverlay['base']; metadata?: Config }>();
-const machineName = async (vendor: string, model: string, nozzle: number) =>
-  (await printerCatalog()).find((v) => v.id === vendor)?.models.find((m) => m.id === model)?.machines?.[nozzleKey(nozzle)];
-
-export function printFromV4(r: V4Record): ProfileOverlay {
-  const auto = r.scales?.length || r.preferredHeight || r.heightRule || r.speedModel ? { auto: { schema: 3, scales: r.scales ?? [], ...(r.speedModel ? { speedModel: r.speedModel } : {}), ...(r.preferredHeight ? { preferredHeight: r.preferredHeight } : {}), ...(r.heightRule ? { heightRule: r.heightRule } : {}) } } : {};
-  return { id: r.id, name: r.name, revision: r.revision, kind: 'profile', type: 'process', ...(r.archived ? { archived: r.archived } : {}), base: AUTO, overlay: { ...r.values }, ...auto } as ProfileOverlay;
+export function problemText(problem: LibraryProblem | undefined, name: string): string | undefined {
+  if (!problem) return undefined;
+  const text = problem.message.startsWith(`${name}: `) ? problem.message.slice(name.length + 2) : problem.message;
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-async function fromV4(doc: V4Document): Promise<ProfileLibraryDocument> {
-  for (const r of doc.profiles) if (r.type === 'filament') void filamentCatalog((r.family ?? '').split('/')[0]).catch(() => []);
-  const printers = doc.profiles.filter((p) => p.type === 'printer');
-  const machines = new Map(await Promise.all(printers.map(async (p) => [p.id, await machineName(p.vendor ?? '', p.model ?? '', p.nozzle ?? 0)] as const)));
-  const home = printers.find((p) => !p.archived && machines.get(p.id)) ?? printers.find((p) => machines.get(p.id));
-  const profiles = await Promise.all(doc.profiles.map(async (r): Promise<ProfileOverlay> => {
-    const common = { id: r.id, name: r.name, revision: r.revision, kind: 'profile' as const, type: v3Type[r.type], ...(r.archived ? { archived: r.archived } : {}) };
-    if (r.type === 'printer') {
-      const name = machines.get(r.id) ?? `${r.model} ${r.nozzle} nozzle`;
-      return { ...common, base: { name, engineName: name, version: '', vendor: r.vendor }, overlay: { ...r.machine },
-        ...(r.printOverrides ? { printOverrides: { ...r.printOverrides } } : {}) } as ProfileOverlay;
-    }
-    if (r.type === 'filament') {
-      const vendor = (r.family ?? '').split('/')[0], family = (await filamentCatalog(vendor).catch(() => [])).find((f) => f.id === r.family);
-      const written = writtenFilaments.get(r.id)?.family === r.family ? writtenFilaments.get(r.id) : undefined;
-      const name = written?.base.name ?? (home && family?.variants?.[machines.get(home.id)!]) ?? family?.fallback ?? Object.values(family?.variants ?? {})[0] ?? r.family ?? '';
-      const overlay = { ...r.settings, ...(r.colour ? { filament_colour: [r.colour] } : {}) };
-      const applicability = r.fits ? { schema: 2, ...(r.fits.models?.length ? { printers: { models: r.fits.models } } : {}), ...(r.fits.nozzles?.length ? { nozzle: { sizes: r.fits.nozzles } } : {}) } : undefined;
-      return { ...common, base: written?.base ?? { name, engineName: name, version: '', vendor }, overlay, ...(applicability ? { applicability } : {}),
-        ...(written ? (written.metadata ? { metadata: written.metadata } : {}) : { metadata: { family: r.family ?? '' } }) } as ProfileOverlay;
-    }
-    return printFromV4(r);
-  }));
-  return { schema: 1, revision: doc.revision, ...(doc.epoch ? { epoch: doc.epoch } : {}), profiles, printers: { schema: 1, revision: 0, setups: doc.setups ?? {} } };
+export function recordProblems(s: Pick<State, 'libraryHealth' | 'records'>, kind: 'machine' | 'process' | 'filament', id: string, name: string): string[] {
+  const { problems } = s.libraryHealth, out = [problemText(problems[id], name)];
+  if (kind !== 'process') for (const c of s.records.calibrations) {
+    const problem = problems[c.id];
+    if (!problem || (kind === 'filament' ? c.filament : c.printer) !== id) continue;
+    const filament = s.records.filaments.find((f) => f.id === c.filament)?.name ?? '', printer = s.records.printers.find((p) => p.id === c.printer)?.name ?? '';
+    const owner = `${filament} on ${printer}: `, rest = problem.message.startsWith(owner) ? problem.message.slice(owner.length) : problem.message;
+    out.push(kind === 'filament' ? `On ${printer}: ${rest}` : `${filament}: ${rest}`);
+  }
+  return out.filter((t): t is string => !!t);
+}
+
+function adopted(answer: LibraryAnswer): LibraryRecords {
+  const doc = checked(answer.document);
+  setState({ libraryHealth: { problems: answer.problems ?? {}, notices: answer.notices ?? [] } });
+  return doc;
 }
 
 async function toV4(p: ProfileOverlay): Promise<V4Record> {
@@ -86,9 +61,7 @@ async function toV4(p: ProfileOverlay): Promise<V4Record> {
 export async function readProfileLibrary(_mock = false): Promise<ProfileLibraryDocument> {
   const response = await fetch('/api/library');
   if (!response.ok) throw await responseError(response);
-  const doc = await response.json() as V4Document;
-  if (!doc || doc.schema !== 4 || !Number.isInteger(doc.revision) || !Array.isArray(doc.profiles)) throw new Error('Oops! Your profile library data looks corrupted or unreadable.');
-  return fromV4(doc);
+  return adopted(await response.json() as LibraryAnswer);
 }
 export async function persistProfileLibrary(write: ProfileLibraryWrite, _mock = false): Promise<ProfileLibraryWriteResult> {
   const { document } = write;
@@ -97,5 +70,5 @@ export async function persistProfileLibrary(write: ProfileLibraryWrite, _mock = 
   const response = await mutation('/api/library', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ operationId: write.operationId, expectedRevision: write.expectedRevision, document: v4 }) });
   if (!response.ok) throw await responseError(response);
-  return response.json();
+  return adopted(await response.json() as LibraryAnswer);
 }

@@ -16,7 +16,7 @@ export interface ManagerProfileRowItem {
   cover?: string | null;
   lead?: string;
   dynamic?: boolean;
-  flag?: string;
+  problem?: string;
   method?: string;
   loaded?: string;
   user?: UserPreset;
@@ -49,7 +49,7 @@ export const ManagerProfileRow = memo(function ManagerProfileRow({ item, listId,
   const label=<span role="gridcell" className="pf-row-label"><span className="pf-item-name" {...(item.lead !== undefined && item.fullName && item.fullName !== item.name ? {'data-truncated': 'true', 'data-full-text': item.fullName} : {})}>{head && <span className="pf-name-head">{head}</span>}<span className="pf-name-tail">{tail}</span></span>{item.dynamic && <DynamicBadge/>}
       {item.meta && <span className="pf-item-meta">{item.meta}</span>}{item.note && <span className="pf-item-note">{item.note}</span>}</span>;
   return <div id={`${listId}:${item.key}`} data-profile-key={item.key} role="row" aria-label={item.label ?? item.fullName} aria-selected={selected} data-child={item.child || undefined}
-    className={`pf-item pf-selectable${open ? ' is-on' : selected ? ' is-checked' : ''}`} tabIndex={focused ? 0 : -1}
+    data-invalid={item.problem ? true : undefined} className={`pf-item pf-selectable${open ? ' is-on' : selected ? ' is-checked' : ''}`} tabIndex={focused ? 0 : -1}
     onMouseDown={event => { if (event.shiftKey) event.preventDefault(); }}
     onClick={event => dispatch({ type: 'CLICK', key: item.key, toggle: selectable && (event.ctrlKey || event.metaKey), shift: selectable && event.shiftKey })}>
     {selectable && <span role="gridcell" className="pf-row-check"><Check aria-label={`Select ${item.fullName ?? item.name}`} checked={selected}

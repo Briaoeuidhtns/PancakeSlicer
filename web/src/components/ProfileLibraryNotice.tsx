@@ -54,9 +54,15 @@ export function LibrarySaveStatus() {
 
 export function ProfileLibraryNotice() {
   const load = useStore(s => s.profileLibraryLoad);
-  if (load.state !== 'failed') return null;
-  return <div className="profile-library-notice" role="alert">
-    <div><strong>Profiles didn't load</strong><button type="button" className="btn" onClick={() => void loadCatalog()}>Retry</button></div>
-    <span>{load.error}</span>
-  </div>;
+  const error = load.state === 'failed' ? load.error : null;
+  const notices = useStore(s => s.libraryHealth.notices);
+  useEffect(() => { if (error && error !== CLIENT_OUTDATED) console.error('Profile library could not be read:', error); }, [error]);
+  const said = notices.map((n) => <div key={n.code} className="profile-library-notice" role="alert" data-library-notice={n.code}><div><strong>{n.message}</strong></div></div>);
+  if (!error) return <>{said}<LibrarySaveStatus/></>;
+  if (error === CLIENT_OUTDATED) return <>{said}<div className="profile-library-notice" role="alert">
+    <div><strong>PancakeSlicer got an update!</strong><button type="button" className="btn" onClick={() => location.reload()}>Reload</button></div>
+  </div></>;
+  return <>{said}<div className="profile-library-notice" role="alert">
+    <div><strong>Oops! Couldn't read your profile library</strong><button type="button" className="btn" onClick={() => void loadCatalog()}>Retry</button></div>
+  </div></>;
 }

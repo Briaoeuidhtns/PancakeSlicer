@@ -129,14 +129,16 @@ async function handle(request: Request): Promise<Response> {
   }
   if (path === 'about') return json({ name: 'PancakeSlicer Demo', version: 'Client-side demo', source_url: GITHUB_URL, source_configured: true, license: 'AGPL-3.0', revision: (await engine()).health.server_revision });
   const s = await state();
-  if (path === 'resolve') {
-    try { return json(await hooks.resolve?.(await body(request) as import('./resolve').DemoResolveInput)); }
-    catch (error) { return json({ error: error instanceof Error ? error.message : String(error) }, 400); }
+  if (path === 'resolve' || path === 'slot-offer') {
+    const run = path === 'resolve' ? hooks.resolve : hooks.slotOffer;
+    if (!run) return json({ error: 'The demo resolver only runs right here on the page.' }, 500);
+    try { return json(await run(s.library, await body(request), (await engine()).options.options, await catalog())); }
+    catch (error) { return json({ error: error instanceof Error ? error.message : String(error) }, 500); }
   }
   if (path === 'library') {
-    if (method === 'GET') return json(s.library);
+    if (method === 'GET') return json({ document: s.library, problems: {}, notices: [] });
     const input = await body(request); s.library = { ...input.document, revision: input.expectedRevision + 1 }; save(s);
-    return json({ revision: s.library.revision, operationId: input.operationId });
+    return json({ revision: s.library.revision, operationId: input.operationId, document: s.library, problems: {}, notices: [] });
   }
   if (path === 'session' || path === 'preferences') {
     if (method === 'GET') return json(s[path]);

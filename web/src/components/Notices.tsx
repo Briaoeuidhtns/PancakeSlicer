@@ -66,7 +66,7 @@ function useNoticeLane(msg: ReactNode): Element | null {
   const loading = useStore((s) => !!s.loading);
   const [lane, setLane] = useState<Element | null>(null);
   useEffect(() => {
-    setLane(msg && tab !== 'projects' && !dialogOpen && !loading ? document.querySelector('.canvas-area .notifications') : null);
+    setLane(msg && (tab === 'prepare' || tab === 'preview') && !dialogOpen && !loading ? document.querySelector('.canvas-area .notifications') : null);
   }, [msg, tab, dialogOpen, loading]);
   return lane;
 }
