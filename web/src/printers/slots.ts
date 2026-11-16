@@ -8,14 +8,13 @@ import { loadedLine, tuningFor } from '../catalog/read';
 import { valueAt } from '../multinozzle/config';
 import type { Tray } from './connections';
 
-export type SlotRule = 'spool' | 'remembered' | 'exact' | 'type' | 'generic';
-export interface SlotMatch {
+export interface SlotReport {
   slot: string; label: string;
   tray: { type: string; colour: string; name: string; filament_id: string };
-  filament: string | null; catalog?: string; name: string; rule: SlotRule; colour: string;
   remaining: number | null; spool: string | null;
+  earlier?: string;
 }
-export interface PrinterSlots { online: boolean; updated: string; slots: SlotMatch[]; error?: string }
+export interface PrinterSlots { online: boolean; updated: string; slots: SlotReport[]; error?: string }
 
 export const slotOf = (t: Tray) => isExternalTray(t.id) ? t.extruder === undefined ? 'ext' : t.extruder === 0 ? 'ext.L' : 'ext.R' : `ams${t.ams}.${t.slot}`;
 
@@ -61,7 +60,7 @@ export async function readPrinterSlots(printer: string): Promise<PrinterSlots> {
   return await r.json() as PrinterSlots;
 }
 
-export async function chooseSlot(printer: string, slot: string, filament: string | null): Promise<PrinterSlots> {
+export async function rememberSpool(printer: string, slot: string, filament: string | null): Promise<PrinterSlots> {
   const r = await mutation(path(printer, slot), filament
     ? { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filament }) }
     : { method: 'DELETE' });

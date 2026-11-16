@@ -22,8 +22,8 @@ export function variantsOf(config: Config, type: PresetType): string[] {
   return valuesOf(config[`${prefix(type)}_extruder_variant`]);
 }
 
-export function installedVariant(config: Config, type: PresetType, machine: Config, extruder: number): number {
-  const name = `${valueAt(machine.extruder_type, extruder, 'Direct Drive')} ${valueAt(machine.nozzle_volume_type ?? machine.default_nozzle_volume_type, extruder, 'Standard')}`;
+export function installedVariant(config: Config, type: PresetType, nozzle: NozzleRecord | undefined, extruder: number): number {
+  const name = `${nozzle?.type ?? 'Direct Drive'} ${nozzle?.volume ?? 'Standard'}`;
   const variants = variantsOf(config, type);
   const ids = valuesOf(config[type === 'machine' ? 'printer_extruder_id' : 'print_extruder_id']);
   const index = variants.findIndex((v, i) => v === name && (type === 'filament' || Number(ids[i] ?? 1) === extruder + 1));

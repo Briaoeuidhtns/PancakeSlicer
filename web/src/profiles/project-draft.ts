@@ -2,8 +2,8 @@ import type { Config, PresetType } from '../api/types';
 import { documentGeneration } from '../state/history';
 import { selectChanges } from '../state/changes';
 import { sameValue } from '../state/value-equality';
-import { getState, presetEdits, resolvePreset, setState, type State } from '../state/store';
-import { profileKey } from './identity';
+import { getState, presetEdits, resolvePreset, type State } from '../state/store';
+import { slotFilaments } from './slots';
 import { randomId } from '../random-id';
 export interface ProjectProfileChanges {
   id:string;type:PresetType;key:string;slot:number;generation:number;

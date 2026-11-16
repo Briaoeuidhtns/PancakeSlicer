@@ -16,6 +16,7 @@ import { clearanceScale } from '../preview/clearance';
 import { BP } from '../breakpoints';
 import { phoneSheetQuery } from '../workspace-sheet';
 import { Sep } from '../separator';
+import { slotFilaments } from '../profiles/slots';
 
 const css = (c: RGB) => `rgb(${c[0]},${c[1]},${c[2]})`;
 
@@ -73,7 +74,7 @@ function filamentInfo(d: PreviewData, statistics?: PrintStatistics) {
     const native = statistics?.per_extruder.find((f) => f.extruder_id === i);
     if (native && native.used_filament_mm > 0)
       return { mm: mm ?? 0, grams: (mm ?? 0) * native.used_filament_g / native.used_filament_mm };
-    const cfg = effectiveConfig(s, 'filament', Math.min(i, Math.max(0, s.filamentSlots.length - 1)));
+    const cfg = effectiveConfig(s, 'filament', Math.min(i, Math.max(0, slotFilaments(s).length - 1)));
     const num = (v: unknown, def: number) => {
       const x = Number(Array.isArray(v) ? v[0] : v);
       return Number.isFinite(x) && x > 0 ? x : def;
@@ -193,7 +194,7 @@ export const Legend = memo(function Legend(props: {
       case 'filament': {
         const s = getState();
         const cols = (d.meta.extruder_colors?.length ? d.meta.extruder_colors : []).map(hexToRgb);
-        const names = d.meta.filament_names?.length ? d.meta.filament_names : s.filamentSlots;
+        const names = d.meta.filament_names?.length ? d.meta.filament_names : slotFilaments(s);
         return (
           <table className="lg-table">
             <tbody>

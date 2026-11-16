@@ -12,6 +12,7 @@ import { recordOf } from '../profiles/view';
 import { openSetup } from '../onboarding/setup-flow';
 import { documentGeneration, onLeaveDocument } from '../state/history';
 import './first-run.css';
+import { slotFilaments } from '../profiles/slots';
 
 const SETUP_KEY = 'orca.setup';
 const assets = import.meta.glob<string>('../samples/*.{drc,webp}', { eager: true, query: '?url', import: 'default' });
@@ -158,7 +159,7 @@ function afterFirstVisit() {
   firstVisitObserver=stop;
 }
 
-const hasFilament = (s: ReturnType<typeof getState>) => !!s.filamentSlots[0] && (() => { const r = resolvePreset(s, 'filament', s.filamentSlots[0]); return !!r.name && !r.error; })();
+const hasFilament = (s: ReturnType<typeof getState>) => { const r = slotFilaments(s)[0] ? recordOf(s, 'filament', slotFilaments(s)[0]) : undefined; return !!r && !r.archived; };
 
 let setupOffered = false;
 export default function EmptyPlate() {

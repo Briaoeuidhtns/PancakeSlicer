@@ -49,5 +49,5 @@ export function prepareProfileLibraryHydration(s: State, document: ProfileLibrar
     if(resolved.issue)recoveries.push({type,key,reason:resolved.issue.code,snapshot:resolved.source?.snapshot});
     else if(type!=='machine' && !selectCompatibility(next,type,key).ok)recoveries.push({type,key,reason:'incompatible',snapshot:resolved.source?.snapshot});
   }
-  return {patch:{...patch,printer:next.printer,process:next.process,filamentSlots:next.filamentSlots,slotColours:next.slotColours,filamentEdits:next.filamentEdits,mixes:next.mixes,profileRecoveries:recoveries},requiresAdoption:false};
+  return { records, profileLibraryRevision: records.revision, printer, process, profileRecoveries: recoveries };
 }

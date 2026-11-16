@@ -126,6 +126,7 @@ func NewServer(c Config, jobs *JobManager, catalog *resolve.Catalog) http.Handle
 	mux.HandleFunc("POST /api/printer-connections/{printer}/adopt", s.adoptConnection)
 	mux.HandleFunc("POST /api/printer-connections/{printer}/legacy", s.importLegacyConnection)
 	mux.HandleFunc("POST /api/printer-connections/{printer}/ams", s.amsConnection)
+	mux.HandleFunc("POST /api/printer-connections/{printer}/tray", s.setTray)
 	mux.HandleFunc("POST /api/printer-connections/{printer}/control", s.controlConnection)
 	mux.HandleFunc("POST /api/printer-connections/{printer}/device", s.deviceControl)
 	mux.HandleFunc("GET /api/printer-sends", s.listSends)

@@ -9,26 +9,7 @@ import { loadTab } from '../options';
 import { getState, setState } from '../state/store';
 import { documentGeneration } from '../state/history';
 import { initialiseSavedPreferences, preferenceText } from '../saved-preferences';
-import { findProfile } from './identity';
-import { catalogAnchor, catalogKey, familyVariantName, findCatalogBase, type ProfileCatalog } from './model';
-import { filamentCatalog } from './catalog-reads';
-import { ensureCompatibleSelection } from './material-library';
-import type { CatalogBaseDependency, CatalogDependencySource } from './catalog-readiness';
-const VENDORS = ['BBL', 'Prusa', 'Custom'];
-
-function mergeCatalog(_vendor: string, cat: PresetCatalog) {
-  const order = <T extends { vendor: string }>(l: T[]) => [...l].sort((a, b) => VENDORS.indexOf(a.vendor) - VENDORS.indexOf(b.vendor));
-  const merge=(current:SystemPreset[],incoming:SystemPreset[])=>{
-    const keys=new Set(incoming.map(catalogKey));
-    return order([...current.filter(p=>!keys.has(catalogKey(p))),...incoming]);
-  };
-  setState(s=>({
-    machines:merge(s.machines,cat.machines),
-    processes:merge(s.processes,cat.processes),
-    filaments:[...new Map(merge(s.filaments,cat.filaments).map(p=>[catalogKey(p),p])).values()],
-  }));
-}
-
+import { slotFilaments } from './slots';
 let catalogLoadGeneration = 0;
 const transient = (error: unknown) => error instanceof TypeError || [408, 429].includes((error as {status?:number}).status ?? 0) || ((error as {status?:number}).status ?? 0) >= 500;
 let retryDelay = 1000, armed: (() => void) | null = null;
@@ -61,8 +42,8 @@ export async function loadCatalog() {
       if(!current())return;
       const [document]=await Promise.all([storage.readProfileLibrary(),settings]);
       if(!current())return;
-      const unchanged=()=>{const s=getState();return current() && documentGeneration()===documentAtStart && s.project===initial.project && s.profileSnapshots===initial.profileSnapshots && s.projectPresets===initial.projectPresets && s.dirty===initial.dirty && (s.userPresets===initial.userPresets || s.userPresets.length===initial.userPresets.length && s.userPresets.every((p,i)=>p===initial.userPresets[i])) && s.printer===initial.printer && s.process===initial.process && s.filamentSlots===initial.filamentSlots && s.slotColours===initial.slotColours && s.filamentEdits===initial.filamentEdits && s.mixes===initial.mixes && s.printerLibrary===initial.printerLibrary;};
-      const restoreStartupPlaceholder=!initial.printer && !initial.process && !initial.filamentSlots.length && !initial.project && !initial.objects.length && !initial.profileSnapshots && !initial.projectPresets && !Object.keys(initial.dirty.machine).length && !Object.keys(initial.dirty.process).length && !Object.keys(initial.filamentEdits).length && !Object.keys(initial.printerLibrary.setups).length;
+      const unchanged=()=>{const s=getState();return current() && documentGeneration()===documentAtStart && s.project===initial.project && s.profileSnapshots===initial.profileSnapshots && s.projectPresets===initial.projectPresets && s.dirty===initial.dirty && s.records===initial.records && s.printer===initial.printer && s.process===initial.process && s.filamentEdits===initial.filamentEdits;};
+      const restoreStartupPlaceholder=!initial.printer && !initial.process && !slotFilaments(initial).length && !initial.project && !initial.objects.length && !initial.profileSnapshots && !initial.projectPresets && !Object.keys(initial.dirty.machine).length && !Object.keys(initial.dirty.process).length && !Object.keys(initial.filamentEdits).length;
       if(!current())return;
       if(!unchanged())throw new Error('Your setup changed while profiles were loading. We kept your newest changes—just reload profiles to sync up.');
       await ensureOwnedCatalogs(document,native,unchanged);

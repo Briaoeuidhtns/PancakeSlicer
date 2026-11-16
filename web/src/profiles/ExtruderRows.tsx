@@ -37,24 +37,27 @@ async function saveOnPrinter(i: number, variant: string) {
   } });
 }
 
-export function ExtruderRows({ config, onSet, disabled }: { config?: Config; onSet?(key: string, value: ConfigValue): void; disabled?: boolean }) {
-  const printer = useStore((s) => s.printer);
-  useStore((s) => s.userPresets);
-  const s = getState(), source = config ?? resolvePreset(s, 'machine', printer).config, bambu = findProfile(s, 'machine', printer)?.base?.vendor === 'BBL' || resolvePreset(s, 'machine', printer).base?.vendor === 'BBL';
-  const rows = extruderChoices(source);
-  if (!rows) return null;
-  const set = (i: number, variant: string) => {
-    if (onSet) { for (const [k, v] of Object.entries(installVariant(source, i, variant))) onSet(k, v); return; }
-    void saveOnPrinter(i, variant).catch((error) => toast(error instanceof Error ? error.message : String(error)));
-  };
-  return <div className="extruder-rows" role="group" aria-label="Extruders">{rows.map((row, i) => {
+export function ExtruderRows({ printerId, disabled, grid }: { printerId?: string; disabled?: boolean; grid?: boolean }) {
+  const selected = useStore((s) => s.printer), id = printerId ?? selected;
+  const printer = useStore((s) => s.records.printers.find((p) => p.id === id));
+  const known = useStore((s) => id !== s.printer || selectionValues(s, 'machine', 0).state === 'ready');
+  const lists = valuesOf(useStore((s) => resolvePreset(s, 'machine', id).config.extruder_variant_list));
+  if (!printer) return null;
+  const rows = printer.nozzles.map((n, i) => {
+    const installed = `${n.type ?? INSTALLED.type} ${n.volume ?? INSTALLED.volume}`;
+    return { installed, nozzle: String(n.diameter), options: [...new Set([...(lists[i] ?? '').split(',').map((v) => v.trim()).filter(Boolean), installed])] };
+  });
+  if (rows.length < 2 && (!known || !rows.some((r) => r.options.length > 1))) return null;
+  const bambu = printer.vendor === 'BBL';
+  const set = (i: number, variant: string) => void setPrinterNozzle(id, i, split(variant))
+    .catch((error) => toast('extruderrows_failed', { detail: error instanceof Error ? error.message : String(error) }));
+  return <div className={grid ? 'extruder-rows grid' : 'extruder-rows'} role="group" aria-label="Extruders">{rows.map((row, i) => {
     const label = rows.length > 1 ? extruderLabel(i, rows.length, bambu).replace(/ nozzle$/, '') : 'Extruder';
-    return <div key={i} className="extruder-row">
-      <span className="extruder-name">{label}</span>
-      {row.options.length > 1 ? <Dropdown className="combo" aria-label={`${label} extruder`} disabled={disabled} value={row.installed}
-        options={row.options.map((value) => ({ value, label: value }))} onValueChange={(value) => value !== row.installed && set(i, value)}/>
-        : <span className="extruder-variant">{row.installed}</span>}
-      {row.nozzle && <span className="extruder-nozzle">{row.nozzle} mm</span>}
+    const control = row.options.length > 1 ? <Dropdown className="combo two-line" aria-label={`${label} extruder`} disabled={disabled} value={row.installed}
+      options={row.options.map((value) => ({ value, label: value, short: value.replace(/^Direct Drive /, ''), sub: `${row.nozzle} mm` }))} onValueChange={(value) => value !== row.installed && set(i, value)}/>
+      : <span className="extruder-variant"><span className="dropdown-value">{row.installed.replace(/^Direct Drive /, '')}<span className="dropdown-sub">{row.nozzle} mm</span></span></span>;
+    return <div key={i} className={grid ? 'opt-line extruder-row' : 'extruder-row'}>
+      <span className={grid ? 'opt-label' : 'extruder-name'}>{label}</span>{grid ? <span className="opt-field">{control}</span> : control}
     </div>;
   })}</div>;
 }

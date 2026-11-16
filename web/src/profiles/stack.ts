@@ -6,6 +6,7 @@ import { editRange, removeRangeOptions } from '../plater/ranges';
 import {
   getState, presetEdits, removeObjectOptions, removeVolumeOptions, resolvePreset, setOption, setState, type State,
 } from '../state/store';
+import { slotFilaments } from './slots';
 
 export { same };
 export { selectChanges as changesOf } from '../state/changes';
@@ -62,7 +63,7 @@ export function revert(c: SettingChange) {
       : { ...s.projectPresets, [c.type]: drop(s.projectPresets[c.type]) };
     if (c.type === 'process') patch.projectPlates = s.projectPlates.map((p) => p.index === s.plateIndex ? { ...p, settings: drop(p.settings) } : p);
     const edits = drop(presetEdits(s, c.type, c.slot));
-    if (c.type === 'filament') patch.filamentEdits = { ...s.filamentEdits, [s.filamentSlots[c.slot]]: edits };
+    if (c.type === 'filament') patch.filamentEdits = { ...s.filamentEdits, [slotFilaments(s)[c.slot]]: edits };
     else patch.dirty = { ...s.dirty, [c.type]: edits };
     return patch;
   }));

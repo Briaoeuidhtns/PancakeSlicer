@@ -51,17 +51,8 @@ export function overrides(s = getState()): Config {
   if (tower) [out.wipe_tower_x, out.wipe_tower_y] = [[tower[0]], [tower[1]]];
   if (plate && !s.project)
     for (const k of ['print_sequence', 'spiral_mode', 'first_layer_print_sequence', 'other_layers_print_sequence', 'other_layers_print_sequence_nums'])
-      if (plate.settings[k] !== undefined) out[k] = plate.settings[k];
-  if (s.filamentSlots.length > 1 || s.slotColours.some((c) => c !== undefined)) {
-    const { matrix, multipliers } = allFlush(s);
-    if (!s.project || s.slotColours.some((c) => c !== undefined))
-      out.filament_colour = s.filamentSlots.map((_, i) => filamentColor(s, i + 1));
-    if (!s.project || s.flush.matrix !== null) out.flush_volumes_matrix = matrix;
-    out.flush_multiplier = multipliers;
-  }
-  if (Object.keys(s.mixes).length || MIX_KEYS.some((k) => k in out)) {
-    const per = (f: (m: Mix) => string) => s.filamentSlots.map((_, i) => (s.mixes[i] ? f(s.mixes[i]) : ''));
-    const flag = (f: (m: Mix) => boolean) => s.filamentSlots.map((_, i) => (s.mixes[i] && f(s.mixes[i]) ? '1' : '0'));
+      if (plate.settings[k] !== undefined) process[k] = plate.settings[k];
+  if (Object.keys(slotMixes(s)).length) {
     const sum = (m: Mix) => m.ratios.reduce((a, b) => a + b, 0) || 100;
     Object.assign(out, {
       filament_is_mixed: flag(() => true),
@@ -126,7 +117,7 @@ export const firstLayer = (s: State) => Number(effectiveConfig(s, 'process').ini
 export function plateSignature(s: State): string {
   return JSON.stringify({
     ...jobFields(s),
-    resolved: [effectiveConfig(s, 'machine'), effectiveConfig(s, 'process'), ...s.filamentSlots.map((_, i) => effectiveConfig(s, 'filament', i))],
+    resolved: [effectiveConfig(s, 'machine'), effectiveConfig(s, 'process'), ...slotFilaments(s).map((_, i) => effectiveConfig(s, 'filament', i))],
     plate: s.project ? undefined : plateDescription(s.objects, firstLayer(s)),
     files: s.project ? [fileId(s.project), ...projectEdits(s).added.map(meshSignature), ...projectEdits(s).volumes.map(({ o }) => meshSignature(o))] : s.objects.map(meshSignature),
   }, (key, value) => key === 'transform' && Array.isArray(value) ? value.map((v: number) => Math.round(v * 1e6) / 1e6)

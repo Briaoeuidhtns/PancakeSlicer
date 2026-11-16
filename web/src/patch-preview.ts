@@ -6,6 +6,7 @@ import { instanceMatrix } from './plater/geometry';
 import { effectiveConfig, getState, subscribeStore, type PlateObject, type State } from './state/store';
 import { plateSignature } from './slice-input';
 import { styleOf } from './style-names';
+import { slotFilaments } from './profiles/slots';
 
 type Ring = [number, number][];
 interface Footprint { contour: Ring; holes: Ring[] }

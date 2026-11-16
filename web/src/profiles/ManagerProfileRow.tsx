@@ -1,7 +1,7 @@
 import { memo, useState } from 'react';
 import { Check } from '../components/Check';
 import { DynamicBadge } from '../components/DynamicBadge';
-import type { UserPreset } from '../api/types';
+import { ProblemLine } from './RecordProblem';
 import type { SelectionEvent } from './selection';
 
 export interface ManagerProfileRowItem {
@@ -14,7 +14,6 @@ export interface ManagerProfileRowItem {
   child?: boolean;
   slot?: number;
   cover?: string | null;
-  swatch?:string|null;
   lead?: string;
   dynamic?: boolean;
   flag?: string;
@@ -55,11 +54,11 @@ export const ManagerProfileRow = memo(function ManagerProfileRow({ item, listId,
     onClick={event => dispatch({ type: 'CLICK', key: item.key, toggle: selectable && (event.ctrlKey || event.metaKey), shift: selectable && event.shiftKey })}>
     {selectable && <span role="gridcell" className="pf-row-check"><Check aria-label={`Select ${item.fullName ?? item.name}`} checked={selected}
       onClick={event => event.stopPropagation()} onCheckedChange={() => dispatch({ type: 'CLICK', key: item.key, toggle: true })}/></span>}
-    {item.swatch !== undefined && (item.swatch ? <span role="gridcell" className="profile-color-swatch" style={{backgroundColor:item.swatch}}/> : <span role="gridcell" className="pf-row-swatch" aria-label="No color"/>)}
+    
     {item.cover !== undefined && <span role="gridcell" className="pf-row-cover">{item.cover && failedCover !== item.cover ? <img src={item.cover} alt="" width={52} height={52} loading="lazy" decoding="async" onError={()=>setFailedCover(item.cover ?? undefined)}/> : null}</span>}
     {item.lead !== undefined && <span role="gridcell" className="pf-row-lead">{item.lead}</span>}
-    {item.loaded ? <span className="pf-row-stack">{label}<span role="gridcell" className="pf-row-sub">{item.loaded}</span></span> : label}
-    {item.flag && <span role="gridcell" className="pf-row-flag">{item.flag}</span>}
+    {item.problem ? <span className="pf-row-stack">{label}<ProblemLine role="gridcell" className="pf-row-sub" text={item.problem}/></span>
+      : item.loaded ? <span className="pf-row-stack">{label}<span role="gridcell" className="pf-row-sub">{item.loaded}</span></span> : label}
     {item.method && <span role="gridcell" className="pf-row-method" aria-label={item.method} data-truncated="true" data-full-text={item.method}><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden><path d={METHOD[item.method] ?? METHOD.Flat}/></svg></span>}
     {item.slot !== undefined && <span role="gridcell" className="pf-row-used">In use</span>}
   </div>;

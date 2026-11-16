@@ -1,10 +1,10 @@
 import { Check } from './Check';
 import { Range } from './Range';
 import { Dropdown } from './Dropdown';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ActionMenu } from './Menu';
 import { getState, useStore, type Mix, type State } from '../state/store';
-import { addMix, blend, broken, componentColour, deleteMixes, editMix, filamentType, physicalCount, recommendations, SLOTS_MAX, watchColours } from '../plater/mixed';
+import { addMix, blend, broken, componentColour, deleteMixes, editMix, filamentType, physicalCount, recommendations, SLOTS_MAX } from '../plater/mixed';
 import { filamentColor } from '../plater/filamentColor';
 import { confirmDialog } from '../actions';
 import { Modal, ModalBody, ModalFooter, ModalTitle } from './Modal';
@@ -18,15 +18,15 @@ const ramp = (s: State, m: Mix) => {
 const swatch = (s: State, m: Mix, i: number) => (m.gradient !== null && m.components.length === 2 ? ramp(s, m) : filamentColor(s, i + 1));
 
 export default function MixedFilaments({ close }: { close(): void }) {
-  const mixes = useStore((s) => s.mixes);
-  useStore((s) => s.slotColours);
-  useStore((s) => s.filamentSlots);
+  const mixes = useStore((s) => slotMixes(s));
+  useStore((s) => s.records);
+  useStore((s) => slotFilaments(s));
   const s = getState();
   const [dialog, setDialog] = useState<{ slot: number | null } | null>(null);
   const [menu, setMenu] = useState<{ slot: number; x: number; y: number } | null>(null);
   useEffect(watchColours, []);
   const slots = Object.keys(mixes).map(Number).sort((a, b) => a - b);
-  const full = s.filamentSlots.length >= SLOTS_MAX;
+  const full = slotFilaments(s).length >= SLOTS_MAX;
   const removeAll = () => void confirmDialog('Mixed filament', `Remove all ${slots.length} mixed filaments?`).then((ok) => ok && deleteMixes(slots, undefined, 'Remove all mixed filaments'));
   return (
     <Modal size="m" label="Mixed filament" onClose={close}>
@@ -58,7 +58,7 @@ export default function MixedFilaments({ close }: { close(): void }) {
       </ModalFooter>
       {menu && <ActionMenu label={`Filament ${menu.slot + 1}`} at={menu} onClose={() => setMenu(null)} items={[
         { label: 'Edit', action: () => setDialog({ slot: menu.slot }) },
-        { label: 'Merge with', sub: s.filamentSlots.flatMap((_, j) => j === menu.slot ? [] : [{ label: `Filament ${j + 1}`,
+        { label: 'Merge with', sub: slotFilaments(s).flatMap((_, j) => j === menu.slot ? [] : [{ label: `Filament ${j + 1}`,
           icon: <i className="mixed-dot" style={{ background: filamentColor(s, j + 1) }} />,
           action: () => deleteMixes([menu.slot], j + 1, 'Merge filament') }]) },
         'sep', { label: 'Delete', action: () => deleteMixes([menu.slot]) },
@@ -71,7 +71,7 @@ export default function MixedFilaments({ close }: { close(): void }) {
 function MixDialog({ slot, close }: { slot: number | null; close(): void }) {
   const s = getState();
   const n = physicalCount(s);
-  const [m, setM] = useState<Mix>(() => (slot !== null && s.mixes[slot]) || { components: [1, 2], ratios: [50, 50], gradient: null, perPart: false });
+  const [m, setM] = useState<Mix>(() => (slot !== null && slotMixes(s)[slot]) || { components: [1, 2], ratios: [50, 50], gradient: null, perPart: false });
   const three = m.components.length === 3;
   const colours = m.components.map((c) => componentColour(s, c));
   const types = m.components.map((c) => (c >= 1 && c <= n ? filamentType(s, c) : ''));
@@ -100,7 +100,7 @@ function MixDialog({ slot, close }: { slot: number | null; close(): void }) {
         {m.components.map((c, k) => (
           <label key={k} className="form-row"><span>Filament {k + 1}</span>
             <Dropdown className="combo" value={c} onValueChange={(next) => setM({ ...m, components: m.components.map((x, j) => (j === k ? Number(next) : x)) })} options={[...(!c ? [{ value: 0, label: 'Choose…' }] : []), ...Array.from({ length: n }, (_, j) => j + 1).filter((j) => j === c || !m.components.includes(j)).map((j) => (
-                ({ value: j, label: <>{j}: {s.filamentSlots[j - 1]}</> })
+                ({ value: j, label: <>{j}: {slotFilaments(s)[j - 1]}</> })
               ))]} />
           </label>
         ))}

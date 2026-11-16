@@ -64,8 +64,8 @@
 :where(.orca-parity) .found-acts .btn-ghost { min-height: var(--h-compact); padding: 0 var(--s-3); font: var(--t-small); color: var(--accent-text); }
 @media (hover: hover) { :where(.orca-parity) .found-table tr:not(:hover):not(:focus-within) .found-acts > * { visibility: hidden; } }
 @media (max-width: 599px) { :where(.orca-parity) .found-kind { display: none; } }
-:where(.orca-parity) .printer-live { display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; column-gap: var(--s-2); row-gap: var(--s-1); width: calc(100% - 2 * var(--space-section) - 40px - var(--s-3)); margin: var(--s-1) var(--space-section) 0 calc(var(--space-section) + 40px + var(--s-3)); padding: var(--s-1) 0; border: 0; background: none; color: var(--ink-3); font: var(--t-small); text-align: left; cursor: pointer; }
-:where(.orca-parity) .printer-live:hover .printer-live-text { color: var(--ink); }
+:where(.orca-parity) .printer-live { display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; column-gap: var(--s-2); row-gap: var(--s-1); width: calc(100% - 2 * var(--space-section) - var(--rail-lead, 40px) - var(--s-3)); margin: var(--s-1) var(--space-section) 0 calc(var(--space-section) + var(--rail-lead, 40px) + var(--s-3)); padding: var(--s-1) 0; border: 0; background: none; color: var(--ink-3); font: var(--t-small); text-align: left; cursor: pointer; }
+:where(.orca-parity) .printer-live:hover .printer-live-text { text-decoration: underline; }
 :where(.orca-parity) .printer-live-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 :where(.orca-parity) .print-rings { display: inline-flex; flex: none; align-items: center; gap: var(--s-1); }

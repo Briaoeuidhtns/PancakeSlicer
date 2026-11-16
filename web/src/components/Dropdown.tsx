@@ -2,7 +2,8 @@ import { forwardRef, useEffect, useId, useState, type ButtonHTMLAttributes, type
 import { Select, DropdownMenu, Popover } from 'radix-ui';
 import './menu.css';
 import { Caret } from './Caret';
-export interface DropdownOption { value: string | number; label: ReactNode; disabled?: boolean; search?: string }
+import { InLayer } from './PageLayer';
+export interface DropdownOption { value: string | number; label: ReactNode; disabled?: boolean; search?: string; short?: string; sub?: string }
 type Props = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children' | 'value' | 'onChange'> & { options: readonly DropdownOption[]; placeholder?: string } & ({ multiple?: false; value?: string | number; onValueChange(value: string): void } | { multiple: true; value?: readonly (string | number)[]; onValueChange(value: string[]): void });
 const text = (node: ReactNode): string => node == null || typeof node === 'boolean' ? '' : typeof node === 'object' && !Array.isArray(node) && 'props' in node ? text((node.props as { children?: ReactNode }).children) : Array.isArray(node) ? node.map(text).join('') : String(node);
 export const Dropdown = forwardRef<HTMLButtonElement, Props>(function Dropdown({ options, value, onValueChange, multiple, placeholder = 'Choose…', className = '', title, ...props }, ref) {

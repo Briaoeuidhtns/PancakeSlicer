@@ -27,6 +27,9 @@ import { createProfileSave } from '../flow/profile-save';
 import { defaultChoice, formulaText, newProfileName, newProfileNameError, saveAsNewProfile, saveToProfile, savesInPlace, scaleContext, solveFactor, valueSources, type NewKind, type ValueChoice, type ValueSource } from './save-to-profile';
 import { labelOf } from './PrintOverrides';
 import { Sep } from '../separator';
+import { slotFilaments } from './slots';
+import { exportProfiles } from './library-io';
+import { InLayer } from '../components/PageLayer';
 
 async function exportCurrent(type: PresetType, slot: number) {
   const s = getState();
@@ -78,17 +81,8 @@ function Changes({ type, list, onJump, sources = {}, choices = {}, onChoose }: {
       if (object) setState({ processScope: 'objects', selected: { object: object.id, instance: object.instances[0]?.id ?? 0, volume: c.owner.volume, range: c.owner.range } });
       return;
     }
-    const at = locate(type, c.key), rank = OPTIONS[c.key]?.mode;
-    if (at.pi === 1e9) return;
-    const patch: Partial<State> = {};
-    if (type === 'process' && s.processScope !== 'global') patch.processScope = 'global';
-    if (rank && !modeVisible(rank, effectiveMode(s))) {
-      if (rank === 'developer') patch.developerMode = true; else patch.uiMode = rank;
-      const prior = { uiMode: s.uiMode, developerMode: s.developerMode };
-      toast(`Switched to ${MODE_NAME[rank] ?? rank} to reveal ${label(c)}`, { label: 'Undo', run: () => setState(prior) });
-    }
-    const reveal = () => setState({ settingsFocus: { type, page: at.page, key: c.key, nonce: Date.now() } });
-    if (Object.keys(patch).length) { setState(patch); setTimeout(reveal, 50); } else reveal();
+    if (type === 'process') return focusSetting(type, c.key, label(c));
+    openSlideOutEditor(type, (type === 'machine' ? s.printer : slotFilaments(s)[slot]) ?? '', c.key);
   };
   const rows = list.map((c) => ({ c, at: locate(type, c.key) })).sort((x, y) => x.at.pi - y.at.pi || x.at.gi - y.at.gi);
   const scoped = new Set(list.map(where)).size > 1;
@@ -151,11 +145,12 @@ function ChangesPop({type,slot,list,project}: {type:PresetType;slot:number;list:
 }
 
 function SaveChanges({type, slot, project, list, sources, choices, revertAll}: {type: PresetType; slot: number; project: number; list: Change[]; sources: Record<string, ValueSource>; choices: Record<string, ValueChoice>; revertAll(): void}) {
-  const m = useMemo(createProfileSave, []), snap = useMachine(m);
+  const profile = useStore((s) => findProfile(s, type, (type === 'machine' ? s.printer : type === 'process' ? s.process : slotFilaments(s)[slot]) ?? ''));
+  const m = useMemo(() => profileSaveFor(JSON.stringify([type, profile ? profileKey(profile) : `${type}:${slot}`])), [type, slot, profile && profileKey(profile)]), snap = useMachine(m);
   const projectList = list.filter((c) => c.scope === 'project' && c.owner.plate === undefined);
   const savable = projectList.some((c) => !sources[c.key] || (choices[c.key] ?? defaultChoice(sources[c.key])) !== 'project');
   const owned = useStore((s) => savesInPlace(s, type, slot)), inPlace = owned && savable;
-  const target = useStore((s) => findProfile(s, type, (type === 'machine' ? s.printer : type === 'process' ? s.process : s.filamentSlots[slot]) ?? '')?.name ?? 'profile');
+  const target = useStore((s) => findProfile(s, type, (type === 'machine' ? s.printer : type === 'process' ? s.process : slotFilaments(s)[slot]) ?? '')?.name ?? 'profile');
   const dynamic = useStore((s) => type === 'process' && !!speedModelOf(findProfile(s, type, s.process)));
   const suggested = useStore((s) => newProfileName(s, type, slot));
   const [name, setName] = useState(suggested);
@@ -200,8 +195,8 @@ function usePresetActions(type: PresetType, slot: number) {
   const m = editing(type, slot);
   const state = useMachine(m, (x) => x.value);
   useEffect(() => m.send({ type: 'EDITS', n: project }), [m, project]);
-  const presetName = useStore((s) => (type === 'machine' ? s.printer : type === 'process' ? s.process : s.filamentSlots[slot]));
-  const isUser = useStore((s) => !!findProfile(s,type,presetName ?? ''));
+  const presetName = useStore((s) => (type === 'machine' ? s.printer : type === 'process' ? s.process : slotFilaments(s)[slot]));
+  const isUser = useStore((s) => !!recordOf(s, type, presetName ?? ''));
 
   const onDelete = () => {
     const u = findProfile(getState(),type,presetName ?? '');

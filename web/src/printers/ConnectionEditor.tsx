@@ -1,7 +1,10 @@
 import { useMemo, useRef, useState } from 'react';
 import { confirmDialog } from '../components/Ask';
 import { Dropdown } from '../components/Dropdown';
-import { getState, resolvePreset, toast, useStore } from '../state/store';
+import { getState, toast, useStore, type State } from '../state/store';
+import { recordOf, selectionValues, useAskedValues, type ProfileValues } from '../profiles/view';
+import { loadedPrinterVendors, printerCatalog, type CatalogModel } from '../profiles/catalog-reads';
+import type { PrinterRecord } from '../profiles/records';
 import {
   adoptConnection, connectionOf, discoverPrinters, KIND_LABEL, removeConnection, saveConnection, statusLine, statusTone, tempLine, testConnection, unassigned,
   type ConnectionEdit, type ConnectionKind, type ConnectionTest, type Discovered,
@@ -17,12 +20,18 @@ const STAGE: Record<string, string> = {
 };
 const DESKTOP = typeof window !== 'undefined' && !!(window as { orcaDesktop?: unknown }).orcaDesktop;
 
-function defaultKind(printer: string): ConnectionKind {
-  const { base, config } = resolvePreset(getState(), 'machine', printer);
-  if (base?.vendor === 'BBL' || /bambu/i.test(base?.name ?? '')) return 'bambu-lan';
-  if (base?.vendor === 'Prusa') return 'prusalink';
-  if (base?.vendor === 'Flashforge' || /flashforge/i.test(base?.name ?? '')) return 'flashforge';
-  return String(config?.gcode_flavor ?? '') === 'klipper' ? 'moonraker' : 'octoprint';
+const printerOf = (s: State, id: string) => recordOf(s, 'machine', id) as PrinterRecord | undefined;
+function defaultKind(vendor: string | undefined, values: ProfileValues | null): ConnectionKind | null {
+  if (vendor === 'BBL') return 'bambu-lan';
+  if (vendor === 'Prusa') return 'prusalink';
+  if (vendor === 'Flashforge') return 'flashforge';
+  if (values?.state !== 'ready') return null;
+  return String(values.values.gcode_flavor ?? '') === 'klipper' ? 'moonraker' : 'octoprint';
+}
+function foundModel(d: Discovered): CatalogModel | undefined {
+  if (!d.preset || !d.catalogModel) return undefined;
+  for (const v of loadedPrinterVendors() ?? []) for (const model of v.models) if (model.id === d.catalogModel) return model;
+  return undefined;
 }
 
 export function ConnectionEditor({ printer, name, onSaved }: { printer: string; name: string; onSaved?(): void }) {
@@ -30,8 +39,11 @@ export function ConnectionEditor({ printer, name, onSaved }: { printer: string; 
   const status = useStore((s) => s.printerConnections.status[printer]);
   const all = useStore((s) => s.printerConnections);
   const earlier = useMemo(() => unassigned(all), [all]);
-  const machines = useStore((s) => s.machines);
-  const [kind, setKind] = useState<ConnectionKind>(saved?.kind ?? defaultKind(printer));
+  const vendor = useStore((s) => printerOf(s, printer)?.vendor), setupModel = useStore((s) => printerOf(s, printer)?.model);
+  const selected = useStore((s) => s.printer === printer ? selectionValues(s, 'machine') : null);
+  const asked = useAskedValues(!saved && !selected && vendor !== 'BBL' && vendor !== 'Prusa' ? { type: 'machine', id: printer } : null);
+  const [picked, setKind] = useState<ConnectionKind | null>(saved?.kind ?? null);
+  const kindValues = selected ?? asked, kind = picked ?? defaultKind(vendor, kindValues);
   const [host, setHost] = useState(saved?.host ?? '');
   const [serial, setSerial] = useState(saved?.serial ?? '');
   const [url, setUrl] = useState(saved?.url?.replace(/^http:\/\//, '') ?? '');
@@ -47,7 +59,7 @@ export function ConnectionEditor({ printer, name, onSaved }: { printer: string; 
   const bambu = kind === 'bambu-lan', flashforge = kind === 'flashforge', http = !!kind && !bambu && !flashforge && kind !== 'bambu-connect';
   const digest = kind === 'prusalink' && auth === 'digest';
   const keyOptional = kind === 'moonraker' || kind === 'duet';
-  const edit = (): ConnectionEdit => ({ kind, name, model: model || undefined,
+  const edit = (): ConnectionEdit => ({ kind: kind!, name, model: model || undefined,
     ...(bambu || flashforge ? { host: host.trim(), serial: serial.trim(), access_code: secret } : {}),
     ...(http ? { url: url.trim(), key: secret, auth: kind === 'prusalink' ? auth : undefined, username: digest ? user.trim() : undefined } : {}) });
   const hasSecret = !!saved?.has_secret && sameKind;
@@ -72,9 +84,8 @@ export function ConnectionEditor({ printer, name, onSaved }: { printer: string; 
     else setUrl((d.url ?? '').replace(/^http:\/\//, ''));
   };
   const addAsNew = (d: Discovered) => run('add', async () => {
-    const { createProfileFromBase } = await import('../profiles/catalog');
-    const key = await createProfileFromBase('machine', d.preset!, d.name || `My ${d.model ?? KIND_LABEL[d.kind]}`);
-    const label = resolvePreset(getState(), 'machine', key).user?.name ?? d.name ?? key;
+        const key = await addPrinterOnVariant(foundModel(d)!, d.preset!, d.name || undefined);
+    const label = printerOf(getState(), key)?.name ?? key;
     if (d.kind !== 'bambu-lan') await saveConnection(key, { kind: d.kind, name: label, url: d.url });
     toast(d.kind === 'bambu-lan' ? `Added ${label}! Pop into its Connection settings to enter the access code.` : `Added ${label} and connected it`);
   });
@@ -133,8 +144,8 @@ export function ConnectionEditor({ printer, name, onSaved }: { printer: string; 
         <button type="button" className="btn-primary" disabled={!ready || !!working} onClick={() => void run('save', async () => {
           await saveConnection(printer, edit()); setSecret(''); toast(`Saved connection for ${name}!`); onSaved?.();
         })}>Save</button>
-        <button type="button" className="btn" disabled={!!working} onClick={() => void run('find', async () => setFound(await discoverPrinters()))}>{working === 'find' ? 'Searching…' : 'Find printers'}</button>
-        {saved && <button type="button" className="btn-ghost connection-remove" disabled={!!working} onClick={() => void run('remove', async () => { await removeConnection(printer); toast(`Removed connection for ${name}`); })}>Remove connection</button>}
+        <button type="button" className="btn" disabled={working} onClick={() => run('find', async () => ({ found: (await Promise.all([discoverPrinters(), printerCatalog()]))[0] }))}>{snap.value === 'finding' ? 'Searching…' : 'Find printers'}</button>
+        {saved && <button type="button" className="btn-ghost connection-remove" disabled={working} onClick={() => run('remove', async () => { await removeConnection(printer); toast('removed_connection', { name }); })}>Remove connection</button>}
       </div>
       {found && (!found.printers.length
         ? <div className="hint-text">Hmm, we didn't find any printers on your network.{found.notes.length ? ` ${found.notes.join(' ')}` : ''}</div>

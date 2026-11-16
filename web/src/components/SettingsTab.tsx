@@ -8,7 +8,7 @@ import { PresetBar } from '../profiles/PresetBar';
 import { methodModes, RETIRED_GROUPS, SurfaceSettings, TOP_METHOD_KEYS } from './SurfaceSettings';
 import { methodAvailability } from '../profiles/method-context';
 import { isMethodSettingSupported } from '../profiles/capabilities';
-import { NozzleField, PlateTypeField } from '../profiles/SetupRows';
+import { NozzleField } from '../profiles/SetupRows';
 import { Tabs } from 'radix-ui';
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { preloadable } from '../preloadable';
@@ -26,6 +26,8 @@ import { GroupHead, isGroupOpen, setGroupOpen, useSettingsGroups } from './Setti
 import type { SettingSource } from '../profiles/bases';
 import type { ObjectOverrides } from './ObjectOverrides';
 import './settings.css';
+import { slotFilaments } from '../profiles/slots';
+import { unsavedRule } from '../state/changes';
 
 const BedShapeDialog = preloadable(() => import('./BedShapeDialog'));
 const HeadPicker = preloadable(() => import('./HeadPicker'));
@@ -69,15 +71,17 @@ export function SettingsTab({ type, slot = 0, compact, hidePreset, editor, overr
   const projectDirty = useStore((s) => presetEdits(s, type, slot));
   const fields = editor ?? overrides ?? undefined;
   const dirty = fields?.changes ?? projectDirty;
-  const presetName = useStore((s) => (type === 'machine' ? s.printer : type === 'process' ? s.process : s.filamentSlots[slot]));
-  const userPresets = useStore((s) => s.userPresets);
-  const machines = useStore(s => s.machines), processes = useStore(s => s.processes), filaments = useStore(s => s.filaments);
-  const projectConfig = useStore(s => effectiveConfig(s, type, slot));
-  const config = useMemo(() => fields ? canonicalKeys(fields.config) : projectConfig, [fields?.config, projectConfig]);
-  const unedited = useMemo(() => {
-    const s = getState();
-    return effectiveConfig(type === 'filament' ? {...s, filamentEdits: {...s.filamentEdits, [presetName ?? '']: {}}} : {...s, dirty: {...s.dirty, [type]: {}}}, type, slot);
-  }, [projectConfig, type, slot, presetName]);
+  const records = useStore((s) => s.records), catalogReads = useStore((s) => s.catalogReads);
+  const selected = useStore((s) => selectionValues(s, type, slot)), projectConfig = selected.values;
+  const answer = fields ? { state: fields.state ?? 'ready', error: fields.error } : selected, valuesReady = answer.state === 'ready';
+  const config = fields?.config ?? projectConfig;
+  const printerId = editor?.printer ?? (type === 'machine' && editor ? editor.name : undefined);
+  const extruderPrinter = useStore((s) => s.records.printers.find((p) => p.id === (printerId ?? s.printer)));
+  useExtruderSelection(type, config, extruderPrinter, extruderSelection, setExtruderSelection);
+  const unedited = useMemo(() => belowProject(selected.layers), [selected.layers]);
+  const sidebarProfile = useStore((s) => type === 'machine' ? s.printer : type === 'process' ? s.process : slotFilaments(s)[slot ?? 0]);
+  const savedSources = useMemo(() => fields || !sidebarProfile ? undefined : settingSources(getState(), type, sidebarProfile), [fields, type, sidebarProfile, selected.layers, records]); // eslint-disable-line react-hooks/exhaustive-deps
+  const sources = editor?.sources ?? savedSources;
   const system = fields?.baseline ?? unedited;
 
   const env = useMemo(() => {
@@ -221,11 +225,12 @@ export function SettingsTab({ type, slot = 0, compact, hidePreset, editor, overr
           };
           const own = groupSwitch(g), ownLine = own >= 0 ? g.lines[own] : undefined, fixed = !!ownLine && g.lines.length === 1;
           const sub = (l: TabLine, k: string) => l.overrides?.[splitKey(k)[0]]?.label ?? OPTIONS[splitKey(k)[0]]?.label ?? '';
+          const perExtruder = !overrides && g.lines.some((l) => l.options.some((k) => variantKeys.has(splitKey(k)[0])));
           const pairable = g.lines.length > 0 && own < 0 && g.lines.every((l) => l.options.length === 2 && !l.index_labels && !l.indexed_columns && !customRow(l));
           const pairs = pairable && sub(g.lines[0], g.lines[0].options[0]) && g.lines.every((l) => sub(l, l.options[0]) === sub(g.lines[0], g.lines[0].options[0]) && sub(l, l.options[1]) === sub(g.lines[0], g.lines[0].options[1]))
             ? [sub(g.lines[0], g.lines[0].options[0]), sub(g.lines[0], g.lines[0].options[1])] : null;
           return <section key={g.title} className="optgroup" data-collapsed={open || fixed ? undefined : ''} data-single={single ? '' : undefined} data-pairs={pairs ? '' : undefined} data-lone={fixed ? '' : undefined}>
-            {g.title && !single && !fixed && <GroupHead id={id} title={g.title} modified={modified} open={open} aside={ownLine && field(ownLine, ownLine.options, ownLine.options[0], 0, undefined, false, ownLine.tooltip && OPTIONS[ownLine.tooltip] ? OPTIONS[ownLine.tooltip].tooltip : ownLine.tooltip, true)} />}
+            {g.title && !single && !fixed && <GroupHead id={id} title={g.title} modified={modified} open={open} onReset={readOnly ? undefined : () => undoable('Reset section', () => g.lines.flatMap((l) => l.options.map((k) => splitKey(k)[0])).filter((k) => k in dirty).forEach((k) => fields ? fields.reset(k) : resetOption(type, k, slot)))} aside={(ownLine || perExtruder) && <>{perExtruder && <ExtruderSwitch type={type} config={config} printer={extruderPrinter} selection={extruderSelection} onChange={setExtruderSelection}/>}{ownLine && field(ownLine, ownLine.options, ownLine.options[0], 0, undefined, false, ownLine.tooltip && OPTIONS[ownLine.tooltip] ? OPTIONS[ownLine.tooltip].tooltip : ownLine.tooltip, true)}</>} />}
             {open && pairs && <div className="opt-pair-head" aria-hidden><span>{pairs[0]}</span><span>{pairs[1]}</span></div>}
             {(open || fixed) && g.lines.map((line, row) => {
               if (row === own && !fixed) return null;

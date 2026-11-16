@@ -4,6 +4,7 @@ import { effectiveConfig, getState, setState, subscribeStore, type State, type W
 import { plateSignature } from '../slice-input';
 import { plateForm } from './operations';
 import { postJob } from '../api/blobs';
+import { slotFilaments } from '../profiles/slots';
 
 function wanted(s: State): boolean {
   if (!s.api || s.api.mock || s.project || !s.objects.length) return false;
@@ -11,7 +12,7 @@ function wanted(s: State): boolean {
   const on = (v: unknown) => v === true || v === 1 || v === '1' || v === 'true';
   if (!on(c.enable_prime_tower) || on(effectiveConfig(s, 'machine').belt_printer)) return false;
   if (c.print_sequence === 'by object' && s.objects.flatMap((o) => o.instances).filter((i) => i.printable !== false).length !== 1) return false;
-  return s.filamentSlots.length > 1 || String(c.timelapse_type) === '1' || on(c.enable_wrapping_detection);
+  return slotFilaments(s).length > 1 || String(c.timelapse_type) === '1' || on(c.enable_wrapping_detection);
 }
 
 const round = (v: number) => Math.round(v * 100) / 100;
@@ -72,7 +73,7 @@ export function startWipeTower() {
   let last: State | null = null;
   subscribeStore(() => {
     const s = getState();
-    if (last && s.objects === last.objects && s.filamentSlots === last.filamentSlots && s.dirty === last.dirty && s.printer === last.printer &&
+    if (last && s.objects === last.objects && slotFilaments(s) === slotFilaments(last) && s.dirty === last.dirty && s.printer === last.printer &&
       s.process === last.process && s.wipeTowerPos === last.wipeTowerPos && s.filamentEdits === last.filamentEdits && s.plateIndex === last.plateIndex &&
       s.project === last.project) return;
     last = s;

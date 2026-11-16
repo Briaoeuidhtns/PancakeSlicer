@@ -45,10 +45,6 @@ export function processTitle(name: string, config: Config, scoped: boolean): str
 }
 
 export const DEFAULT_FILAMENT_COLOUR = '#F2754E';
-export function profileColour(config:Config):string {
-  for (const value of [config.filament_colour, config.default_filament_colour]) { const v = first(value); if (/^#[\da-f]{6}/i.test(v)) return v.slice(0, 7).toUpperCase(); }
-  return DEFAULT_FILAMENT_COLOUR;
-}
 export function printerCover(vendor:string,config:Config,model?:string):string|undefined {
   const actual=model || first(config.printer_model);
   return vendor && actual ? `/profiles/${encodeURIComponent(vendor)}/${encodeURIComponent(actual)}_cover.png` : undefined;

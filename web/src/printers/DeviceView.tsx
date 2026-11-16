@@ -8,16 +8,21 @@ import { Check } from '../components/Check';
 import { NumberBox } from '../components/Field';
 import { Range } from '../components/Range';
 import { responseError } from '../api/access';
-import { controlDevice, controlPrinter, presenceStatus, statusLine, type PrinterConnection, type PrinterStatus, type StatusTone, type Tray } from './connections';
-import { printerCapabilities, printerModel } from './capabilities';
+import { controlPrinter, presenceStatus, statusLine, type PrinterConnection, type PrinterStatus, type StatusTone, type Tray } from './connections';
+import { printerCapabilities } from './capabilities';
 import { DeviceCamera } from './DeviceCamera';
-import { chooseSlot, ruleText, slotOf, usePrinterSlots, type SlotMatch } from './slots';
+import { materialNote, reportText, slotOf, useFilamentType, usePrinterSlots, type SlotReport } from './slots';
+import { FilamentColourMenu } from '../profiles/FilamentColourMenu';
 import { trayCode } from '../multinozzle/ams';
 import { Dropdown } from '../components/Dropdown';
 import { outcomeLabel, outcomeTone } from './sendOutcome';
 import type { Transfer } from '../flow/transfer';
 import './printers.css';
 import './device.css';
+import { pickSlotFilament, reportedUnits, setupOf } from './device-slots';
+import { SlotsCard } from './DeviceSlots';
+import { feedOf } from './feeds';
+import { RecordProblem } from '../profiles/RecordProblem';
 
 function Card({ title, action, className = '', children }: { title: string; action?: ReactNode; className?: string; children: ReactNode }) {
   return <section className={`device-card ${className}`}>{action ? <div className="device-card-head"><h2>{title}</h2>{action}</div> : <h2>{title}</h2>}{children}</section>;
@@ -56,8 +61,9 @@ const SPEEDS = [{ id: '1', label: 'Silent' }, { id: '2', label: 'Standard' }, { 
 type History = Transfer;
 type Control = 'nozzle' | 'bed' | 'chamber' | 'fan' | 'speed' | 'light';
 
-function Spool({ tray, trays, dual, external = false, match, choices, busy, choose }: { tray: Tray; trays: readonly Tray[]; dual: boolean; external?: boolean; match?: SlotMatch;
-  choices: { key: string; name: string; type: string }[]; busy: boolean; choose(filament: string | null): void }) {
+function Spool({ printer, tray, trays, report, chosen, choices, busy, choose, swatch }: { printer: string; tray: Tray; trays: readonly Tray[];
+  report?: SlotReport; chosen: string; choices: { key: string; name: string; type: string }[]; busy: boolean; choose(filament: string): void;
+   swatch?: { printer: string; slot: number } }) {
   const colour = /^#[0-9a-f]{6}$/i.test(tray.color) ? tray.color : undefined;
   const remaining = tray.type && tray.remaining != null && tray.remaining >= 0 ? Math.min(100, tray.remaining) : undefined;
   const where = trayCode(tray, trays);
@@ -67,16 +73,18 @@ function Spool({ tray, trays, dual, external = false, match, choices, busy, choo
     ...[...choices].sort((a, b) => Number(same(b)) - Number(same(a))).map((c) => ({ value: c.key, label: c.name, search: `${c.name} ${c.type}` })),
     ...(chosen ? [{ value: AUTO, label: 'Match automatically' }] : [])];
   return <div className="device-spool" data-active={tray.active || undefined} aria-label={`${where}, ${tray.type || 'empty'}${tray.active ? ', in use' : ''}`}>
-    <span className="device-spool-disc" style={{ backgroundColor: tray.type ? colour : undefined }} data-empty={!tray.type || undefined} aria-hidden="true" />
-    <span className="device-spool-text"><span className="device-spool-where">{where}{dual && tray.extruder != null && !external && ` ${tray.extruder === 0 ? 'R' : 'L'}`}{tray.active && <span className="status-text" data-tone="printing"> In use</span>}</span>
-      {match && options ? <Dropdown className="combo device-spool-pick" value={match.filament ?? ''} disabled={busy} aria-label={`Filament in ${where}`} options={options}
-          onValueChange={(next) => next && next !== match.filament && choose(next === AUTO ? null : next)} />
-        : <span>{tray.type || 'Empty'}</span>}
-      {match && <span className="device-spool-why">{ruleText(match)}{match.rule !== 'exact' && tray.type && ` (${tray.type})`}</span>}</span>
+    {swatch ? <span className="device-spool-swatch"><FilamentColourMenu printer={swatch.printer} slot={swatch.slot}/></span>
+      : <span className="device-spool-disc" style={{ backgroundColor: tray.type ? colour : undefined }} data-empty={!tray.type || undefined} aria-hidden="true" />}
+    <span className="device-spool-text">
+      <Dropdown className="combo device-spool-pick" value={chosen} placeholder="Pick a filament…" disabled={busy} aria-label={`Your filament in ${where}`}
+        options={[{ value: '', label: 'Pick a filament…' }, ...choices.map((c) => ({ value: c.key, label: c.name, search: `${c.name} ${c.type}` }))]}
+        onValueChange={(next) => next !== chosen && choose(next)} />
+      <span className="device-spool-report">{reportText(report ?? { tray: { type: tray.type, colour: tray.color, name: '', filament_id: '' }, remaining: remaining ?? null })}{tray.active && <span className="status-text" data-tone="printing">, in use</span>}</span>
+      {earlier && <button type="button" className="link device-spool-earlier" disabled={busy} onClick={() => choose(earlier.key)}>Your earlier choice: {earlier.name}</button>}
+      {note && <span className="device-spool-why" role="note">{note}</span>}</span>
     {remaining != null && <progress aria-label={`${where} remaining`} max="100" value={remaining} />}
   </div>;
 }
-const AUTO = '\0auto';
 
 function jobEnd(st: PrinterStatus | undefined): { label: string; tone?: StatusTone; reason?: string } {
   if (!st?.online) return { label: statusLine(st) || 'Connecting…', tone: 'offline' };
@@ -155,12 +163,15 @@ function DevicePanel({ connection, model, cover, status, live }: { connection: P
   const fans = bambu ? Object.entries(status?.fans ?? {}).filter(([name]) => status?.controls?.fans?.[name] && capabilities.fans.includes(name)).sort(([a], [b]) => ['part', 'auxiliary', 'chamber'].indexOf(a) - ['part', 'auxiliary', 'chamber'].indexOf(b)) : [];
   const light = bambu ? status?.light : undefined, speed = bambu ? status?.speed_mode : undefined;
   const trays = status?.trays ?? [], units = new Map<number, Tray[]>();
-  const slotMatches = usePrinterSlots(bambu ? connection.printer : undefined);
-  const matchOf = (t: Tray) => slotMatches.slots?.slots.find((m) => m.slot === slotOf(t));
-  const choicesKey = useStore(() => (JSON.stringify(listProfiles('filament').map((p) => ({ key: p.key, name: p.name, type: String(Array.isArray(p.config.filament_type) ? p.config.filament_type[0] : p.config.filament_type ?? '') })))));
-  const choices = useMemo(() => JSON.parse(choicesKey) as { key: string; name: string; type: string }[], [choicesKey]);
+  const reports = usePrinterSlots(bambu ? connection.printer : undefined);
+  const stored = useStore((s) => setupOf(s, connection.printer));
+  const reportOf = (t: Tray) => reports.slots?.slots.find((x) => x.slot === slotOf(t));
+  const chosenOf = (t: Tray) => stored?.slots.find((x) => x.tray === slotOf(t))?.filament ?? '';
+  const swatchOf = (t: Tray) => { const slot = stored?.slots.findIndex((x) => x.tray === slotOf(t)) ?? -1; return slot >= 0 ? { printer: connection.printer, slot } : undefined; };
+  const filaments = useStore((s) => s.records.filaments), reads = useStore((s) => s.catalogReads);
+  const choices = useMemo(() => filaments.filter((f) => !f.archived).map((f) => ({ key: f.id, name: f.name, type: profileInfo(getState(), 'filament', f.id).entry?.type ?? '' })).sort((a, b) => a.name.localeCompare(b.name)), [filaments, reads]); // eslint-disable-line react-hooks/exhaustive-deps
   const [choosing, setChoosing] = useState(false);
-  const choose = (t: Tray) => (filament: string | null) => { setChoosing(true); act(() => chooseSlot(connection.printer, slotOf(t), filament).then(slotMatches.set)).finally(() => setChoosing(false)); };
+  const choose = (t: Tray) => (filament: string) => { setChoosing(true); act(() => pickSlotFilament(connection.printer, slotOf(t), filament, reportedUnits(trays), !!reportOf(t)?.spool)).finally(() => setChoosing(false)); };
   for (const tray of trays.filter((t) => t.kind !== 'external')) units.set(tray.ams, [...(units.get(tray.ams) ?? []), tray]);
   const lastJob = history.find((job) => job.state === 'done' && job.start);
   const runningId = canStop && status?.file ? history.find((job) => job.start && job.outcome === 'printing' && !job.job_end && job.filename === status.file)?.id : undefined;
@@ -181,6 +192,7 @@ function DevicePanel({ connection, model, cover, status, live }: { connection: P
         </Card>;
   const temperatures = !!(status?.nozzle || status?.nozzle_temps?.length || status?.bed || (capabilities.chamber && status?.chamber));
   return <article className="device-panel" aria-label={connection.name}>
+    <RecordProblem kind="machine" id={connection.printer} className="device-problem"/>
     {error && <p role="alert" className="device-command-error">{error}</p>}
     <div className="device-layout">
       <div className="device-left"><DeviceCamera printer={connection.printer} cover={cover} light={light} lightLabel={lightLabel} cameraLabel={capabilities.cameraLabel} busy={busy} onLight={() => void set('light', light ? 0 : 1)} />
@@ -217,7 +229,7 @@ const openConnection = (printer: string) => setState({ presetUx: { kind: 'preset
 
 export function DeviceView() {
   const connections = useStore((s) => s.printerConnections);
-  useStore((s) => s.userPresets);
+  const records = useStore((s) => s.records.printers);
   const platePrinter = useStore((s) => s.printer), [selected, select] = useState(platePrinter);
   const setups = listProfiles('machine').map((setup) => ({ ...setup, model: printerModel(getState(), setup.key) }));
   const printers = connections.connections.filter((c) => c.printer && setups.some((p) => p.key === c.printer));

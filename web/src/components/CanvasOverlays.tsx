@@ -35,6 +35,8 @@ import { canEditLayers } from './LayerHeight';
 import { Num } from './Num';
 import { setAssembly, useAssembly } from '../plater/assembly';
 import { Sep } from '../separator';
+import { slotFilaments } from '../profiles/slots';
+import { PagePortal, usePageLeave } from './PageLayer';
 
 const PAINT_GIZMOS: [PaintKind, string, string, string][] = [
   ['support', 'toolbar_support', 'Support painting', 'L'],
@@ -478,7 +480,7 @@ export function PaintPanel() {
   const t = useSyncExternalStore(subscribePaintTool, paintTool);
   const threshold = useStore((s) => object && kind === 'support' ? Number({ ...effectiveConfig(s, 'process'), ...object.settings }.support_threshold_angle) || 0 : 0);
   useEffect(() => { if (kind === 'support') setPaintTool({ highlight: threshold }); }, [kind, object?.id, threshold]);
-  const filaments = useStore((s) => s.filamentSlots.map((_, i) => filamentColor(s, i + 1)).join(' ')).split(' ').filter(Boolean);
+  const filaments = useStore((s) => slotFilaments(s).map((_, i) => filamentColor(s, i + 1)).join(' ')).split(' ').filter(Boolean);
   useEffect(() => { if (kind && !PAINT_TOOLS[kind].some(([id]) => id === paintTool().tool)) setPaintTool({ tool: 'circle' }); }, [kind, t.tool]);
   useEffect(() => { if (t.filament > filaments.length) setPaintTool({ filament: 1 }); }, [t.filament, filaments.length]);
   if (!kind || !object) return null;

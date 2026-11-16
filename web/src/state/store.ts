@@ -7,7 +7,7 @@ import { plateSignature } from '../slice-input';
 import type * as THREE from 'three';
 import { T3 } from '../three-runtime';
 import type { Api } from '../api/client';
-import type { Config, ConfigValue, JobStatus, PresetType, SystemPreset, UserPreset } from '../api/types';
+import type { Config, ConfigValue, JobStatus, PresetType } from '../api/types';
 import type { ProjectPlate } from '../plater/threemf';
 import { OPTIONS, type OptionMode } from '../options';
 import { undo, undoable } from './history';
@@ -482,7 +482,7 @@ const markStale = (job: JobView): JobView => (job.state === 'done' ? { ...job, s
 
 const EMPTY_EDITS: Config = {};
 export function presetEdits(s: State, type: PresetType, slot = 0): Config {
-  return type === 'filament' ? s.filamentEdits[s.filamentSlots[slot]] ?? EMPTY_EDITS : s.dirty[type];
+  return type === 'filament' ? s.filamentEdits[slotFilaments(s)[slot]] ?? EMPTY_EDITS : s.dirty[type];
 }
 
 const settingName = (key: string) => `Change setting "${OPTIONS[key]?.label || key}"`;
@@ -491,8 +491,8 @@ export function setOption(type: PresetType, key: string, value: ConfigValue, slo
   if (type === 'process' && key === 'layer_height') { const h = Number(Array.isArray(value) ? value[0] : value); if (h > 0) setLayerHeight(h); return; }
   undoable(settingName(key), () => setState((s) => {
     const edits = { ...presetEdits(s, type, slot), [key]: value };
-    const patch:Partial<State>={...(type==='filament' ? {filamentEdits:{...s.filamentEdits,[s.filamentSlots[slot]]:edits}} : {dirty:{...s.dirty,[type]:edits}}),job:markStale(s.job)};
-    return type==='machine' && key==='nozzle_diameter' ? {...patch,...reconcilePrinterSelection(s,{...s,...patch}).patch} : patch;
+    const patch:Partial<State>={...(type==='filament' ? {filamentEdits:{...s.filamentEdits,[slotFilaments(s)[slot]]:edits}} : {dirty:{...s.dirty,[type]:edits}}),job:markStale(s.job)};
+    return patch;
   }), `${type}:${slot}:${key}`);
 }
 
@@ -506,7 +506,7 @@ export function resetOption(type: PresetType, key: string, slot = 0) {
     const edits = { ...presetEdits(s, type, slot) };
     delete edits[key];
     return {
-      ...(type === 'filament' ? { filamentEdits: { ...s.filamentEdits, [s.filamentSlots[slot]]: edits } }
+      ...(type === 'filament' ? { filamentEdits: { ...s.filamentEdits, [slotFilaments(s)[slot]]: edits } }
         : { dirty: { ...s.dirty, [type]: edits } }),
       job: markStale(s.job),
     };
@@ -515,7 +515,7 @@ export function resetOption(type: PresetType, key: string, slot = 0) {
 
 export function hasUnsavedEdits(s: State, type: PresetType, slot: number) {
   if (!selectChanges(s, type, slot).some((c) => c.scope === 'project' && c.owner.plate === undefined)) return false;
-  return type !== 'filament' || !s.filamentSlots.some((f, i) => i !== slot && f === s.filamentSlots[slot]);
+  return type !== 'filament' || !slotFilaments(s).some((f, i) => i !== slot && f === slotFilaments(s)[slot]);
 }
 
 

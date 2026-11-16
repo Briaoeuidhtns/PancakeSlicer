@@ -5,6 +5,7 @@ import { getState, printerPreset, useStore } from '../state/store';
 import { filamentColor } from '../plater/filamentColor';
 import { setPlateSettings } from '../plater/plates';
 import { Modal, ModalBody, ModalFooter, ModalTitle } from './Modal';
+import { slotFilaments } from '../profiles/slots';
 
 type Range = { from: number; to: number; order: number[] };
 const ints = (v: unknown) => String(v ?? '').split(/[,;]/).map((x) => Number(x.trim())).filter((x) => Number.isFinite(x));
@@ -33,7 +34,7 @@ function Order({ order, colours, onChange }: { order: number[]; colours: string[
 export default function PlateSettings({ close }: { close(): void }) {
   const plate = useStore((s) => s.projectPlates.find((p) => p.index === s.plateIndex));
   const s = getState();
-  const n = s.filamentSlots.length, colours = s.filamentSlots.map((_, i) => filamentColor(s, i + 1));
+  const n = slotFilaments(s).length, colours = slotFilaments(s).map((_, i) => filamentColor(s, i + 1));
   const natural = Array.from({ length: n }, (_, i) => i + 1);
   const cfg = plate?.settings ?? {};
   const [name, setName] = useState(plate?.name ?? '');

@@ -19,16 +19,28 @@ export function useCatalog(type: 'machine' | 'filament' | 'process', adding: boo
 const plain = (name: string) => name.replace(/\s+@.*$/, '').trim();
 const anchor = (name: string, vendor: string) => ({ name, engineName: name, version: '', vendor });
 
-export interface PrinterChoice { vendor: string; model: CatalogModel; nozzle: string }
-export interface FamilyChoice { family: CatalogFamily; colour?: string; label?: string }
-export interface AddResult { keys: string[]; existing: string[]; skipped: string[]; chosen: string[] }
+export type PrinterIntent = 'add' | 'another';
+export interface PrinterChoice { vendor: string; model: CatalogModel; nozzle: string; intent?: PrinterIntent }
+export interface ProductChoice { product: CatalogEntry; label?: string }
+export interface AddResult { keys: string[]; existing: string[]; skipped: string[]; chosen: string[]; restored?: string[] }
 
-export async function printDefaults({ vendor, model, nozzle }: PrinterChoice): Promise<Config | undefined> {
-  const machine = model.machines[nozzle], api = getState().api;
-  if (!machine) throw new Error(`${model.name} doesn't have a ${nozzle} mm nozzle preset.`);
-  const preset = findCatalogBase(getState(), 'machine', machine).base ?? (api && (await api.presets(vendor, [], undefined, [machine])).machines.find((p) => p.name === machine));
-  const supplied = (preset as { print_defaults?: Config } | undefined)?.print_defaults;
-  return supplied && Object.fromEntries(Object.entries(supplied).filter(([key]) => !SPEED_KEYS.has(key)));
+function namer(records: { name: string; archived?: unknown }[]) {
+  const taken = new Set(records.filter((r) => !r.archived).map((r) => r.name));
+  return (wanted: string) => { let name = wanted, n = 2; while (taken.has(name)) name = `${wanted} (${n++})`; taken.add(name); return name; };
+}
+type Plan<R> = { records: R[]; existing: string[]; skipped: string[]; chosen: string[]; wanted: string[]; restored?: R[] };
+async function add<R extends PrinterRecord | FilamentRecord>(kind: 'printer' | 'filament', plan: (doc: LibraryRecords) => Plan<R>): Promise<AddResult> {
+  const result = plan(getState().records), restored = result.restored ?? [];
+  if (result.records.length || restored.length)
+    await commitRecords([...result.records, ...restored].map((record) => ({ kind, record })), { label: kind === 'printer' ? 'Add printer' : 'Add filament' });
+  const renamed = result.records.flatMap((r, i) => r.name !== result.wanted[i] ? [noticeText('added_as_renamed', { name: r.name, wanted: result.wanted[i] })] : []);
+  if (renamed.length) toast('added_renamed', { lines: renamed.join('\n') });
+  return { keys: [...result.records, ...restored].map((r) => r.id), existing: result.existing, skipped: result.skipped, chosen: result.chosen, restored: restored.map((r) => r.name) };
+}
+
+export function catalogPrinterSetup(record: PrinterRecord): PrinterRecord {
+  const feed = feedOf(record.model);
+  return feed ? layoutSetup(record, [{ nozzle: 0 }]) : { ...record, slots: [{ id: `slot:${randomId()}`, filament: '' }] };
 }
 const owned = (s: State) => s.userPresets.filter((p) => !p.archived);
 const namer = (s: State) => {
@@ -37,26 +49,28 @@ const namer = (s: State) => {
 };
 
 export async function addCatalogPrinters(choices: PrinterChoice[]): Promise<AddResult> {
-  const defaults = await Promise.all(choices.map(printDefaults));
-  let existing: string[] = [], chosen: string[] = [];
-  const result = await profileBatchCreation((s) => {
-    const names = namer(s), taken = new Map(owned(s).filter((p) => p.type === 'machine').map((p) => [p.base?.name ?? p.inherits, profileKey(p)]));
-    const skipped: string[] = [], records: UserPreset[] = [];
-    existing = []; chosen = [];
-    choices.forEach((choice, i) => {
-      const { vendor, model, nozzle } = choice, machine = model.machines[nozzle], label = plain(nozzle === '0.4' || model.nozzles.length === 1 ? model.name : `${model.name} ${nozzle} nozzle`);
-      if (taken.has(machine)) { skipped.push(label); existing.push(taken.get(machine)!); chosen.push(taken.get(machine)!); return; }
-      taken.set(machine, '');
-      const id = `profile:${randomId()}`; chosen.push(id);
-      records.push(names.keep({ id, type: 'machine', kind: 'profile', name: names.name('machine', label), revision: 0, inherits: machine,
-        base: anchor(machine, vendor), overlay: {}, overrides: {}, ...(defaults[i] && Object.keys(defaults[i]!).length ? { printOverrides: { ...defaults[i] } } : {}) } as UserPreset));
-    });
-    return { records, skipped };
-  }).commit();
-  return { keys: result.keys, existing, skipped: result.skipped, chosen };
+  const variants = await Promise.all(choices.map(async ({ model, nozzle }) => defaultVariant(await catalogLine('printers', model.id), Number(nozzle))));
+  return add('printer', (doc) => {
+    const name = namer(doc.printers), live = doc.printers.filter((p) => !p.archived);
+    const records: PrinterRecord[] = [], restored: PrinterRecord[] = [], existing: string[] = [], skipped: string[] = [], chosen: string[] = [], wanted: string[] = [];
+    for (const [i, { vendor, model, nozzle, intent = 'add' }] of choices.entries()) {
+      const variant = variants[i], diameter = Number(nozzle), label = plain(nozzle === '0.4' || model.nozzles.length === 1 ? model.id : `${model.id} ${nozzle} nozzle`);
+      if (!variant) throw new Error(`Hmm, ${model.id} doesn't have a ${nozzle} mm nozzle in the catalog.`);
+      const on = (p: PrinterRecord) => p.model === model.id && p.nozzles[0]?.variant === variant.id;
+      const have = intent === 'add' ? [...live, ...records, ...restored].find(on) : undefined;
+      if (have) { skipped.push(label); existing.push(have.id); chosen.push(have.id); continue; }
+      const removed = intent === 'another' ? undefined : doc.printers.filter((p) => p.archived && on(p) && !live.some((l) => l.name === p.name))
+        .sort((a, b) => (b.archived?.at ?? 0) - (a.archived?.at ?? 0))[0];
+      if (removed) { const { archived: _a, ...back } = removed; restored.push(back); chosen.push(back.id); continue; }
+      const record = catalogPrinterSetup({ id: `profile:${randomId()}`, name: name(label), revision: 0, vendor, model: model.id,
+        nozzles: Array.from({ length: Math.max(1, variant.extruders) }, () => ({ variant: variant.id, diameter })), slots: [] });
+      records.push(record); chosen.push(record.id); wanted.push(label);
+    }
+    return { records, restored, existing, skipped, chosen, wanted };
+  });
 }
-export async function addCatalogPrinter(vendor: string, model: CatalogModel, nozzle: string): Promise<string> {
-  const { keys, skipped } = await addCatalogPrinters([{ vendor, model, nozzle }]);
+export async function addCatalogPrinter(vendor: string, model: CatalogModel, nozzle: string, intent: PrinterIntent = 'add'): Promise<string> {
+  const { keys, skipped } = await addCatalogPrinters([{ vendor, model, nozzle, intent }]);
   if (!keys.length) throw new Error(`${skipped[0]} is already in your printers list.`);
   return keys[0];
 }

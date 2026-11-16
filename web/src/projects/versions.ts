@@ -1,3 +1,4 @@
+import { documentStrip } from '../profiles/slots';
 import { useSyncExternalStore } from 'react';
 import type { StoredDocBase } from '../persist/backend';
 import { plateSignature } from '../slice-input';
@@ -213,7 +214,7 @@ export function versionSetup(id: string, v: ProjectVersion): Promise<VersionSetu
       .then((summary) => {
         const doc = summary?.doc ?? {}, picture = summary?.meta?.thumbnail;
         return { printer: profileName('machine', doc.printer), process: profileName('process', doc.process),
-          filaments: Array.isArray(doc.filamentSlots) ? doc.filamentSlots.map((k, i) => ({ name: profileName('filament', k), colour: slotColour({ ...getState(), ...doc } as State, i) })) : [],
+          filaments: (({ filaments, colours } = documentStrip(doc) ?? { filaments: [], colours: [] }) => filaments.map((k, i) => ({ name: profileName('filament', k), colour: colours[i] ?? slotColour(getState(), i) })))(),
           picture: typeof picture === 'string' && picture.startsWith('data:image/') ? picture : undefined };
       });
     found.catch(() => setups.delete(key));

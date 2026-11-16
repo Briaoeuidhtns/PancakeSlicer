@@ -8,6 +8,8 @@ import { importObjectsDialog } from '../components/Ask';
 import { bedArea, newProject } from '../actions';
 import { bakeStl, bedBounds, instanceBox, loadProject, nextFreeSpot, outsideBed } from './geometry';
 import { listedPlates } from './plates';
+import { slotFilaments } from '../profiles/slots';
+import { OPTIONS } from '../options';
 
 type ImportedPlate = { index: number; objects: PlateObject[] };
 
@@ -32,8 +34,8 @@ function placeObjects(existing: PlateObject[], incoming: PlateObject[]): PlateOb
   return placed;
 }
 
-export function objectsPatch(state: State, imported: ImportedPlate[]): Partial<State> {
-  const slots = Math.max(1, state.filamentSlots.length);
+function objectsPatch(state: State, imported: ImportedPlate[], area: THREE.Vector2[]): Partial<State> {
+  const slots = Math.max(1, slotFilaments(state).length);
   const plates = listedPlates(state).map((p) => ({ ...p }));
   let nextIndex = Math.max(...plates.map((p) => p.index)) + 1;
   for (const [i, incoming] of imported.entries()) {

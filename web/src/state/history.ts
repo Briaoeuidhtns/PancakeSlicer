@@ -4,9 +4,9 @@ import { plateSignature } from '../slice-input';
 import { getState, setState, type PlateObject, type State } from './store';
 
 const DOC_KEYS = [
-  'objects', 'projectPlates', 'plateIndex', 'project', 'projectName', 'projectMaterials', 'projectPresets', 'projectNotice',
-  'events', 'filamentSlots', 'slotColours', 'flush', 'printer', 'process', 'dirty', 'filamentEdits', 'bedType', 'selected',
-  'wipeTowerPos', 'mixes', 'processVariant', 'profileSnapshots', 'projectProfileContexts',
+  'objects', 'projectPlates', 'plateIndex', 'project', 'projectName', 'projectMaterials', 'projectPresets', 'projectSlotValues', 'projectSlots',
+  'events', 'printer', 'process', 'dirty', 'filamentEdits', 'selected',
+  'wipeTowerPos', 'processVariant', 'profileSnapshots', 'projectProfileContexts',
 ] as const satisfies readonly (keyof State)[];
 export type Doc = Pick<State, (typeof DOC_KEYS)[number]>;
 
@@ -122,6 +122,7 @@ function restore(doc: Doc) {
   restoring = true;
   try {
     setState(doc);
+    void import('../profiles/slot-writes').then(async ({ adoptStrip }) => adoptStrip((await import('../profiles/slots')).documentStrip(doc)));
     const s = getState();
     if (s.job.plateSignature && s.job.stale && plateSignature(s) === s.job.plateSignature)
       setState({ job: { ...s.job, stale: false } });

@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from
 import type { SystemPreset } from '../api/types';
 import { requestPreset } from '../components/PresetCombo';
 import { Glyph } from '../components/Glyph';
-import { getState, printerPreset, setState, toast, useStore } from '../state/store';
+import { getState, setState, toast, useStore, type State } from '../state/store';
+import { recordOf } from '../profiles/view';
+import type { PrinterRecord } from '../profiles/records';
 import { savePreferences } from '../saved-preferences';
 import { addCatalogPrinters, addCatalogProducts, useCatalog } from '../profiles/catalog-add';
 import type { CatalogEntry } from '../catalog/types';
@@ -52,7 +54,7 @@ const Next = ({ disabled, label = 'Next', onClick }: { disabled?: boolean; label
   <button type="button" className="btn-primary" disabled={disabled} onClick={onClick ?? (() => send({ type: 'NEXT' }))}>{label}</button>;
 
 function Welcome() {
-  const ready = useStore((s) => !!printerPreset(s));
+  const ready = useStore((s) => !!selectedPrinter(s));
   const idle = ready && !TOUR_PAGES;
   useEffect(() => { if (idle) send({ type: 'CLOSE' }); }, [idle]);
   if (idle) return null;
@@ -111,7 +113,7 @@ function Printer() {
     finally { setBusy(false); }
   };
   return <Frame step="printer" foot={<><Back /><span className="setup-grow" />{failed && <span className="setup-test bad">{failed}</span>}
-    {model && <span className="setup-count">{model.model}<Sep/>{nozzles.join(', ')} mm</span>}<Next label={busy ? 'Loading…' : 'Next'} disabled={!model || !nozzles.length || busy} onClick={() => void next()} /></>}>
+    {model && <span className="setup-count">{model.model}<Sep/>{nozzles.join(', ')} mm</span>}<Next disabled={!model || !nozzles.length} onClick={next} /></>}>
     <h2>Your printer</h2>
     <input className="text setup-search" type="search" placeholder="Search printers" aria-label="Search printers" value={search} onChange={(e) => setSearch(e.target.value)} />
     <div className="setup-printer">

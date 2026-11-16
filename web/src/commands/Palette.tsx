@@ -8,6 +8,7 @@ import { allCommands, allProviders, closePalette, commandsVersion, paletteQuery,
 import { registerCore } from './core';
 import { fuzzy, loadSettings, settingCommands } from './settings';
 import { SEP } from '../separator';
+import { slotFilaments } from '../profiles/slots';
 
 registerCore();
 
@@ -30,8 +31,8 @@ registerProvider('presets', (q) => {
   return [
     ...users('machine').map((n) => row('machine', 'Printer', n, s.printer)),
     ...users('process').map((n) => row('process', 'Process', n, s.process)),
-    ...s.filamentSlots.flatMap((cur, slot) => users('filament')
-      .map((n) => row('filament', s.filamentSlots.length > 1 ? `Filament ${slot + 1}` : 'Filament', n, cur, slot))),
+    ...slotFilaments(s).flatMap((cur, slot) => users('filament')
+      .map((n) => row('filament', slotFilaments(s).length > 1 ? `Filament ${slot + 1}` : 'Filament', n, cur, slot))),
   ];
 });
 

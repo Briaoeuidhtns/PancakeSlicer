@@ -11,6 +11,7 @@ import { pickerStatus } from '../printers/connections';
 import { profileKey } from './identity';
 import { worksWithNone } from './WorksWith';
 import { SEP } from '../separator';
+import { slotFilaments } from './slots';
 
 const first = (v: unknown) => String([v].flat()[0] ?? '');
 const shortName = (name: string) => name.replace(/\s*@.*$/, '') || name;
@@ -57,15 +58,15 @@ export const sameStateGroups = (key: string, build: () => PickerGroup[]) => (): 
   const value = build(); listCache.set(key, { at, value }); return value;
 };
 
-const addFilament: PickerAction = { label: 'Add filament', run: () => setState({ presetUx: { kind: 'presets', type: 'filament', add: true } }) };
+const addFilament: PickerAction = { label: 'Add filament…', run: () => openLibrary('filament', { add: true }) };
 
 function filamentGroups(slot: number | null): PickerGroup[] {
   const s = getState();
   let entries = listProfiles('filament');
-  const hidden = slot === null ? undefined : currentEntry('filament', s.filamentSlots[slot], entries);
+  const hidden = slot === null ? undefined : currentEntry('filament', slotFilaments(s)[slot], entries);
   if (hidden) entries = [...entries, hidden];
   const others = new Map<string, { n: number; colour: string }[]>();
-  s.filamentSlots.forEach((name, i) => { if (i !== slot && name) others.set(name, [...(others.get(name) ?? []), { n: i + 1, colour: filamentColor(s, i + 1) }]); });
+  slotFilaments(s).forEach((name, i) => { if (i !== slot && name) others.set(name, [...(others.get(name) ?? []), { n: i + 1, colour: filamentColor(s, i + 1) }]); });
   const item = (e: PickerEntry): PickerItem => {
     const brand = first(e.config.filament_vendor) || e.vendor || 'Generic', b = brandName(e.name, e.config);
     const label = e.mine ? e.name : b.name;
@@ -91,7 +92,7 @@ function filamentGroups(slot: number | null): PickerGroup[] {
 }
 
 export function FilamentPicker({ slot }: { slot: number }) {
-  const name = useStore((s) => s.filamentSlots[slot] ?? '');
+  const name = useStore((s) => slotFilaments(s)[slot] ?? '');
   useStore((s) => s.filamentEdits);
   useStore((s) => s.userPresets);
   const s = getState();

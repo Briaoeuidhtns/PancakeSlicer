@@ -7,38 +7,17 @@ import { Dropdown } from '../components/Dropdown';
 import { Glyph } from '../components/Glyph';
 import { MenuButton, type MenuEntry } from '../components/Menu';
 import './profiles.css';
-import { modelKey, nozzleOf, printerModels } from './machines';
-import { NozzleSizeFields } from '../multinozzle/NozzleControls';
+import { NozzleSize } from './NozzleSize';
+import { slotFilaments, slotMixes } from './slots';
+import { slotExtruder } from '../printers/feeds';
 
 export function NozzleField() {
-  const machine = useStore((s) => printerPreset(s));
-  useStore((s) => s.machines);
-  useStore((s) => s.userPresets);
-  const variants = machine ? printerModels(getState()).get(modelKey(machine)) ?? [] : [];
-  const sizes = [...new Set(variants.map(nozzleOf).filter((d) => Number.isFinite(d) && d > 0))].sort((a, b) => a - b);
-  if (sizes.length < 2 || !machine) return null;
-  return <NozzleSizeFields config={machine.config} sizes={sizes} />;
+  const printer = useStore((s) => s.printer);
+  return printer ? <NozzleSize printerId={printer} grid/> : null;
 }
 
-export function PlateTypeField() {
-  const machine = useStore((s) => printerPreset(s));
-  const bedType = useStore((s) => s.bedType);
-  const bedDef = OPTIONS.curr_bed_type;
-  const multiBed = machine?.config.support_multi_bed_types;
-  if (!(machine?.vendor === 'BBL' || multiBed === true || multiBed === 1 || multiBed === '1') || !bedDef?.enum_values) return null;
-  return (
-    <div className="opt-line">
-      <span className="opt-label">Plate type</span>
-      <span className="opt-field">
-        <Dropdown className="combo" aria-label="Plate type" value={bedType}
-          onValueChange={(value) => undoable('Change plate type', () => setState({ bedType: value }))}
-          options={bedDef.enum_values.flatMap((v, i) =>
-            machine?.not_support_bed_type?.some((b) => b === v || b === bedDef.enum_labels?.[i])
-              ? [] : [{ value: v, label: bedDef.enum_labels?.[i] ?? v }])} />
-      </span>
-    </div>
-  );
-}
+const PLATE_SHORT: Record<string, string> = { 'Smooth Cool Plate': 'Cool Plate', 'Engineering Plate': 'Engineering', 'Smooth High Temp Plate': 'High Temp',
+  'Smooth PEI Plate': 'Smooth PEI', 'Textured PEI Plate': 'Textured PEI', 'Textured Cool Plate': 'Textured Cool', 'Cool Plate (SuperTack)': 'SuperTack' };
 
 export function addFilament() {
   void import('../plater/mixed').then((m) => m.addPhysical()).catch((error) => toast(String(error)));
@@ -57,9 +36,9 @@ export function removeSlot(i: number) {
   });
 }
 
-export function FilamentMenu() {
-  const slots = useStore((s) => s.filamentSlots.length);
-  const physical = slots - Object.keys(useStore((s) => s.mixes)).length;
+export function FilamentMenu({ extra = [] }: { extra?: MenuEntry[] }) {
+  const slots = useStore((s) => slotFilaments(s).length);
+  const physical = slots - Object.keys(useStore((s) => slotMixes(s))).length;
   const flushChanged = useStore((st) => flushModified(st));
   const amsPrinter = useStore((st) => st.printerConnections.connections.some((c) => c.printer === st.printer && c.kind === 'bambu-lan') ? st.printer : undefined);
   const [syncing, setSyncing] = useState(false);
@@ -73,5 +52,5 @@ export function FilamentMenu() {
     ...(amsPrinter ? [{ label: syncing ? 'Syncing from AMS…' : 'Sync from AMS', disabled: syncing, action: sync }] : []),
     ...(physical > 1 ? [{ label: 'Mixed filament…', action: () => setState({ appDialog: 'mixed' }) }] : []),
   ];
-  return items.length ? <MenuButton className="icon-btn rail-act" label="Filament tools" items={items}><Glyph name="more"/></MenuButton> : null;
+  return items.length ? <MenuButton className="icon-btn rail-act" label="Slot tools" items={items}><Glyph name="more"/></MenuButton> : null;
 }

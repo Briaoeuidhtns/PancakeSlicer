@@ -1,6 +1,6 @@
 import type { PresetType, UserPreset } from '../api/types';
 import type { State } from '../state/store';
-import { randomId } from '../random-id';
+import { slotFilaments } from './slots';
 
 export type ProfileKey = string;
 export interface ProfileReference {
@@ -55,7 +55,7 @@ export function profileReferenceInventory(s: State, type: PresetType, key: Profi
   const p = findProfile(s, type, key);
   if (!p) return { complete: false, references: [] };
   const references: ProfileReference[] = [];
-  const selected = type === 'machine' ? [s.printer] : type === 'process' ? [s.process] : s.filamentSlots;
+  const selected = type === 'machine' ? [s.printer] : type === 'process' ? [s.process] : slotFilaments(s);
   selected.forEach((selectedKey, slot) => {
     if (!matchesProfile(p, selectedKey)) return;
     references.push({ kind: 'active', label: type === 'filament' ? `Filament ${slot + 1}` : type === 'machine' ? 'Printer' : 'Process' });

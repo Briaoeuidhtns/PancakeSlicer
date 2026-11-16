@@ -1,26 +1,16 @@
-import type { Config, SystemPreset, UserPreset } from '../api/types';
+import type { Config } from '../api/types';
 import { sameValue } from '../state/value-equality';
 import { getState, toast, type State } from '../state/store';
-import { commitProfileRecords } from './transactions';
-import { findProfile, profileKey } from './identity';
-import { resolveProfile } from './model';
-import { printerCatalog, type CatalogModel } from './catalog-reads';
-import { printDefaults } from './catalog-add';
-import { loadFilamentVariants, loadMachinePresets } from './catalog-startup';
-import { capturePrinterMaterials, reconcilePrinterSelection, selectionNotice } from './material-library';
-import { availableHeights, effectiveLayerHeight } from './context';
-import { SEP } from '../separator';
-
-export interface NozzleModel { vendor: string; model: CatalogModel; nozzle: string }
-export async function nozzleModel(base: string): Promise<NozzleModel | undefined> {
-  for (const v of await printerCatalog()) for (const model of v.models)
-    for (const [nozzle, machine] of Object.entries(model.machines ?? {})) if (machine === base) return { vendor: v.id, model, nozzle };
-  return undefined;
-}
+import { commitRecords } from './transactions';
+import type { ResolveResponse } from '../flow/resolved';
+import { catalogLine, defaultVariant } from '../catalog/read';
+import type { CatalogVariant } from '../catalog/types';
+import type { PrinterRecord } from './records';
 
 const PRINTER_OWNED = /_gcode$|^printable_|^bed_|^curr_bed_type$|host|^thumbnails|^printer_notes$/;
 const nozzleDependent = (key: string, from: Config, to: Config) => !PRINTER_OWNED.test(key) && (key in from || key in to) && !sameValue(key, from[key], to[key]);
 
+const printerOf = (id: string) => getState().records.printers.find((p) => p.id === id && !p.archived);
 const label = (key: string) => key.replace(/_/g, ' ');
 export async function switchNozzle(printerKey: string, nozzle: string): Promise<string[]> {
   const before = getState(), record = findProfile(before, 'machine', printerKey), from = resolveProfile(before, 'machine', printerKey).base;

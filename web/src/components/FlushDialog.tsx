@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Dropdown } from './Dropdown';
-import { effectiveConfig, printerPreset } from '../state/store';
-import { extruderCount, extruderLabel } from '../multinozzle/config';
-import { MAX_FLUSH_VOLUME, minFlushVolumes, MULTIPLIER_RANGE, predictorMinFlush } from '../flush';
-import { allFlush, autoFlushMatrix, flushInputs } from '../flush-state';
-import { markStale, setState, useStore } from '../state/store';
+import { printerPreset } from '../state/store';
+import { extruderLabel } from '../multinozzle/config';
+import { nozzleCount } from '../profiles/view';
+import { allFlush, MAX_FLUSH_VOLUME, MULTIPLIER_RANGE, nozzleFlush } from '../flush-state';
+import { setState, useStore } from '../state/store';
 import { Modal, ModalBody, ModalFooter, ModalTitle } from './Modal';
 import { SlotChip } from './SlotChip';
 import { undoable } from '../state/history';
@@ -20,8 +20,8 @@ export function FlushDialog() {
 function FlushTable() {
   const s = useStore((st) => st);
   const [nozzle, setNozzle] = useState(0);
-  const count = extruderCount(effectiveConfig(s, 'machine'));
-  const { colours, printer, filaments } = flushInputs(s, nozzle);
+  const count = nozzleCount(s);
+  const slots = filledSlots(s), colours = slots.map((i) => filamentColor(s, i + 1));
   const n = colours.length;
   const init = allFlush(s);
   const [raw, setRaw] = useState<number[]>(init.matrix);

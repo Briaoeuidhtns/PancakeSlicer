@@ -47,19 +47,16 @@ export function machineSwap(config: Config, vendor: string | undefined): { mode:
   return { mode: 'manual', modes: ['manual'] };
 }
 
-export function capturePrinterMaterials(s: MaterialLibraryState): PrinterProfileLibrary {
-  const library = libraryOf(s), printer = findProfile(s, 'machine', s.printer);
-  if (!printer) return library;
-  const id = profileKey(printer), setup = library.setups[id] ?? emptyPrinterSetup(id);
-  const slots = s.filamentSlots.map((key, index) => ({ ...setup.slots[index], id: setup.slots[index]?.id ?? `slot:${randomId()}`,
-    materialId: findProfile(s,'filament',key) ? profileKey(findProfile(s, 'filament', key)!) : key, colour: undefined }));
-  const tuning = { ...setup.tuning, ...Object.fromEntries(Object.entries(s.filamentEdits).flatMap(([key, config]) => {
-    const material = findProfile(s, 'filament', key); return material ? [[profileKey(material), clone(config)]] : [];
-  })) };
-  for (const slot of slots) if (!Object.keys(s.filamentEdits[slot.materialId] ?? {}).length) delete tuning[slot.materialId];
-  const next = { ...setup, ...(s.process ? {processId:findProfile(s,'process',s.process)?.id ?? s.process} : {}), slots, materialIds: [...new Set([...setup.materialIds, ...slots.map(slot => slot.materialId)])], tuning, mixes: clone(s.mixes) };
-  if (JSON.stringify({ ...next, revision: 0 }) === JSON.stringify({ ...setup, revision: 0 })) return library;
-  return putSetup(library, next);
+export function stripRecord(s: MaterialLibraryState): PrinterRecord | undefined {
+  const record = recordOf(s, 'machine', s.printer) as PrinterRecord | undefined;
+  if (!record || record.archived) return undefined;
+  const strip = stripOf(s);
+  const fill = record.swap === 'toolheads' && !Object.keys(strip.mixes).length ? Math.max(0, record.nozzles.length - strip.filaments.length) : 0;
+  const filaments = [...strip.filaments, ...Array<string>(fill).fill(strip.filaments[0] ?? '')].map((key) => key ? filamentId(s, key) : '');
+  const { process: _p, ...rest } = recordWithStrip(s, { ...strip, filaments, colours: [...strip.colours, ...Array<undefined>(fill)] }) ?? record;
+  const process = s.process ? recordOf(s, 'process', s.process)?.id ?? s.process : record.process;
+  const next: PrinterRecord = { ...rest, ...(process ? { process } : {}) };
+  return sameRecord(next, record) ? undefined : next;
 }
 
 export function planPrinterSwitch(s: MaterialLibraryState, printerKey: string): PrinterMaterialsPlan {

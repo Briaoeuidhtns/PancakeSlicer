@@ -14,6 +14,7 @@ import { Choice } from './kit';
 import { displayLabel } from './fields/labels';
 import { ScopeMark } from '../profiles/Scope';
 import type { ChangeTarget } from '../state/changes';
+import { slotFilaments } from '../profiles/slots';
 
 const LabelId = createContext<string | undefined>(undefined);
 const useLabel = () => ({ 'aria-labelledby': useContext(LabelId) });
@@ -176,7 +177,7 @@ const FILAMENT_SLOT_KEYS = new Set(['support_filament', 'support_interface_filam
   'inner_wall_filament_id', 'sparse_infill_filament_id', 'internal_solid_filament_id', 'top_surface_filament_id', 'bottom_surface_filament_id']);
 
 function SlotChoice({ value, onCommit }: { value: string; onCommit: (v: ConfigValue) => void }) {
-  const slots = useStore((s) => s.filamentSlots);
+  const slots = useStore((s) => slotFilaments(s));
   useStore((s) => s.filamentEdits);
   const type = (i: number) => { const t = effectiveConfig(getState(), 'filament', i).filament_type; return String(Array.isArray(t) ? t[0] : t ?? ''); };
   const known = value === '0' || (Number(value) >= 1 && Number(value) <= slots.length);

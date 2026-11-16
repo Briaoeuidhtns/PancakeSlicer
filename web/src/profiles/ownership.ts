@@ -1,4 +1,4 @@
-import type { Config, PresetType } from '../api/types';
+import type { PresetType } from '../api/types';
 import type { ProfileKey } from './identity';
 
 export interface ProfileBaseAnchor {

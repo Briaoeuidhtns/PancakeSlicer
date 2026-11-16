@@ -121,8 +121,6 @@
 
 :where(.orca-parity) .color-trigger[data-ink] { display: inline-grid; place-items: center; color: #fff; font: var(--t-small); font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
 :where(.orca-parity) .color-trigger[data-ink=dark] { color: #1a1a1a; }
-:where(.orca-parity) .color-trigger[data-modified] { position: relative; }
-:where(.orca-parity) .color-trigger[data-modified] { outline: 2px solid var(--modified); outline-offset: 1px; }
 :where(.orca-parity) .filament-colour-actions { flex-wrap: wrap; }
 :where(.orca-parity) .pk-skel-name { width: 9em; max-width: 100%; height: 12px; }
 :where(.orca-parity) .pk-skel-sub { width: 6em; max-width: 70%; height: 10px; margin-top: var(--s-2); }

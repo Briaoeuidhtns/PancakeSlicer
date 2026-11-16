@@ -1,4 +1,4 @@
-import { effectiveConfig, getState, markStale, setState, subscribeStore, type Mix, type PlateObject, type State } from '../state/store';
+import { effectiveConfig, getState, markStale, setState, type Mix, type PlateObject, type State } from '../state/store';
 import { undoable } from '../state/history';
 import type { Config } from '../api/types';
 import { filamentColor } from './filamentColor';
@@ -12,7 +12,7 @@ import { allFlush, flushReady } from '../flush-state';
 export const SLOTS_MAX = 32;
 export { blend };
 
-export const physicalCount = (s: State) => s.filamentSlots.length - Object.keys(s.mixes).length;
+export const physicalCount = (s: State) => slotFilaments(s).length - Object.keys(slotMixes(s)).length;
 export const componentColour = (s: State, c: number) => (c >= 1 && c <= physicalCount(s) ? filamentColor(s, c) : '#808080');
 export const mixColour = (s: State, m: Mix) => blend(m.components.map((c) => componentColour(s, c)), m.ratios);
 export const filamentType = (s: State, c: number) => String([effectiveConfig(s, 'filament', c - 1).filament_type].flat()[0] ?? '');
@@ -37,27 +37,27 @@ export function remapAll(st: State, map: number[]): Partial<State> {
 const shifted = (mixes: Record<number, Mix>, from: number, by: number) =>
   Object.fromEntries(Object.entries(mixes).map(([i, m]) => [Number(i) >= from ? Number(i) + by : Number(i), m]));
 
-export async function addMix(m: Mix) {
-  await flushReady();
-  undoable('Add mixed filament', () => setState((st) => {
-    const i = st.filamentSlots.length, slotColours = [...st.slotColours];
-    slotColours[i] = mixColour(st, m);
-    const next = { filamentSlots: [...st.filamentSlots, st.filamentSlots[m.components[0] - 1] ?? st.filamentSlots[0]], slotColours, mixes: { ...st.mixes, [i]: m }, job: markStale(st.job) };
-    return { ...next, ...insertedFlush(st, next, [...st.filamentSlots.map((_, k) => k), -1]) };
-  }));
+export function addMix(m: Mix) {
+  undoable('Add mixed filament', () => {
+    const st = getState(), strip = stripOf(st), i = strip.filaments.length;
+    const next: Strip = { ids: [...strip.ids, undefined], filaments: [...strip.filaments, strip.filaments[m.components[0] - 1] ?? strip.filaments[0]], colours: [...strip.colours, undefined], mixes: { ...strip.mixes, [i]: m } };
+    setState({ job: markStale(st.job) });
+    writeStrip(next, 'Add mixed filament', st, insertedFlush(st, [...strip.filaments.map((_, k) => k), -1]));
+  });
 }
 
 export function editMix(i: number, m: Mix) {
-  undoable('Edit mixed filament', () => setState((st) => {
-    const slotColours = [...st.slotColours];
-    slotColours[i] = mixColour(st, m);
-    return { slotColours, mixes: { ...st.mixes, [i]: m }, job: markStale(st.job) };
-  }));
+  undoable('Edit mixed filament', () => {
+    const st = getState(), strip = stripOf(st);
+    setState({ job: markStale(st.job) });
+    writeStrip({ ...strip, mixes: { ...strip.mixes, [i]: m } }, 'Edit mixed filament');
+  });
 }
 
 export function deleteMixes(slots: number[], into?: number, name = 'Delete mixed filament') {
-  undoable(name, () => setState((st) => {
-    const gone = new Set(slots), n = st.filamentSlots.length;
+  undoable(name, () => {
+    const st = getState(), strip = stripOf(st);
+    const gone = new Set(slots), n = strip.filaments.length;
     const kept = Array.from({ length: n }, (_, i) => i).filter((i) => !gone.has(i));
     const id = (k: number) => kept.indexOf(k) + 1;
     const map = Array.from({ length: n }, (_, k) => (gone.has(k) ? (into ? id(into - 1) : 1) : id(k)));
@@ -77,19 +77,20 @@ const usesSlot = (o: PlateObject, n: number) => o.extruder === n || paints(o.pai
   || !!o.volumes?.some((v) => v.type === 'part' && (v.extruder === n || paints(v.paint?.color, n)));
 
 export function removeSlotAt(n: number): { moved: number; to: number; merged: { mix: number; into: number }[] } | null {
-  const st0 = getState(), total = st0.filamentSlots.length, p = physicalCount(st0);
+  const st0 = getState(), total = slotFilaments(st0).length, p = physicalCount(st0);
   if (n < 1 || n > total || total < 2 || (n <= p && p < 2)) return null;
   const target = n > 1 ? n - 1 : 2;
   const renumber = (j: number) => (j > n ? j - 1 : j);
   const to = renumber(target);
   const physical = (c: number) => (c === n ? to : c >= 1 && c <= total ? renumber(c) : c);
-  const remixed = Object.entries(st0.mixes).flatMap(([k, m]) => (Number(k) === n - 1 ? [] : [[Number(k), { ...m, components: m.components.map(physical) }] as const]));
+  const remixed = Object.entries(slotMixes(st0)).flatMap(([k, m]) => (Number(k) === n - 1 ? [] : [[Number(k), { ...m, components: m.components.map(physical) }] as const]));
   const merged = remixed.filter(([, m]) => new Set(m.components).size === 1).map(([k, m]) => ({ mix: k + 1, into: m.components[0] }));
   const gone = new Set([n - 1, ...merged.map((d) => d.mix - 1)]);
   const kept = Array.from({ length: total }, (_, k) => k).filter((k) => !gone.has(k));
   const map = Array.from({ length: total }, (_, k) => (k === n - 1 ? to : merged.find((d) => d.mix === k + 1)?.into ?? kept.indexOf(k) + 1));
   const moved = st0.objects.filter((o) => usesSlot(o, n)).length;
-  undoable('Remove filament', () => setState((st) => {
+  undoable('Remove filament', () => {
+    const st = getState(), strip = stripOf(st);
     const pick = <T,>(a: T[]) => kept.map((k) => Array.from(a)[k]);
     return {
       ...remapAll(st, map, kept),
@@ -109,28 +110,28 @@ function insertedFlush(st: State, changes: Partial<State>, previous: number[]): 
   return { flush: { ...st.flush, matrix: insertFlushSlots(matrix, n, previous, allFlush(next).matrix) } };
 }
 
-export async function addPhysical(colour?: string, name?: string) {
-  await flushReady();
-  undoable('Add filament', () => setState((st) => {
-    const p = physicalCount(st), n = st.filamentSlots.length;
-    const filamentSlots = [...st.filamentSlots], slotColours = [...st.slotColours];
-    while (slotColours.length < n) slotColours.push(undefined);
-    filamentSlots.splice(p, 0, name ?? st.filamentSlots[p - 1] ?? '');
-    slotColours.splice(p, 0, colour);
-    const next = { filamentSlots, slotColours, mixes: shifted(st.mixes, p, 1) };
+export function addPhysical(colour?: string, name?: string) {
+  undoable('Add filament', () => {
+    const st = getState(), strip = stripOf(st), p = physicalCount(st), n = strip.filaments.length;
+    const ids = [...strip.ids], filaments = [...strip.filaments], colours = [...strip.colours];
+    ids.splice(p, 0, undefined);
+    filaments.splice(p, 0, name ?? strip.filaments[p - 1] ?? '');
+    colours.splice(p, 0, colour);
+    const next: Strip = { ids, filaments, colours, mixes: shifted(strip.mixes, p, 1) };
     const previous = Array.from({ length: n + 1 }, (_, k) => k === p ? -1 : k > p ? k - 1 : k);
     if (writeStrip(next, 'Add filament', st, insertedFlush(st, previous))) setState(remapAll(st, Array.from({ length: n }, (_, k) => (k >= p ? k + 2 : k + 1))));
   });
 }
 
 export function removePhysical() {
-  undoable('Remove filament', () => setState((st) => {
-    const p = physicalCount(st), n = st.filamentSlots.length;
-    if (p <= 1) return {};
-    const filamentSlots = [...st.filamentSlots], slotColours = [...st.slotColours];
-    filamentSlots.splice(p - 1, 1);
-    slotColours.splice(p - 1, 1);
-    const mixes = Object.fromEntries(Object.entries(shifted(st.mixes, p, -1)).map(([i, m]) =>
+  undoable('Remove filament', () => {
+    const st = getState(), strip = stripOf(st), p = physicalCount(st), n = strip.filaments.length;
+    if (p <= 1) return;
+    const ids = [...strip.ids], filaments = [...strip.filaments], colours = [...strip.colours];
+    ids.splice(p - 1, 1);
+    filaments.splice(p - 1, 1);
+    colours.splice(p - 1, 1);
+    const mixes = Object.fromEntries(Object.entries(shifted(strip.mixes, p, -1)).map(([i, m]) =>
       [i, { ...m, components: m.components.map((c) => (c === p ? 0 : c > p ? c - 1 : c)) }]));
     const kept = Array.from({ length: n }, (_, k) => k).filter((k) => k !== p - 1);
     setState(remapAll(st, Array.from({ length: n }, (_, k) => (k === p - 1 ? 1 : k >= p ? k : k + 1))));

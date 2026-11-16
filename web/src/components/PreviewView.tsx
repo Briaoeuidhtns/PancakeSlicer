@@ -22,6 +22,7 @@ import { filamentColor } from '../plater/filamentColor';
 import { setVisibleToolpaths } from '../preview/visible';
 import { preloadable } from '../preloadable';
 import './preview.css';
+import { slotFilaments } from '../profiles/slots';
 
 const SHOW_STATS = new URLSearchParams(location.search).has('stats');
 const ExplainLegend = preloadable(() => import('./PreviewExplain').then((m) => ({ default: m.ExplainLegend })));
@@ -36,7 +37,7 @@ const setStandardCompare = (on: boolean) => setCompareWanted(on ? 'standard' : n
 const GcodeWindow = preloadable(() => import('./GcodeWindow'));
 const ToolPosition = preloadable(() => import('./ToolPosition'));
 
-export const jobColours = () => getState().filamentSlots.map((_, i) => filamentColor(getState(), i + 1));
+export const jobColours = () => slotFilaments(getState()).map((_, i) => filamentColor(getState(), i + 1));
 
 export function colorContext(d: PreviewData, ui: Pick<PreviewUi, 'view' | 'nonplanar'>, ranges: Ranges): ColorContext {
   const extruderColors = (d.meta.extruder_colors?.length ? d.meta.extruder_colors : jobColours()).map(hexToRgb);

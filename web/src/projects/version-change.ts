@@ -4,6 +4,7 @@ import { display, presetLabel } from '../profiles/format';
 import { getState, type PlateObject } from '../state/store';
 import { profileInfo } from '../profiles/view';
 import type { Doc } from '../state/history';
+import { documentStrip } from '../profiles/slots';
 
 export interface VersionChange { key?: string; label: string; from?: string; to?: string }
 
@@ -39,8 +40,8 @@ export function describeChange(before: Doc, after: Doc): VersionChange[] {
     out.push({ key: 'plates', label: after.projectPlates.length > before.projectPlates.length ? 'Added plate' : 'Removed plate' });
   if (before.printer !== after.printer) out.push({ key: 'printer', label: 'Printer', from: profileName('machine', before.printer), to: profileName('machine', after.printer) });
   if (before.process !== after.process) out.push({ key: 'process', label: 'Process', from: profileName('process', before.process), to: profileName('process', after.process) });
-  if (before.filamentSlots !== after.filamentSlots && shown(before.filamentSlots) !== shown(after.filamentSlots)) {
-    const a = before.filamentSlots, b = after.filamentSlots;
+  const a = documentStrip(before)?.filaments ?? [], b = documentStrip(after)?.filaments ?? [];
+  if (shown(a) !== shown(b)) {
     if (a.length !== b.length) out.push({ key: 'filaments', label: b.length > a.length ? 'Added filament' : 'Removed filament' });
     else b.forEach((k, i) => k !== a[i] && out.push({ key: `filament:${i}`, label: b.length > 1 ? `Filament ${i + 1}` : 'Filament', from: profileName('filament', a[i]), to: profileName('filament', k) }));
   }

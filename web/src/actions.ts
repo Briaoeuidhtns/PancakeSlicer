@@ -60,8 +60,8 @@ async function connectService(): Promise<Api> {
 export async function loadCatalog() { await (await import('./profiles/catalog-startup')).loadCatalog(); }
 
 function switchingChanges(s: State, type: PresetType, slot = 0): Config {
-  const name = type === 'machine' ? s.printer : type === 'process' ? s.process : s.filamentSlots[slot];
-  const { config, user } = resolvePreset(s, type, name);
+  const name = type === 'machine' ? s.printer : type === 'process' ? s.process : slotFilaments(s)[slot];
+  const { config, record } = resolvePreset(s, type, name);
   const project = type === 'filament' ? s.projectPresets?.filaments[slot] : s.projectPresets?.[type];
   const text = (v: ConfigValue) => JSON.stringify(Array.isArray(v) ? v.map(String) : String(v));
   const baseline = Object.fromEntries(Object.entries(project ?? {}).filter(([k, v]) =>
@@ -85,7 +85,7 @@ export function switchPreset(type: PresetType, slot: number, name: string, edits
 
 function applyPresetSwitch(type: PresetType, slot: number, name: string, edits: 'discard' | 'transfer') {
   const before = getState();
-  const current = type === 'machine' ? before.printer : type === 'process' ? before.process : before.filamentSlots[slot];
+  const current = type === 'machine' ? before.printer : type === 'process' ? before.process : slotFilaments(before)[slot];
   let kept = 0, dropped = 0;
   if (name === current) return { kept, dropped };
   const carry = (scope: PresetType, target: string, sourceSlot = 0) => {
@@ -111,9 +111,9 @@ function applyPresetSwitch(type: PresetType, slot: number, name: string, edits: 
     const filamentEdits = { ...st.filamentEdits };
     let projectPresets = st.projectPresets;
     if (type === 'filament') {
-      const filaments = st.filamentSlots.map((f, i) => i === slot ? carried
+      const filaments = slotFilaments(st).map((f, i) => i === slot ? carried
         : { ...st.projectPresets?.filaments[i], ...filamentEdits[f] });
-      st.filamentSlots.forEach((f) => delete filamentEdits[f]);
+      slotFilaments(st).forEach((f) => delete filamentEdits[f]);
       delete filamentEdits[name];
       projectPresets = { machine: {}, process: {}, ...projectPresets, filaments };
     } else if (projectPresets) projectPresets = { ...projectPresets, process: {} };
@@ -121,8 +121,7 @@ function applyPresetSwitch(type: PresetType, slot: number, name: string, edits: 
       dirty: type === 'process' ? { ...st.dirty, process: carried } : st.dirty,
       filamentEdits,
       projectPresets,
-      ...(type === 'process' ? { process: name, ...(preferred ? { processVariant: { layerHeight: preferred } } : {}) } : { filamentSlots: st.filamentSlots.map((f, i) => (i === slot ? name : f)),
-        slotColours: st.mixes[slot] ? st.slotColours : st.slotColours.map((c, i) => (i === slot ? undefined : c)) }),
+      ...(type === 'process' ? { process: name, ...(preferred ? { processVariant: { layerHeight: preferred } } : {}) } : {}),
       job: markStale(st.job),
     };
     return st.profileLibraryLoad.state === 'ready' ? { ...patch, printerLibrary: capturePrinterMaterials({ ...st, ...patch }) } : patch;

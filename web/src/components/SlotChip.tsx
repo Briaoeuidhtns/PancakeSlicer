@@ -1,7 +1,11 @@
 import { DropdownMenu as Menu } from 'radix-ui';
 import { filamentColor } from '../plater/filamentColor';
-import { getState, resolvePreset, useStore, type State } from '../state/store';
+import { EMPTY_SLOT_COLOUR, reportedTray } from '../profiles/filament-colour';
+import { profileInfo } from '../profiles/view';
+import { getState, useStore, type State } from '../state/store';
 import './menu.css';
+import { slotFilaments } from '../profiles/slots';
+import { InLayer } from './PageLayer';
 
 export const inkOn = (hex: string) => {
   const m = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})/i.exec(hex);
@@ -9,14 +13,14 @@ export const inkOn = (hex: string) => {
 };
 
 export function SlotChip({ n, colour }: { n: number; colour: string }) {
+  if (colour === EMPTY_SLOT_COLOUR) return <span className="slot-chip is-empty" aria-hidden>{n}</span>;
   return <span className="slot-chip" aria-hidden data-ink={inkOn(colour)} style={{ backgroundColor: colour }}>{n}</span>;
 }
 
-export const slotsOf = (s: State) => s.filamentSlots.map((name, i) => ({ n: i + 1, colour: filamentColor(s, i + 1), name: resolvePreset(s, 'filament', name).name ?? name }));
+export const slotsOf = (s: State) => slotFilaments(s).map((id, i) => ({ n: i + 1, colour: filamentColor(s, i + 1), name: profileInfo(s, 'filament', id).name || 'Unknown filament' }));
 export function useSlots() {
-  useStore((s) => s.filamentSlots);
-  useStore((s) => s.slotColours);
-  useStore((s) => s.userPresets);
+  useStore((s) => s.records);
+  useStore((s) => JSON.stringify(slotFilaments(s).map((_, i) => reportedTray(s, i) ?? null)));
   return slotsOf(getState());
 }
 

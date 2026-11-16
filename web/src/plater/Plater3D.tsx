@@ -1612,7 +1612,7 @@ void main() {
       }
     };
 
-    let last: State | null = null;
+    let last: State | null = null, lastColours = '';
     let lastTower: [unknown, unknown, unknown] = [null, null, null];
     const drawnEdits = (s: State) => viewOptions().overhang ? `${effectiveConfig(s, 'process').support_threshold_angle}` : '';
     const sync = () => {
@@ -1636,13 +1636,14 @@ void main() {
         render();
         last = { ...last, cut: s.cut };
       }
-      if (last && s.objects === last.objects && s.selected === last.selected && s.printer === last.printer && s.projectPlates === last.projectPlates &&
+      const colours = slotFilaments(s).map((_, i) => filamentColor(s, i + 1)).join();
+      if (last && colours === lastColours && s.objects === last.objects && s.selected === last.selected && s.printer === last.printer && s.projectPlates === last.projectPlates &&
           s.plateIndex === last.plateIndex && s.project === last.project && s.job.state === last.job.state &&
           s.filamentSlots === last.filamentSlots && s.slotColours === last.slotColours && s.filamentEdits === last.filamentEdits &&
           s.userPresets === last.userPresets && s.filaments === last.filaments && s.projectMaterials === last.projectMaterials &&
           s.machines === last.machines && s.gizmo === last.gizmo && s.dirty.machine === last.dirty.machine &&
           (s.dirty.process === last.dirty.process || drawnEdits(s) === drawnEdits(last))) return;
-      last = s;
+      last = s; lastColours = colours;
       syncBed(s);
       syncGrid(s);
       syncObjects(s);

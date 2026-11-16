@@ -2,10 +2,10 @@ import { SEP } from '../separator';
 import { preprintMaterialChecks } from '../multinozzle/material-checks';
 import { useSlicedMapping } from '../multinozzle/sliced-mapping';
 import { preprintWarnings } from '../multinozzle/preprint';
-import { autoMap, availableTrays, physicalMapping, trayCode, trayFilament, type SendFilament } from '../multinozzle/ams';
-import { assignedExtruder, nozzleAssignments } from '../multinozzle/assignments';
-import { extruderCount, valueAt } from '../multinozzle/config';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { trayCode, type SendFilament } from '../multinozzle/ams';
+import { valueAt } from '../multinozzle/config';
+import { nozzleCount } from '../profiles/view';
+import { useEffect, useMemo, useReducer, useState, type ReactNode } from 'react';
 import { SlotChip } from './SlotChip';
 import { printerModel } from '../printers/capabilities';
 import { Check } from './Check';
@@ -23,6 +23,7 @@ import { connectionOf, connectionOutput, KIND_LABEL, presenceStatus, readSendPla
 import { printerCapabilities } from '../printers/capabilities';
 import { noticeSend, openDevice, sendOutcome } from '../printers/sendOutcome';
 import '../printers/printers.css';
+import { slotFilaments } from '../profiles/slots';
 
 const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const errorText = (e: unknown) => sentence(e instanceof Error ? e.message : String(e));
@@ -83,6 +84,7 @@ function SendView({ close, printer, head, edit }: { close: () => void; printer: 
   const fits = connectionOutput(kind) === output;
   const single = useStore((s) => s.filamentSlots.length === 1);
   const machineConfig = useStore((s) => effectiveConfig(s, 'machine'));
+  const record = useStore((s) => setupOf(s, printer));
   const capabilities = printerCapabilities(useStore((s) => printerModel(s, printer)) || connection.model || '');
   const [leveling, setLeveling] = useState(true);
   const [flowCali, setFlowCali] = useState(false);
@@ -95,7 +97,8 @@ function SendView({ close, printer, head, edit }: { close: () => void; printer: 
       printable: Number(valueAt(config.filament_printable, 0, '3')), compatibility: Number(valueAt(config.filament_extruder_compatibility, 0, '0')),
       ...(extruderCount(effectiveConfig(s, 'machine')) > 1 && String(nozzleAssignments(s).filament_map_mode ?? '').includes('Manual') ? { extruder: assignedExtruder(s, i) } : {}) };
   })));
-  const multiNozzle = extruderCount(machineConfig) > 1;
+  const resolvedTypes = (JSON.parse(useStore((s) => JSON.stringify(slotFilaments(s).map((_, i) => { const v = selectionValues(s, 'filament', i); return v.state === 'ready' ? valueAt(v.values.filament_type, 0) : null; })))) as (string | null)[]).map((t) => t ?? undefined);
+  const multiNozzle = useStore((st) => nozzleCount(st, printer)) > 1;
   const sliced = useSlicedMapping(jobId, bambu && jobReady);
   const filaments = useMemo(() => (JSON.parse(filamentKey) as SendFilament[]).map((filament, i) => {
     const nozzle = sliced?.mapping?.filament_map[i];
@@ -141,8 +144,9 @@ function SendView({ close, printer, head, edit }: { close: () => void; printer: 
     return () => { live = false; };
   }, [bambu, printer, !!liveTrays]);
 
-  const materials = bambu ? preprintMaterialChecks(machineConfig, status, filaments, shown, trays ?? []) : [];
-  const warnings = bambu ? [...preprintWarnings(machineConfig, status, filaments, shown, trays ?? []), ...materials.filter((row) => !row.blocked).map((row) => row.message)] : [];
+  const materials = bambu && record ? preprintMaterialChecks(record, status, filaments, shown, trays ?? []) : [];
+  const materialNotes = filaments.flatMap((f, i) => { const tray = trays?.find((t) => t.id === shown[i]), note = tray && materialNote(tray.type, f.name || 'This filament', resolvedTypes[i]); return note ? [`Filament ${i + 1}: ${note}`] : []; });
+  const warnings = bambu && record ? [...preprintWarnings(record, machineConfig, status, filaments, shown, trays ?? []), ...materials.filter((row) => !row.blocked).map((row) => row.message), ...materialNotes] : [];
   const materialBlocks = materials.filter((row) => row.blocked);
   const send = async (start: boolean) => {
     if (!jobId) return;
