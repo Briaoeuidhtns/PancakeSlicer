@@ -1,6 +1,6 @@
 import { openUrlImport } from '../url-import';
 import { preloadable } from '../preloadable';
-import { DEMO } from '../demo/config';
+import { DEMO, NO_ENGINE, SAMPLE_JOB } from '../demo/config';
 import { hasWhatYouCanDo } from './what-you-can-do-page';
 import { ProjectTitle } from '../projects/ProjectTitle';
 import { MenuButton, type MenuEntry } from './Menu';
@@ -180,7 +180,7 @@ export function TopBar() {
     {update && <button type="button" className="update-pill" aria-label={`Update available: v${update.version}`} onClick={() => openUpdate(update)}><span>Update</span></button>}
     </div>
     {(DEMO || mock) && <span className="mock-badge">Demo</span>}
-    {DEMO && <DemoResultNotice/>}
+    {DEMO && <SampleSliceLabel/>}
     {tab !== 'projects' && <TabBar/>}
     {tab === 'projects' && <div id="topbar-slot" className="topbar-slot"/>}
     {archive && <Suspense fallback={null}><ArchiveDialog files={archive} close={() => setArchive(null)} /></Suspense>}
@@ -240,6 +240,9 @@ export function TabBar() {
       <div className="title-zone"><ProjectTitle/></div>
       <div className="tabbar-actions">
         <PrintingChip/>
+        {undecided && !DEMO && <span className="demo-result-notice" role="note" data-offer-undecided>{OFFER_UNDECIDED}</span>}
+        {DEMO ? <><span className="demo-result-notice" role="note">{NO_ENGINE}</span>
+          <button className={sliceClass} disabled>{tier === 'phone' ? 'Slice' : 'Slice plate'}</button></> : <>
         {allSlice ? (
           <button className={sliceClass} style={progress} disabled={!printer || busy} onClick={() => void sliceAll()}>Slice all</button>
         ) : (
@@ -266,12 +269,11 @@ export function TabBar() {
         )}
         </span>}
         {more.length > 0 && <MenuButton className="btn slant output-overflow" label="More output actions" items={more}><Glyph name="more"/></MenuButton>}
+        </>}
       </div>
     </div>
   );
 }
-
-function DemoResultNotice() {
-  const done = useStore(s => s.job.state === 'done' && s.tab !== 'projects');
-  return done ? <span className="demo-result-notice" role="status">Demo: showing pre-sliced result</span> : null;
+function SampleSliceLabel() {
+  return useStore((s) => s.job.id === SAMPLE_JOB && s.tab !== 'projects') ? <span className="demo-result-notice" role="status">Sample slice</span> : null;
 }

@@ -63,6 +63,7 @@ const realApi: Api = {
   },
 
   async submit(req, signal, onUpload) {
+    if (DEMO) throw new Error(NO_ENGINE);
     const fd = new FormData();
     await attachFiles(fd, req.files, signal, onUpload);
     const { printer, print, filaments } = req.library;

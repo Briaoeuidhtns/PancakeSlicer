@@ -1,5 +1,6 @@
 import table from '../../../server/method_capabilities.json';
 import type { Config } from '../api/types';
+import { DEMO } from '../demo/config';
 
 export interface MethodArtifact {
   validated?: boolean; preview_ready?: boolean; print_qualified?: boolean;

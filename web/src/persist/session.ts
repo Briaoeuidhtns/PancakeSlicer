@@ -43,7 +43,9 @@ export function encode(doc: Doc): { stored: StoredDoc; blobs: Map<string, Blob> 
   return { stored: { ...stored, files: Object.fromEntries([...blobs].map(([k, b]) => [k, b instanceof File ? b.name : k])) }, blobs };
 }
 
-export { projectThumbnail as thumbnail } from '../projects/thumbnail';
+let drawThumbnail: (() => string | null) | null = null;
+export const registerThumbnail = (draw: () => string | null) => { drawThumbnail = draw; };
+export const thumbnail = (): string | null => drawThumbnail?.() ?? null;
 
 export async function decode(doc: StoredDoc, get: (key: string) => Promise<Blob | null>): Promise<Partial<State>> {
   const blobs = new Map(await Promise.all(Object.entries(doc.files ?? {}).map(async ([k, name]) => {

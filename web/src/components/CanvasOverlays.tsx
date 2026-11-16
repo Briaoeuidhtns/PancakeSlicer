@@ -22,8 +22,8 @@ import { closeSlantPlane, commitSlant, resetSlantAuto, setSlant } from '../plate
 import { InTopLayer } from './Modal';
 import { useTier } from '../breakpoints';
 import { SliceFailed } from './Notices';
-import { bareName, plainWarnings, type PlainWarning } from '../engine-warnings';
-import './prepare.css';
+import { bareName } from '../engine-warnings';
+import { plainWarnings, type PlainWarning } from '../engine-warning-text';
 
 const OrientConfirm = preloadable(() => import('./OrientConfirm').then((m) => ({ default: m.OrientConfirm })));
 const RemapFilaments = preloadable(() => import('./RemapFilaments'));
@@ -251,9 +251,11 @@ export function SliceNotification() {
     return r || f || ws.length ? [{ o, bare, key, r, f, ws }] : [];
   });
   const known = new Set(plateObjects.map((o) => bareName(o.name)));
-  const loose = plain.filter((w) => (!w.object || !known.has(w.object)) && w.text !== null);
+  const unplaced = plain.filter((w) => (!w.object || !known.has(w.object)) && (w.text !== null || w.detail));
+  const notes = unplaced.filter((w) => w.code.endsWith('_capped')), loose = unplaced.filter((w) => !notes.includes(w));
+  const noteKey = notes.length ? `${job.id}:n` : null;
   const [held, setHeld] = useState(false);
-  const transient = [exported, ...perObject.filter((n) => n.r && !n.f && !n.ws.length && !n.r.slant?.why && !n.r.printedFlat).map((n) => n.key),
+  const transient = [exported, noteKey, ...perObject.filter((n) => n.r && !n.f && !n.ws.length && !n.r.slant?.why && !n.r.printedFlat).map((n) => n.key),
     ...Object.keys(orientPrompts).map((id) => `orient${id}`)].filter((k): k is string => !!k && !expired.has(k));
   useEffect(() => {
     if (held) return;
@@ -282,6 +284,12 @@ export function SliceNotification() {
         {close(exported)}
         <div className="notif-title">Exported successfully</div>
         <div className="notif-body">{job.exported}{'\n'}{fileUse(machine)}</div>
+      </div>
+    ),
+    noteKey && !expired.has(noteKey) && !closed.has(noteKey) && (
+      <div key="notes" className="notification done">
+        {close(noteKey)}
+        <WarningLines warnings={notes} open={details.has(noteKey)} onToggle={() => toggleDetails(noteKey)} />
       </div>
     ),
     brief && !expired.has(brief) && (

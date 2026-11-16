@@ -32,12 +32,21 @@ type cachedResponse struct {
 
 var brotliSlot = make(chan struct{}, 1)
 
-func cacheResponse(b []byte) *cachedResponse {
-	var zipped bytes.Buffer
-	z := gzip.NewWriter(&zipped)
-	z.Write(b)
-	z.Close()
-	c := &cachedResponse{plain: b, zipped: zipped.Bytes(), etag: fmt.Sprintf(`"%x"`, sha256.Sum256(b))}
+func cacheResponse(b []byte) *cachedResponse { return precompressedResponse(b, nil, nil) }
+
+func precompressedResponse(b, gzipped, brotliEncoded []byte) *cachedResponse {
+	if gzipped == nil {
+		var zipped bytes.Buffer
+		z := gzip.NewWriter(&zipped)
+		z.Write(b)
+		z.Close()
+		gzipped = zipped.Bytes()
+	}
+	c := &cachedResponse{plain: b, zipped: gzipped, etag: fmt.Sprintf(`"%x"`, sha256.Sum256(b))}
+	if brotliEncoded != nil {
+		c.brotli.Store(&brotliEncoded)
+		return c
+	}
 	go func() {
 		brotliSlot <- struct{}{}
 		defer func() { <-brotliSlot }()
@@ -321,9 +330,21 @@ func (c *staticCache) entry(path string, st os.FileInfo) (staticEntry, bool) {
 		entry.build = hex.EncodeToString(sum[:6])
 		b = bytes.Replace(b, []byte("</head>"), []byte(`<meta name="orca-build" content="`+entry.build+`"></head>`), 1)
 	}
-	entry.response = cacheResponse(b)
+	entry.response = precompressedResponse(b, sibling(path+".gz", st), sibling(path+".br", st))
 	c.files[path] = entry
 	return entry, true
+}
+
+func sibling(path string, of os.FileInfo) []byte {
+	st, err := os.Stat(path)
+	if err != nil || st.ModTime().Before(of.ModTime()) {
+		return nil
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	return b
 }
 
 func (c *staticCache) build(dir string) string {

@@ -7,15 +7,23 @@ import { isPaint, paintKeyTool, setPaintTool, togglePaint, type PaintKind } from
 import { toggleViewOption } from './plater/viewOptions';
 import { addInstance, arrangeAll, download, importFiles, newProject, openFileDialog, openProjectDialog, removeInstance, toolbarOperation, saveProject, toggleBoolean, toggleText } from './actions';
 import { setCut, toggleCut } from './plater/cut';
-import { CanvasToolbar, CutPanel, PaintPanel, SlantPanel, SliceNotification, Toast } from './components/CanvasOverlays';
 import { LoadingState } from './components/Notices';
-import { PreviewLoading } from './components/PreviewLoading';
-import { LayerHeightBar, LayerHeightPanel } from './components/LayerHeight';
-import { Sidebar } from './components/Sidebar';
+import { SidebarSkeleton } from './components/SidebarSkeleton';
 import WorkspaceRail from './components/WorkspaceRail';
 import { AskHost } from './components/Ask';
 import { TopBar } from './components/TopBar';
 import { graphicsCapability } from './browser-support';
+const overlays = () => import('./components/CanvasOverlays'), heights = () => import('./components/LayerHeight');
+const CanvasToolbar = preloadable(() => overlays().then(m => ({default: m.CanvasToolbar})));
+const CutPanel = preloadable(() => overlays().then(m => ({default: m.CutPanel})));
+const SlantPanel = preloadable(() => overlays().then(m => ({default: m.SlantPanel})));
+const PaintPanel = preloadable(() => overlays().then(m => ({default: m.PaintPanel})));
+const SliceNotification = preloadable(() => overlays().then(m => ({default: m.SliceNotification})));
+const Toast = preloadable(() => overlays().then(m => ({default: m.Toast})));
+const LayerHeightPanel = preloadable(() => heights().then(m => ({default: m.LayerHeightPanel})));
+const LayerHeightBar = preloadable(() => heights().then(m => ({default: m.LayerHeightBar})));
+const PreviewLoading = preloadable(() => import('./components/PreviewLoading').then(m => ({default: m.PreviewLoading})));
+const Sidebar = preloadable(() => import('./components/Sidebar').then(m => ({default: m.Sidebar})));
 const ControlHints = preloadable(() => import('./components/ControlHints').then(m => ({default: m.ControlHints})));
 const BrimEarsPanel = preloadable(() => import('./components/BrimEarsPanel'));
 const TransformPanel = preloadable(() => import('./components/Transform').then(m => ({ default: m.TransformPanel })));
@@ -62,6 +70,9 @@ import { useMachine } from './flow/fsm';
 import { setup as setupFlow } from './onboarding/setup-flow';
 const useSetup = <T,>(sel: (s: ReturnType<typeof setupFlow.get>) => T) => useMachine(setupFlow, sel);
 import { threeReady } from './three-runtime';
+import { slotFilaments } from './profiles/slots';
+import './components/prepare.css';
+import { PageScope } from './components/PageLayer';
 const AppDialog = preloadable(() => import('./components/AppDialogs'));
 const CalibDialog = preloadable(() => import('./components/CalibDialog'));
 const NonplanarCalibDialog = preloadable(() => import('./components/NonplanarCalibDialog'));
@@ -297,13 +308,9 @@ export default function App() {
           )}
           <div style={{ display: tab === 'prepare' ? 'contents' : 'none' }}>
             {platerLoaded && <Suspense fallback={null}><Plater3D /></Suspense>}
-            <CanvasToolbar />
+            <Suspense fallback={null}><CanvasToolbar /></Suspense>
             {!projects && tab === 'prepare' && (gizmo === 'move' || gizmo === 'rotate' || gizmo === 'scale') && <Suspense fallback={null}><TransformPanel /></Suspense>}
-            <CutPanel />
-            <SlantPanel />
-            <PaintPanel />
-            <LayerHeightPanel />
-            <LayerHeightBar />
+            <Suspense fallback={null}><CutPanel /><SlantPanel /><PaintPanel /><LayerHeightPanel /><LayerHeightBar /></Suspense>
             {gizmo === 'measure' && <Suspense fallback={null}><MeasurePanel /></Suspense>}
             {!empty && <Suspense fallback={null}><CanvasTools /></Suspense>}
             {!empty && <Suspense fallback={null}><ObjectInfo /></Suspense>}
@@ -324,8 +331,8 @@ export default function App() {
           {multiPlate && <Suspense fallback={null}><PlateChoice /></Suspense>}
           <Suspense fallback={null}><Navigator /></Suspense>
           <Suspense fallback={null}><ProjectStatus /></Suspense>
-          <SliceNotification />
-          {loading ? <LoadingState text={loading} /> : <PreviewLoading />}
+          <Suspense fallback={null}><SliceNotification /></Suspense>
+          {loading ? <LoadingState text={loading} /> : <Suspense fallback={null}><PreviewLoading /></Suspense>}
         </div>
       </div>
       <Suspense fallback={<div role="status">Loading dialog…</div>}>
@@ -341,7 +348,7 @@ export default function App() {
       </Suspense>
       <Suspense fallback={null}><ControlHints /></Suspense>
       <AskHost />
-      <Toast />
+      <Suspense fallback={null}><Toast /></Suspense>
     </div>
   );
 }

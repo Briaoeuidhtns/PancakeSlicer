@@ -1,4 +1,8 @@
 import { tools } from '../flow/tools';
+import { onLeavePage } from '../flow/page';
+import { registerThumbnail } from '../persist/session';
+import { projectThumbnail } from '../projects/thumbnail';
+import { objectValues } from '../profiles/view';
 import { takeProbedCanvas } from '../browser-support';
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
@@ -35,6 +39,9 @@ import { layerCursor, layerParams, layerProfileOf, subscribeLayerCursor } from '
 import { layerMaterial } from './layerTexture';
 import { getPatchPreview, inFootprint, nonplanarViewShown, overlayFits, planarReason, subscribePatchPreview, type InstanceOverlay } from '../patch-preview';
 import { hoverSurface, selectSurface, subscribeTopSurfaces, surfaceAt, surfaceText, topSurfaces, topSurfacesShown } from '../top-surfaces';
+import { slotFilaments } from '../profiles/slots';
+
+registerThumbnail(projectThumbnail);
 
 const OUTSIDE = new THREE.Color(0x4d9ed9);
 const WHITE = new THREE.Color(0xffffff);

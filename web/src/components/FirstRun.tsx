@@ -5,7 +5,10 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { HoverCard } from 'radix-ui';
 import { openFileDialog, openProjectDialog } from '../actions';
 import { importFetched } from '../plater/handy';
-import { getState, resolvePreset, subscribeStore, toast, useStore } from '../state/store';
+import { getState, subscribeStore, toast, useStore } from '../state/store';
+import { project } from '../flow/project';
+import { currentRoute } from '../flow/routes';
+import { recordOf } from '../profiles/view';
 import { openSetup } from '../onboarding/setup-flow';
 import { documentGeneration, onLeaveDocument } from '../state/history';
 import './first-run.css';
@@ -47,10 +50,16 @@ function warmPreview(url: string) {
   const img = new Image(); img.src = url; void img.decode().catch(() => decoded.delete(url));
 }
 let warmed = false;
+const emptyForGood = () => currentRoute().kind === 'blank' && project.get().value === 'blank' && !getState().objects.length && !getState().loading;
 function warmSamples() {
   if (warmed) return;
   const idle = window.requestIdleCallback ?? ((f: () => void) => setTimeout(f, 200));
-  idle(() => { for (const s of SAMPLES) modelBlobUrl(s.variants[0].model).catch(() => {}); });
+  idle(() => {
+    if (warmed || !emptyForGood()) return;
+    warmed = true;
+    for (const s of SAMPLES) warmPreview(s.variants[0].preview);
+    idle(() => { for (const s of SAMPLES) modelBlobUrl(s.variants[0].model).catch(() => {}); });
+  });
 }
 function warmVariants(variants: Variant[]) {
   for (const v of variants.slice(1)) { warmPreview(v.preview); modelBlobUrl(v.model).catch(() => {}); }

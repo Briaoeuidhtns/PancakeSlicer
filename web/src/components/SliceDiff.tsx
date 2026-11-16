@@ -1,3 +1,5 @@
+import { warningKey, type EngineWarning } from '../engine-warnings';
+import { warningText } from '../engine-warning-text';
 import { setCompareWanted, useBaseline, useStandardData } from '../compare';
 import { editedOf, resolvedOf, settingChanges } from '../compare-settings';
 import type { PreviewData } from '../preview/data';

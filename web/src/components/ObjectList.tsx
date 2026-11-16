@@ -20,7 +20,6 @@ import { canAddPlate, OBJECT_DRAG } from '../plater/plates';
 import { rangeLabel } from '../plater/ranges';
 import { overrideCount } from '../plater/overrides';
 import { setHoverLink, useHoverLink } from '../plater/hoverLink';
-import './prepare.css';
 import { Sep } from '../separator';
 
 interface SliceRecord {
