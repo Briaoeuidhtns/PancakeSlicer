@@ -14,7 +14,11 @@ import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 
 import { preloadable } from '../preloadable';
 import type { Config, ConfigValue, PresetType } from '../api/types';
 import { isHidden, modeVisible, OPTIONS, splitKey, loadTab, useTab, type TabDesc, type TabLine, type OptionDef, type OptionMode } from '../options';
-import { effectiveConfig, effectiveMode, getState, presetEdits, resetOption, resolvePreset, setOption, setState, useStore } from '../state/store';
+import { plateSlots } from '../printers/slot-check';
+import { slotExtruder } from '../printers/feeds';
+import { effectiveConfig, effectiveMode, getState, presetEdits, resetOption, setOption, setState, useStore, type State } from '../state/store';
+import { belowProject, profileInfo, recordOf, selectionValues, useAskedValues, variantOf } from '../profiles/view';
+import type { PrinterRecord } from '../profiles/records';
 import { condition, environment, fieldDefinition, optionState } from '../visibility';
 import { hiddenReason } from '../settings/common';
 import { lineMode, nativeSupportCapable, tabEnvironment } from '../settings-env';
@@ -31,6 +35,7 @@ import { slotFilaments } from '../profiles/slots';
 import { unsavedRule } from '../state/changes';
 
 const BedShapeDialog = preloadable(() => import('./BedShapeDialog'));
+const nozzleCount = (s: State, printer: string) => (recordOf(s, 'machine', printer) as PrinterRecord | undefined)?.nozzles.length || 1;
 const HeadPicker = preloadable(() => import('./HeadPicker'));
 const HeadShapeButton = preloadable(() => import('./HeadPicker').then((m) => ({ default: m.HeadShapeButton })));
 const GcodeWorkbench = preloadable(() => import('../gcode/GcodeWorkbench'), { idle: false });
@@ -209,14 +214,16 @@ export function SettingsTab({ type, slot = 0, compact, hidePreset, editor, overr
       </Tabs.List>
       <Tabs.Content forceMount value={auxiliaryOn ? `aux:${auxIdx}` : String(Math.min(pageIdx,pages.length-1))} className="page-body" ref={body}>
         {aux ? aux.content : <><div className="page-flow">
-        {!overrides && <VariantSelector type={type} config={config} machine={type === 'machine' ? config : machineConfig} selection={extruderSelection} onChange={setExtruderSelection} />}
-        {type === 'machine' && !editor && <><NozzleField /><PlateTypeField /></>}
-        {type === 'machine' && !overrides && <ExtruderRows config={editor ? config : undefined} onSet={editor?.set} disabled={readOnly} />}
-        {type === 'filament' && !fields && <FilamentNozzleAssignment slot={slot} disabled={readOnly} />}
-        {type === 'process' && pageIdx === 0 && !overrides && <SurfaceSettings config={config} system={system} availability={availability} editor={editor} dirty={dirty} uiMode={uiMode} legacyKeys={legacyKeys} readOnly={readOnly}/>}
-        {!desc && <div className="settings-load" role={error || retryError ? 'alert' : 'status'}><span>{retryError || error ? `Oops! Couldn't load settings: ${retryError ?? error}` : 'Loading settings…'}</span>{(error || retryError) && <button type="button" className="btn" disabled={retrying} onClick={retry}>{retrying ? 'Retrying…' : 'Retry'}</button>}</div>}
-        {type === 'process' && !overrides && page?.title === 'Multimaterial' && getState().filamentSlots.length > 1 && <section className="optgroup"><button type="button" className="btn" onClick={() => setState({flushDialog: true})}>Flush volumes</button></section>}
-        {groups.map((g) => {
+        {type === 'machine' && !editor && <NozzleField />}
+        {type === 'machine' && !overrides && page?.title === 'Extruder' && <ExtruderRows grid printerId={editor?.name} disabled={readOnly} />}
+        {!valuesReady && (answer.state === 'failed'
+          ? <div className="settings-load" role="alert"><span>{answer.error ?? 'Hmm, we couldn\'t resolve these settings.'}</span></div>
+          : <div className="settings-load" role="status"><span>Resolving…</span></div>)}
+        {valuesReady && type === 'process' && pageIdx === 0 && !overrides && <SurfaceSettings config={config} system={system} availability={availability} editor={editor} unsaved={unsaved} uiMode={uiMode} legacyKeys={legacyKeys} readOnly={readOnly}/>}
+        {!desc && (error || retryError ? <div className="settings-load" role="alert"><span>Oops! Couldn't load settings</span><button type="button" className="btn" disabled={retrying} onClick={retry}>{retrying ? 'Retrying…' : 'Retry'}</button></div>
+          : <SettingsSkeleton tabs={false}/>)}
+        {type === 'process' && !overrides && page?.title === 'Multimaterial' && slotFilaments(getState()).length > 1 && <section className="optgroup optgroup-action"><button type="button" className="btn" onClick={() => setState({flushDialog: true})}>Flush volumes</button></section>}
+        {valuesReady && groups.map((g) => {
           const single = groups.length === 1 && g.lines.length === 1 && g.lines[0].options.length === 1 && !!OPTIONS[splitKey(g.lines[0].options[0])[0]]?.multiline, id = groupId(page.title, g.title), open = !g.title || single || isGroupOpen(id, openByDefault);
           const modified = markOf(keysOf(g.lines), unsaved);
           const method = type === 'process' ? String(config.nonplanar_mode ?? '') : undefined;

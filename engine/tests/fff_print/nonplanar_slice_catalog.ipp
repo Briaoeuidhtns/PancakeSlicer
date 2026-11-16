@@ -57,6 +57,8 @@ std::string option_type_name(ConfigOptionType type)
 }
 void dump_options(const std::string &path)
 {
+    const std::set<std::string> printer(Preset::printer_options().begin(), Preset::printer_options().end()),
+        filament(Preset::filament_options().begin(), Preset::filament_options().end());
     nlohmann::json options = nlohmann::json::array();
     for (const auto &[key, def] : print_config_def.options) {
         options.push_back({{"key", key}, {"type", option_type_name(def.type)}, {"type_id", int(def.type)},
@@ -64,7 +66,8 @@ void dump_options(const std::string &path)
             {"category", def.category}, {"sidetext", def.sidetext}, {"enum_values", def.enum_values},
             {"enum_labels", def.enum_labels}, {"min", def.min}, {"max", def.max}, {"mode", int(def.mode)},
             {"default", def.default_value ? def.default_value->serialize() : ""},
-            {"nullable", def.nullable}, {"readonly", def.readonly}, {"cli", def.cli}});
+            {"nullable", def.nullable}, {"readonly", def.readonly}, {"cli", def.cli},
+            {"profile", printer.count(key) ? "machine" : filament.count(key) ? "filament" : "process"}});
         if (key == "nonplanar_curved_max_angle") {
             nlohmann::json by_mode = nlohmann::json::object();
             for (const auto &[name, value] : ConfigOptionEnum<NonplanarMode>::get_enum_values())

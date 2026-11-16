@@ -16,6 +16,7 @@ import { materialNote, reportText, slotOf, useFilamentType, usePrinterSlots, typ
 import { FilamentColourMenu } from '../profiles/FilamentColourMenu';
 import { trayCode } from '../multinozzle/ams';
 import { Dropdown } from '../components/Dropdown';
+import { Skeleton } from '../components/Skeleton';
 import { outcomeLabel, outcomeTone } from './sendOutcome';
 import type { Transfer } from '../flow/transfer';
 import { useDeviceControl, type DeviceCommand } from './device-controls';
@@ -135,15 +136,16 @@ function AllJobs({ runningId, version, collapse }: { runningId?: string; version
 
 function DevicePanel({ connection, model, cover, status, live }: { connection: PrinterConnection; model: string; cover?: string; status?: PrinterStatus; live: boolean }) {
   const [thumbnailFailed, failThumbnail] = useState(false);
-  const [error, setError] = useState(''), [pending, setPending] = useState(false), [history, setHistory] = useState<History[]>([]), [historyError, setHistoryError] = useState('');
+  const [error, setError] = useState(''), [pending, setPending] = useState(false), [history, setHistory] = useState<History[]>([]), [historyError, setHistoryError] = useState(''), [historyLoaded, setHistoryLoaded] = useState(false);
   const transfers = useStore((s) => s.printerConnections.transfers), [allJobs, showAllJobs] = useState(false);
   const historyVersion = transfers.filter((t) => t.printer === connection.printer).map((t) => `${t.id}:${t.state}:${t.outcome}`).join(',');
   useEffect(() => {
     const abort = new AbortController();
+    setHistoryLoaded(false);
     void fetch(`/api/printer-sends?printer=${encodeURIComponent(connection.printer)}`, { signal: abort.signal }).then(async (r) => {
       if (!r.ok) throw await responseError(r);
-      const body = await r.json() as { sends: History[] }; if (!abort.signal.aborted) { setHistory(body.sends); setHistoryError(''); }
-    }).catch((e: unknown) => { if (!abort.signal.aborted) setHistoryError(e instanceof Error ? e.message : 'Couldn\'t load recent prints'); });
+      const body = await r.json() as { sends: History[] }; if (!abort.signal.aborted) { setHistory(body.sends); setHistoryError(''); setHistoryLoaded(true); }
+    }).catch((e: unknown) => { if (!abort.signal.aborted) { setHistoryError(e instanceof Error ? e.message : 'Couldn\'t load recent prints'); setHistoryLoaded(true); } });
     return () => abort.abort();
   }, [connection.printer, historyVersion]);
   useEffect(() => failThumbnail(false), [status?.job?.id]);
@@ -193,6 +195,12 @@ function DevicePanel({ connection, model, cover, status, live }: { connection: P
           {trays.filter((t) => t.kind === 'external' && !(feedOf(model)?.external === 'exclusive' && units.size > 0)).map((tray) => <div className="device-external" key={tray.id}><Spool printer={connection.printer} tray={tray} trays={trays} report={reportOf(tray)} chosen={chosenOf(tray)} swatch={swatchOf(tray)} choices={choices} busy={busy || choosing} choose={choose(tray)} /></div>)}
         </Card>;
   const temperatures = !!(status?.nozzle || status?.nozzle_temps?.length || status?.bed || (capabilities.chamber && status?.chamber));
+  const waiting = status === undefined;
+  const skelRows = (labels: string[]) => labels.map((label) => <div key={label} className="device-row"><span className="device-row-label">{label}</span><span className="device-row-value"><Skeleton width={150} height={12}/></span></div>);
+  const amsSkeleton = bambu && waiting && <Card title="AMS & filament" className="device-ams"><div className="device-slots" role="status" aria-busy="true" aria-label="Checking the AMS…">
+    {[0, 1, 2, 3].map((i) => <div key={i} className="device-spool"><Skeleton block width={24} height={24} style={{ borderRadius: '50%', marginTop: 2 }}/><span className="device-spool-text"><Skeleton width={48} height={10} style={{ margin: '3px 0' }}/><Skeleton block width="100%" height={28} style={{ margin: '4px 0' }}/></span></div>)}</div></Card>;
+  const historySkeleton = !historyLoaded && <Card title="Recent jobs" className="device-recent"><ol className="device-history" role="status" aria-busy="true" aria-label="Fetching recent jobs…">
+    {[0, 1, 2].map((i) => <li key={i}><strong><Skeleton width="40%" height={12}/></strong><time><Skeleton width={90} height={10}/></time><span><Skeleton width={56} height={10}/></span></li>)}</ol></Card>;
   return <article className="device-panel" aria-label={connection.name}>
     <RecordProblem kind="machine" id={connection.printer} className="device-problem"/>
     {error && <p role="alert" className="device-command-error">{error}</p>}
@@ -204,7 +212,7 @@ function DevicePanel({ connection, model, cover, status, live }: { connection: P
         <section className="device-job" aria-label="Print job">
           {status?.job?.thumbnail && !thumbnailFailed && <div className="device-job-art"><img src={status.job.thumbnail} alt={`Plate ${status.job.plate}`} onError={() => failThumbnail(true)} /></div>}
           <div className="device-job-content">
-            <strong className="device-job-name">{filename ? jobName(filename) : 'No active print'}</strong>
+            <strong className="device-job-name">{waiting ? <Skeleton width={'45%'} height={16} style={{ margin: '3px 0' }}/> : filename ? jobName(filename) : 'No active print'}</strong>
             <span className="device-job-state">{status?.job && filename && <span>Plate {status.job.plate}</span>}<span className="status-text" data-tone={tone}>{phrase}</span>{!canStop && live && end.reason && <span>{end.reason}</span>}</span>
             {progress != null && <div className="device-job-progress"><progress max="1" value={progress} aria-label="Print progress" /><strong>{moonraker ? Math.floor(progress * 100) : Math.round(progress * 100)}<small>%</small></strong></div>}
             {canStop && moonraker && <div className="device-job-meta">
@@ -216,7 +224,8 @@ function DevicePanel({ connection, model, cover, status, live }: { connection: P
           </div>
           {canStop && <div className="device-job-actions">{active && <button className="btn" type="button" disabled={busy} onClick={() => run(status?.state === 'paused' ? 'resume' : 'pause')}>{status?.state === 'paused' ? 'Resume' : 'Pause'}</button>}<button className="btn btn-danger" type="button" disabled={busy} onClick={() => run('stop')}>Stop</button></div>}
         </section>
-        {temperatures && <Card title="Temperatures" className="device-temperatures">{temperatureRows}</Card>}
+        {temperatures ? <Card title="Temperatures" className="device-temperatures">{temperatureRows}</Card>
+          : waiting && <Card title="Temperatures" className="device-temperatures"><div role="status" aria-busy="true" aria-label="Checking temperatures…">{skelRows(['Nozzle', 'Bed'])}</div></Card>}
         {(fans.length > 0 || speed != null || light != null) && <Card title="Controls" className="device-controls">
           {fans.map(([name, value]) => { const capability = status!.controls!.fans![name]; return <FanRow key={name} printer={connection.printer} fan={name} label={name === 'part' ? 'Part fan' : name === 'auxiliary' ? 'Aux fan' : `${name[0].toUpperCase()}${name.slice(1)} fan`} reported={value} min={capability.min} max={capability.max} offline={offline} />; })}
           {speed != null && <ControlRow label="Speed">{() => <><Dropdown aria-label="Print speed" value={String(speed)} disabled={offline} options={SPEEDS.map((o) => ({ value: o.id, label: o.label }))} onValueChange={(value) => speedCtl.commit(Number(value))} /><ControlError error={speedCtl.error} /></>}</ControlRow>}
@@ -224,7 +233,8 @@ function DevicePanel({ connection, model, cover, status, live }: { connection: P
         </Card>}
         {!!status?.messages?.length && <Card title={`Printer messages (${status.messages.length})`} className="device-messages"><ul>{status.messages.map((message, i) => <li key={`${message.code}:${i}`}><p>{message.message || message.code}</p>{message.message && <span>{message.code}</span>}</li>)}</ul></Card>}
       </div>
-      {(history.length > 0 || historyError) && <Card title={allJobs ? 'All jobs' : 'Recent jobs'} className="device-recent">{historyError && <p role="status" className="device-error">{historyError}</p>}
+      {historySkeleton}
+      {historyLoaded && (history.length > 0 || historyError) && <Card title={allJobs ? 'All jobs' : 'Recent jobs'} className="device-recent">{historyError && <p role="status" className="device-error">{historyError}</p>}
         {allJobs ? <AllJobs runningId={runningId} version={transfers.map((t) => `${t.id}:${t.state}:${t.outcome}`).join(',')} collapse={() => showAllJobs(false)} /> : <>
           <ol className="device-history">{history.slice(0, 5).map((job) => <HistoryRow key={job.id} job={job} running={job.id === runningId} />)}</ol>
           <div className="device-history-more"><button type="button" className="link" onClick={() => showAllJobs(true)}>Show all</button></div></>}</Card>}

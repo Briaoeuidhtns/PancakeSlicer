@@ -75,7 +75,15 @@ async function flatWorker(env: DevEnvironment, url: string) {
 }
 
 export function devStartup(): Plugin {
-  let env: DevEnvironment | undefined;
+  let env: DevEnvironment | undefined, api: string | undefined;
+  const bootShape = async (page: string) => {
+    if (!api) return null;
+    try {
+      const r = await fetch(`${api}/api/boot?page=${encodeURIComponent(page)}`, { signal: AbortSignal.timeout(1000) });
+      const text = r.ok ? await r.text() : '';
+      return text && text.trim() !== 'null' && !text.includes('<') ? text.trim() : null;
+    } catch { return null; }
+  };
   return {
     name: 'orca-dev-startup',
     apply: 'serve',
@@ -99,10 +107,15 @@ export function devStartup(): Plugin {
         if (env?.depsOptimizer?.isOptimizedDepFile(id)) return { code: `${code}\n`, map: { mappings: '' } };
       },
     },
-    async transformIndexHtml() {
+    configResolved(config) {
+      const target = config.server.proxy?.['/api'];
+      api = typeof target === 'string' ? target : typeof target?.target === 'string' ? target.target : undefined;
+    },
+    async transformIndexHtml(_html, ctx) {
       if (!env) return [];
-      const urls = await staticGraph(env, STARTUP_MODULES.map((url) => served(env!, url)));
-      return urls.map((href): HtmlTagDescriptor => ({ tag: 'link', attrs: { rel: 'modulepreload', href }, injectTo: 'head' }));
+      const [urls, boot] = await Promise.all([staticGraph(env, STARTUP_MODULES.map((url) => served(env!, url))), bootShape(ctx.originalUrl ? new URL(ctx.originalUrl, 'http://page').pathname : ctx.path)]);
+      return [...urls.map((href): HtmlTagDescriptor => ({ tag: 'link', attrs: { rel: 'modulepreload', href }, injectTo: 'head' })),
+        ...(boot ? [{ tag: 'script', attrs: { id: 'pancake-boot', type: 'application/json' }, children: boot, injectTo: 'head' } as HtmlTagDescriptor] : [])];
     },
   };
 }

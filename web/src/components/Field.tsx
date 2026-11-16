@@ -126,7 +126,7 @@ export const Field = memo(function Field(props: {
   const vector = def.type.endsWith('s') && (props.optKey.includes('#') || !['points', 'points_groups', 'ints_groups'].includes(def.type));
   const current = props.value === undefined ? undefined : normalizeConfigValue(key, props.value);
   const system = props.systemValue === undefined ? undefined : normalizeConfigValue(key, props.systemValue);
-  const value = elementOf(current ?? (def.nullable ? undefined : def.default as ConfigValue | undefined), idx, vector);
+  const value = elementOf(current, idx, vector);
   const prompt = (k: string) => { if (PROMPTED.has(k)) void import('../configPrompts').then((m) => m.checkSetting(props.type, k, props.slot)); };
   const set = props.onSet ?? ((k: string, v: ConfigValue) => { setOption(props.type, k, v, props.slot); prompt(k); });
   const reset = props.onReset ?? ((k: string) => { resetOption(props.type, k, props.slot); prompt(k); });

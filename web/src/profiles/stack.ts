@@ -35,7 +35,7 @@ export function revert(c: SettingChange) {
   if (c.scope === 'object') return removeObjectOptions(object!, [c.key]);
   if (c.scope === 'part') return removeVolumeOptions(object!, volume!, [c.key]);
   if (c.scope === 'range') {
-    if (c.key === 'layer_height') return editRange(object!, range!, { layer_height: Number(c.was ?? OPTIONS.layer_height?.default ?? 0.2) });
+    if (c.key === 'layer_height') return editRange(object!, range!, { layer_height: Number(c.was) });
     return removeRangeOptions(object!, range!, [c.key]);
   }
   undoable(`Reset setting "${OPTIONS[c.key]?.label || c.key}"`, () => setState((s) => {

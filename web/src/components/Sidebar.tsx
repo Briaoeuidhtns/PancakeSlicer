@@ -2,7 +2,16 @@ import { ProfileLibraryNotice } from './ProfileLibraryNotice';
 import { openSlideOutEditor } from '../navigation';
 import { preloadable } from '../preloadable';
 import { nativeSurfaceSummary } from '../preview/explain-record';
-import { Suspense, useState, type ReactNode } from 'react';
+import { Fragment, Suspense, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { railSlotsHeight, rememberRailLayout } from './rail-layout';
+import { bootShape } from '../boot-shape';
+import { HeldText } from './Skeleton';
+import { railWidthNow } from '../sidebar';
+import { SidebarSkeleton } from './SidebarSkeleton';
+import { toggleSidebar } from '../sidebar';
+import { SettingsSkeleton } from './SettingsSkeleton';
+import { feedOf, slotLabels, unitsOf } from '../printers/feeds';
+import { materialNote, reportText, trayLibraryFilament, usePrinterSlots } from '../printers/slots';
 import type { PresetType } from '../api/types';
 import { effectiveMode, getState, printerPreset, setState, toast, useStore, type State } from '../state/store';
 import { profileInfo, recordOf, selectionValues } from '../profiles/view';
@@ -49,15 +58,12 @@ function RailSection({title, summary, meta, actions, className = '', children}: 
     {!folded && children}
   </section>;
 }
-const presetName = (type: PresetType, name: string | undefined) => (name ? resolvePreset(getState(), type, name).name ?? name : '');
+const presetName = (type: PresetType, id: string | undefined) => (id ? profileInfo(getState(), type, id).name : '');
+const printerRecord = (s: State) => recordOf(s, 'machine', s.printer) as PrinterRecord | undefined;
+const hasPrinter = (s: State) => { const r = printerRecord(s); return !!r && !r.archived; };
 function PrinterSummary() {
-  const name = useStore(s => presetName('machine', s.printer)), enabled = useStore(s => s.printerConnections.enabled);
-  const nozzle = useStore(s => { const d = printerPreset(s)?.config.nozzle_diameter; return String(Array.isArray(d) ? d[0] ?? '' : d ?? ''); });
-  const label = useStore(s => pickerStatus(s.printerConnections, s.printer)?.label), tone = useStore(s => pickerStatus(s.printerConnections, s.printer)?.tone);
-  return <>{name}{nozzle && !name.includes(nozzle) && ` ${nozzle} mm`}{enabled && <><Sep/><span className="status-text" data-tone={label ? tone : 'offline'}>{label ?? 'Not connected'}</span></>}</>;
-}
-function FilamentSummary() {
-  return <>{useSlots().map(f => <span key={f.n} className="rail-summary-slot"><SlotChip n={f.n} colour={f.colour}/>{f.name}</span>)}</>;
+  const info = useStore(s => profileInfo(s, 'machine', s.printer)), machine = useStore(s => selectionValues(s, 'machine'));
+  return <>{info.name ? printerShortName(info.name, machine.values, info.vendor ?? '') : ''}</>;
 }
 function RailAction({glyph, label, disabled, onClick}: {glyph: GlyphName; label: string; disabled?: boolean; onClick(): void}) {
   return <button type="button" className="icon-btn rail-act" aria-label={label} disabled={disabled} onClick={onClick}><Glyph name={glyph}/></button>;
@@ -65,7 +71,7 @@ function RailAction({glyph, label, disabled, onClick}: {glyph: GlyphName; label:
 const edit = (type: PresetType, name?: string) => name && openSlideOutEditor(type, name);
 
 function PrinterSection() {
-  const machine = useStore(printerPreset), name = useStore(s => s.printer), ready = useStore(printerReady);
+  const machine = useStore(printerPreset), name = useStore(s => s.printer), ready = useStore(hasPrinter);
   const [failedCover, setFailedCover] = useState<string>();
   const cover = ready && machine ? printerCover(machine.vendor, machine.config, machine.model) : undefined;
   return <RailSection title="Printer" summary={<PrinterSummary/>} meta={ready && <PrinterChangesMark/>} actions={<>
@@ -152,18 +158,24 @@ function SliceSummary() {
   const summary = useStore(s => s.tab !== 'preview' && s.job.state === 'done' && !s.job.stale && s.job.status?.record ? nativeSurfaceSummary(s.job.status.record) : null);
   return summary ? <div className="engine-line" role="status">{summary}</div> : null;
 }
-function RailSkeleton() {
-  const bar = (k: number, wide?: boolean) => <div key={k} className={`rail-row rail-skel${wide ? ' rail-row-wide' : ''}`}><span className="skel-block"/></div>;
-  return <div className="rail-skeleton" role="status" aria-label="Loading profiles">
-    <RailSection title="Filament">{bar(0)}</RailSection>
-    <RailSection title="Print settings" className="process-section">{bar(1, true)}<div className="process-panel">{[2, 3, 4, 5, 6, 7].map(k => <div key={k} className="skel-line"/>)}</div></RailSection>
-  </div>;
-}
 export function Sidebar() {
-  const objects = useStore(s => s.processScope === 'objects' && !!s.objects.length);
-  const ready = useStore(printerReady), process = useStore(s => s.process), processName = useStore(s => presetName('process', s.process));
+  const ready = useStore(hasPrinter), process = useStore(s => s.process), processName = useStore(s => presetName('process', s.process));
   const loading = useStore(s => !s.api || s.profileLibraryLoad.state === 'loading');
-  return <aside className="sidebar scroll-fade">
+  const opening = useMachine(project, (p) => p.value === 'blank' || p.value === 'opening') && !!urlProject();
+  const aside = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const el = aside.current;
+    if (!el) return;
+    let timer = 0;
+    const save = () => { clearTimeout(timer); timer = window.setTimeout(() => { if (el.querySelectorAll(':scope > section.rail-section').length > 1) rememberRailLayout(el, railWidthNow()); }, 500); };
+    const sizes = new ResizeObserver(save);
+    const watch = () => { sizes.disconnect(); sizes.observe(el); el.querySelectorAll(':scope > section.rail-section').forEach((section) => sizes.observe(section)); save(); };
+    const sections = new MutationObserver(watch);
+    sections.observe(el, { childList: true }); watch();
+    return () => { clearTimeout(timer); sizes.disconnect(); sections.disconnect(); };
+  }, [ready, loading, opening]);
+  if ((!ready && loading) || opening) return <SidebarSkeleton/>;
+  return <aside ref={aside} className="sidebar scroll-fade">
     <ProfileLibraryNotice/>
     <PrinterSection/>
     {ready && <>
@@ -174,6 +186,5 @@ export function Sidebar() {
       </RailSection>
       <SliceSummary/>
     </>}
-    {!ready && loading && <RailSkeleton/>}
   </aside>;
 }

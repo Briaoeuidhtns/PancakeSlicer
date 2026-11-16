@@ -310,6 +310,12 @@ func (c *staticCache) serve(w http.ResponseWriter, r *http.Request, path string,
 		http.NotFound(w, r)
 		return
 	}
+	if script := []byte(nil); entry.page != nil && boot != nil {
+		if script = boot(r); script != nil {
+			precompressedResponse(withBoot(entry.page, script), nil, nil).serve(w, r, st.Name(), contentType, policy, st.ModTime())
+			return
+		}
+	}
 	entry.response.serve(w, r, st.Name(), contentType, policy, st.ModTime())
 }
 
@@ -329,6 +335,7 @@ func (c *staticCache) entry(path string, st os.FileInfo) (staticEntry, bool) {
 		sum := sha256.Sum256(b)
 		entry.build = hex.EncodeToString(sum[:6])
 		b = bytes.Replace(b, []byte("</head>"), []byte(`<meta name="orca-build" content="`+entry.build+`"></head>`), 1)
+		entry.page = b
 	}
 	entry.response = precompressedResponse(b, sibling(path+".gz", st), sibling(path+".br", st))
 	c.files[path] = entry

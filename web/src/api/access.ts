@@ -141,7 +141,8 @@ export const failureCode = (error: unknown) => (error as ApiError)?.code ?? (err
 
 export async function responseError(response: Response): Promise<ApiError> {
   const text = await response.text();
-  let message = `${response.status} ${response.statusText}: ${text.slice(0, 300)}`;
+  let message = [502, 503, 504].includes(response.status) ? 'Oops, we can\'t reach the service right now.'
+    : text.trim() ? `${response.status} ${response.statusText}: ${text.slice(0, 300)}` : `${response.status} ${response.statusText}`;
   const details: Partial<ApiError> = {};
   try {
     const j = JSON.parse(text);

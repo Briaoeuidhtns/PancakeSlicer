@@ -153,7 +153,7 @@ const realApi: Api = {
     };
   },
   async cancel(id) {
-    await mutation(`/api/jobs/${id}`, { method: 'DELETE' });
+    await (await mutation(`/api/jobs/${id}`, { method: 'DELETE' })).text();
   },
   downloadUrl: (id) => `/api/jobs/${id}/download`,
   movesUrl: (id) => `/api/jobs/${id}/moves`,

@@ -1,4 +1,6 @@
 import { OrderBar } from './OrderBar';
+import { phoneSheetQuery } from '../workspace-sheet';
+import { Skeleton } from './Skeleton';
 import { loadSource, noteViewerProgress, viewerFirstMoves, viewerReady, viewerError, scrubViewer } from '../flow/viewer';
 import { Suspense, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { getState, printerPreset, setState, subscribeStore, useStore } from '../state/store';
@@ -489,6 +491,17 @@ export function PreviewView() {
           headAction={methods ? <Suspense fallback={null}><DoneMethods /></Suspense> : before && <Suspense fallback={null}><DoneComparing /></Suspense>}
           explain={explainKey}
         />
+      )}
+      {job.state === 'done' && !methods && !data?.header && !data?.error && (
+        <div className={phoneSheetQuery.matches ? 'legend closed' : 'legend'} role="status" aria-busy="true" aria-label="Loading toolpaths">
+          <div className="lg-head"><Skeleton width={88} height={14} style={{ margin: '7px 0' }} /></div>
+          {!phoneSheetQuery.matches && <><div className="lg-summary">
+            {[0, 1].map((i) => <div key={i} className="lg-stat"><Skeleton width={84} height={22} style={{ margin: '2px 0' }} /><Skeleton width={56} height={10} style={{ margin: '3px 0' }} /></div>)}
+          </div>
+          <div className="lg-scroll"><div className="lg-roles">
+            {[70, 60, 75, 55, 80, 65, 50, 60].map((w, i) => <div key={i} className="lg-role-row"><Skeleton block width={14} height={6} /><Skeleton width={`${w}%`} height={10} /><Skeleton width={36} height={10} /></div>)}
+          </div></div></>}
+        </div>
       )}
       {methods && !data?.header && (
         <div className="legend" aria-label="Legend">

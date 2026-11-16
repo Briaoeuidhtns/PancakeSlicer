@@ -25,7 +25,7 @@ export function presetValue(s: State, type: PresetType, key: string, slot = 0): 
 }
 
 export function settingValue(s: State, type: PresetType, key: string, slot = 0, target: ChangeTarget = {}): ConfigValue | undefined {
-  let value = effectiveConfig(s, type, slot)[key] ?? OPTIONS[key]?.default as ConfigValue | undefined;
+  let value: ConfigValue | undefined = effectiveConfig(s, type, slot)[key];
   if (type !== 'process') return value;
   const object = s.objects.find((o) => o.id === target.object);
   if (!object) return value;
@@ -64,7 +64,7 @@ export function selectChanges(s: State, type: PresetType, slot = 0): SettingChan
   const project = type === 'filament' ? s.projectPresets?.filaments[slot] : s.projectPresets?.[type];
   const plate = type === 'process' ? s.projectPlates.find((p) => p.index === s.plateIndex) : undefined;
   const global = effectiveConfig(s, type, slot);
-  const globalValue = (key: string) => global[key] ?? OPTIONS[key]?.default as ConfigValue | undefined;
+  const globalValue = (key: string): ConfigValue | undefined => global[key];
   for (const key of new Set([...Object.keys(project ?? {}), ...Object.keys(plate?.settings ?? {}), ...Object.keys(edits)])) {
     const now = global[key];
     if (now === undefined || !profileHolds(type, key)) continue;

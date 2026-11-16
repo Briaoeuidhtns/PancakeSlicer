@@ -150,4 +150,5 @@
 @media (max-width: 599px) { :root.orca-parity .modal.palette { top: 0; transform: none; height: auto; max-height: 80dvh; } }
 
 :where(.orca-parity) .ask-message { white-space: pre-line; overflow-wrap: anywhere; }
+:where(.orca-parity) .ask-problem { margin: var(--s-1) 0 0; color: var(--warn); font: var(--t-small); overflow-wrap: anywhere; }
 :where(.orca-parity) .ask-choices { display: grid; gap: var(--s-2); }

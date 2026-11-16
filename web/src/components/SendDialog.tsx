@@ -7,6 +7,7 @@ import { valueAt } from '../multinozzle/config';
 import { nozzleCount } from '../profiles/view';
 import { useEffect, useMemo, useReducer, useState, type ReactNode } from 'react';
 import { SlotChip } from './SlotChip';
+import { Skeleton } from './Skeleton';
 import { printerModel } from '../printers/capabilities';
 import { Check } from './Check';
 import { confirmDialog } from './Ask';

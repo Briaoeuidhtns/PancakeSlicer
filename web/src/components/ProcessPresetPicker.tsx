@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react';
-import { getState, resolvePreset, setState, useStore } from '../state/store';
+import { openSlideOutEditor } from '../navigation';
+import { useStore } from '../state/store';
+import { profileInfo } from '../profiles/view';
 import { AddPrintMenu } from '../profiles/AddPrintMenu';
 import { requestPreset } from './PresetCombo';
 import { listProfiles } from '../profiles/pickerSource';
@@ -17,7 +19,7 @@ export function ProcessPresetPicker() {
     const hidden = currentEntry('process', process, entries);
     if (hidden) entries = [...entries, hidden];
     const ordered = [...entries].sort((a, b) => a.name.localeCompare(b.name));
-    const items: PickerItem[] = ordered.map((p) => ({ id: p.key, label: p.name, meta: p === hidden ? NOT_COMPATIBLE : undefined, search: `${p.name} ${p.vendor}`, disabled: p.reason }));
+    const items: PickerItem[] = ordered.map((p) => ({ id: p.key, label: p.name, meta: p === hidden ? UNAVAILABLE : undefined, search: `${p.name} ${p.vendor}`, disabled: p.reason }));
     return [{ id: 'profiles', title: '', items } as PickerGroup];
   };
   const pick = (id: string) => {

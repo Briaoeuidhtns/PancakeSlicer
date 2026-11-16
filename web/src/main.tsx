@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import App from './App';
+import App, { preloadProjects } from './App';
+import { urlRoute } from './flow/routes';
 import { init } from './actions';
 import { startProjects } from './flow/project';
 import { loadTab } from './options';
@@ -9,7 +10,7 @@ import { preloadViews, whenIdle } from './preloadable';
 import { preloadCovers, preloadImages, printerCatalog } from './profiles/catalog-reads';
 import { printerCover } from './profiles/metadata';
 import { listProfiles } from './profiles/pickerSource';
-import { getState, resolvePreset } from './state/store';
+import { getState, resolvePreset, setState } from './state/store';
 export function start() {
   void initialiseSavedPreferences().catch(() => {});
 
@@ -25,10 +26,12 @@ export function start() {
     }).catch(() => {}));
   }).catch(() => {});
 
-  createRoot(document.getElementById('root')!).render(
+  const render = () => createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <App />
     </StrictMode>,
   );
+  if (urlRoute().kind === 'projects') { setState({ tab: 'projects' }); void preloadProjects().then(render, render); }
+  else render();
   window.addEventListener('pagehide', () => { void import('./saved-preferences').then(m=>m.flushSavedPreferences()).catch(()=>{}); });
 }

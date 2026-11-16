@@ -1,4 +1,6 @@
-import { Component, useEffect, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
+import { bootFolders, bootProjects } from '../boot-shape';
+import { HeldText, Skeleton } from '../components/Skeleton';
+import { Component, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import { ActionMenu, type MenuEntry } from '../components/Menu';
 import { Check } from '../components/Check';
 import { Dropdown } from '../components/Dropdown';
@@ -131,6 +133,21 @@ class Boundary extends Component<{children:ReactNode},{failed:boolean}> {
   componentDidCatch(error:unknown){console.warn('Projects',error);}
   render(){return this.state.failed ? <div className="projects"><div className="pj-empty" role="alert"><strong>Projects unavailable</strong><button type="button" className="btn" onClick={()=>{refreshProjects();this.setState({failed:false});}}>Retry</button></div></div> : this.props.children;}
 }
+function ProjectsSkeleton({ view, home }: { view: string; home: boolean }) {
+  const count = bootProjects(), rows = Array.from({ length: Math.min(count ?? Infinity, view === 'list' ? 8 : 12) }, (_, i) => i);
+  const folders = home ? [...bootFolders()].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })) : [];
+  return <div className="pj-scroll" role="status" aria-busy="true" aria-label="Loading projects">
+    {folders.length > 0 && <div className="pj-tiles" aria-hidden="true">{folders.map((name, i) => <div key={i} className="pj-tile"><button type="button" className="pj-tile-open" disabled tabIndex={-1}><span className="pj-tile-text">
+      <HeldText className="pj-name" text={name}/><HeldText className="pj-sub" text="0 projects"/></span></button><button type="button" className="icon-btn pj-icon" disabled tabIndex={-1}/></div>)}</div>}
+    {home && rows.length > 0 && <div className="pj-section"><h2>Recent</h2><button type="button" className="link" disabled tabIndex={-1}>Show all</button></div>}
+    {view === 'list'
+      ? <div className="pj-list">{rows.map((i) => <div key={i} className="pj-item pj-skel"><span className="pj-cell"><span className="pj-mini"><Skeleton block width="100%" height="100%"/></span></span>
+          <span className="pj-cell pj-title"><Skeleton width="50%" height={12}/></span><span className="pj-cell"><Skeleton width={48} height={10}/></span><span className="pj-cell"><Skeleton width={72} height={10}/></span><span/></div>)}</div>
+      : <div className="pj-grid">{rows.map((i) => <div key={i} className="pj-item pj-skel"><div className="pj-thumb"><Skeleton block width="100%" height="100%"/></div>
+          <div className="pj-meta"><span className="pj-name"><Skeleton width="60%" height={12} style={{ margin: '3px 0' }}/></span><span className="pj-sub"><Skeleton width="45%" height={10} style={{ margin: '3px 0' }}/></span></div></div>)}</div>}
+  </div>;
+}
+
 export default function ProjectsView(){return <Boundary><Projects/></Boundary>;}
 
 function Projects() {
@@ -369,7 +386,7 @@ function Projects() {
   ];
   const crumbs=placeFolder?folderPath(folders,placeFolder.id):[];
   const title=searching?'Search':placeFolder?placeFolder.name:inTrash?'Trash':PLACES.find(x=>x.kind===place.kind)?.label ?? 'Home';
-  const loading=inTrash?!trash && !trashError:!list;
+  const loading=inTrash?!trash && !trashError:!list || place.kind==='home' && folderState.state==='loading';
   const failed=inTrash?trashError:status.state==='failed'?status.error:folderState.state==='failed'?folderState.error:null;
   const empty=inTrash?'Trash is empty':place.kind==='favorites'?'No favorites':place.kind==='recent'?'Nothing edited this week':place.kind==='unsorted'?'Nothing unsorted':placeFolder?'Drag projects here':'No projects yet';
   const item=(p:ProjectMeta)=><Item key={p.id} p={p} view={view} trash={inTrash} current={!inTrash && p.id===current} selected={selectedSet.has(p.id)} selecting={selected.length>0} focused={p.id===focusKey} favorite={favorites.has(p.id)} canFavorite={prefsLoaded} renaming={renaming===p.id} blocked={blocked(p.id) || retrying===p.id}
@@ -439,7 +456,7 @@ function Projects() {
         <button type="button" className="btn-ghost" disabled={busy || selected.some(blocked)} onClick={()=>void remove(selected)}>Move to Trash</button>
         <button type="button" className="btn-ghost pj-clear" onClick={()=>dispatch({type:'CLEAR'})}>Clear</button>
       </div>}
-      {loading ? <div className="pj-empty" role="status">Loading…</div>
+      {loading ? <ProjectsSkeleton view={view} home={place.kind==='home'}/>
         : <div className="pj-scroll scroll-fade">
           {tiles}
           {place.kind==='home' && !searching && shown.length>0 && <div className="pj-section"><h2>Recent</h2><button type="button" className="link" onClick={()=>go({kind:'recent'})}>Show all</button></div>}

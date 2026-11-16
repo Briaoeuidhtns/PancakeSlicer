@@ -65,6 +65,7 @@ const LibraryPage = preloadable(() => import('./profiles/LibraryPage').then((m) 
 const DeviceView = preloadable(() => import('./printers/DeviceView').then((m) => ({ default: m.DeviceView })));
 const PreviewView = preloadable(() => loadPreviewView().then((viewer) => ({ default: viewer })));
 const ProjectsView = preloadable(() => import('./projects/ProjectsView'));
+export const preloadProjects = ProjectsView.preload;
 const Palette = preloadable(() => import('./commands/Palette'));
 
 import { useSyncExternalStore } from 'react';

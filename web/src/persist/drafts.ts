@@ -104,7 +104,7 @@ const serviceDraftStore: ProjectDraftStore = {
   }),
   remove: (id, throughSequence) => mutate(id, async () => {
     if ((acknowledged.get(id) ?? 0) > throughSequence) return;
-    try { await serviceRequest(`${draftPath(id)}?throughSequence=${throughSequence}`, { method: 'DELETE' }, true); }
+    try { await (await serviceRequest(`${draftPath(id)}?throughSequence=${throughSequence}`, { method: 'DELETE' }, true))?.text(); }
     catch (error) {
       if ((error as {status?:number}).status === 409) return;
       throw error;

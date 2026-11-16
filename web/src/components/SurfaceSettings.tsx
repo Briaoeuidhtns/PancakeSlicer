@@ -78,13 +78,13 @@ const CLEARANCE_GROUP = 'Head clearance', TUNING_GROUP = 'Advanced non-planar';
 export function SurfaceSettings({config,system,availability,editor,unsaved,uiMode,legacyKeys = [],readOnly = false}: {config:Config;system:Config;availability:MethodAvailabilityResult;editor?:ProfileFields;unsaved:(key:string)=>boolean;uiMode:OptionMode;legacyKeys?:string[];readOnly?:boolean}) {
   const engine = useEngineHealth();
   useEffect(() => {void probeEngine();}, []);
-  const mode = String(config.nonplanar_mode ?? OPTIONS.nonplanar_mode?.default ?? 'off');
+  const mode = String(config.nonplanar_mode ?? '');
   const slantObject = useStore((s) => !!slantTarget(s));
   const lone = useStore((s) => s.objects.length === 1 ? s.objects[0] : null);
   const focusKey = useStore((s) => s.settingsFocus?.type === 'process' ? s.settingsFocus.key : null);
-  const wave = String(config[WAVE] ?? OPTIONS[WAVE]?.default ?? 'off');
+  const wave = String(config[WAVE] ?? '');
   const problem = methodSelectionProblem(availability,config);
-  const value = (key: string) => config[key] ?? OPTIONS[key]?.default;
+  const value = (key: string) => config[key];
   const on = (key: string) => ['1', 'true'].includes(String(value(key)));
   const write = (key: string, next: string) => editor ? editor.set(key, next) : next === String(system[key] ?? '') ? resetOption('process', key) : setOption('process', key, next);
   const row = (key: string, extra: {label?: string; value?: string; definition?: Partial<OptionDef>; onSet?: (key: string, value: ConfigValue) => void; rowKey?: string} = {}) =>
@@ -92,7 +92,7 @@ export function SurfaceSettings({config,system,availability,editor,unsaved,uiMod
       dirty={unsaved(key)} onSet={extra.onSet ?? editor?.set} onReset={editor?.reset} disabled={readOnly} mode={mode} definition={extra.definition}/> : null;
   const selector = (key: string, target: 'mode' | 'wave') => {
     const def = OPTIONS[key]; if (!def) return null;
-    const current = key === 'nonplanar_mode' ? mode : String(config[key] ?? def.default ?? 'off');
+    const current = key === 'nonplanar_mode' ? mode : String(config[key] ?? '');
     const methods = availability.methods.filter(m => m.target === target);
     const modes = target === 'mode' ? methodModes(current, availability) : undefined;
     const values = modes?.enum_values ?? [...new Set(['off', ...methods.map(m => m.id), current])];

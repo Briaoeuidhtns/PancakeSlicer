@@ -33,8 +33,8 @@ export default function GcodeWorkbench({ type, slot = 0, keys, labels, config, s
   const key = keys.includes(selected) ? selected : keys[0];
   const configKeys = useMemo(() => [...new Set([...Object.keys(system), ...Object.keys(config)])], [config, system]);
   const shortLabel = (k: string) => (labels[k] || OPTIONS[k]?.label || k).replace(/\s*G-?code$/i, '') || k;
-  const value = (k: string) => text(config[k] ?? system[k] ?? OPTIONS[k]?.default as ConfigValue | undefined);
-  const template = (k: string) => text(system[k] ?? OPTIONS[k]?.default as ConfigValue | undefined);
+  const value = (k: string) => text(config[k] ?? system[k]);
+  const template = (k: string) => text(system[k]);
   const set = editor?.set ?? ((k: string, v: ConfigValue) => setOption(type, k, v, slot));
   const reset = editor?.reset ?? ((k: string) => resetOption(type, k, slot));
   const commit = (k: string, next: string) => {

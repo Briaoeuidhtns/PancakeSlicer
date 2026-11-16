@@ -71,13 +71,14 @@ export async function rememberSpool(printer: string, slot: string, filament: str
 export function usePrinterSlots(printer: string | undefined): { slots?: PrinterSlots; error?: string; set(next: PrinterSlots): void } {
   const trays = useStore((s) => (printer ? JSON.stringify(s.printerConnections.status[printer]?.trays ?? null) : ''));
   const library = useStore((s) => s.profileLibraryRevision);
-  const [state, setState] = useState<{ key: string; slots?: PrinterSlots; error?: string }>({ key: '' });
+  const [state, setState] = useState<{ key: string; printer?: string; slots?: PrinterSlots; error?: string }>({ key: '' });
   const key = `${printer}\n${trays}\n${library}`;
   useEffect(() => {
     if (!printer) return;
     let live = true;
-    readPrinterSlots(printer).then((slots) => live && setState({ key, slots }), (e: unknown) => live && setState({ key, error: e instanceof Error ? e.message : String(e) }));
+    readPrinterSlots(printer).then((slots) => { if (live) setState({ key, printer, slots }); }, (e: unknown) => live && setState({ key, printer, error: e instanceof Error ? e.message : String(e) }));
     return () => { live = false; };
-  }, [key]);
-  return { slots: state.slots, error: state.error, set: (slots) => setState({ key, slots }) };
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  const current = state.key === key, same = state.printer === printer;
+  return { slots: current || same ? state.slots : undefined, error: current ? state.error : undefined, set: (slots) => setState({ key, printer, slots }) };
 }

@@ -4,7 +4,6 @@ import { effectiveConfig, getState, setState, updateObject, type Instance, type 
 import type { Config } from '../api/types';
 import { instanceBox } from './geometry';
 import { loadHead, type Head } from '../heads';
-import { OPTIONS } from '../options';
 
 const DEG = Math.PI / 180;
 const KEYS = ['nonplanar_slant_angle', 'nonplanar_slant_direction', 'nonplanar_slant_start_height'] as const;
@@ -155,7 +154,7 @@ export async function refreshSlantLimit() {
   if (!head) return setState({ slant: { ...now, limit: undefined } });
   const width = span(instanceBox(t.o, t.inst), now.dir);
   const duct = ['1', 'true'].includes(String(process.nonplanar_ignore_duct ?? '0'));
-  const tolerance = num(process.nonplanar_collision_tolerance ?? OPTIONS.nonplanar_collision_tolerance?.default, 0);
+  const tolerance = num(process.nonplanar_collision_tolerance, 0);
   const limit = slantLimit(head, now.dir, Math.max(width, 1e-3), num(objectValue(s, t.o, 'layer_height'), 0.2), duct, tolerance);
   setState({ slant: { ...now, limit } });
 }

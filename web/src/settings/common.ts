@@ -44,9 +44,9 @@ export function hiddenReason(k: string, s: State, type?: PresetType, slot?: numb
   const element = (v: unknown) => Array.isArray(v) && /^(?:floats|ints|percents)/.test(def.type)
     ? v[Math.min(idx, v.length - 1)] : v;
   if (emptyRanges.has(key)) {
-    const v = element(value === undefined ? def.default : value);
+    const v = element(value);
     if (empty(v) || key.startsWith('nozzle_temperature_range_') && Number(scalar(v)) === 0) return 'empty';
-  } else if (/^(?:float|int|percent)/.test(def.type) && empty(element(value === undefined && !def.nullable ? def.default : value))) return 'empty';
+  } else if (/^(?:float|int|percent)/.test(def.type) && empty(element(value))) return 'empty';
   const machine = effectiveConfig(s, 'machine');
   const off = (name: string) => {
     const v = scalar(machine[name]);

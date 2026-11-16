@@ -145,8 +145,10 @@ func NewServer(c Config, jobs *JobManager, catalog *resolve.Catalog) http.Handle
 	mux.HandleFunc("GET /api/emboss-fonts", s.embossFonts)
 	mux.HandleFunc("GET /api/user-heads", s.listUserHeads)
 	mux.HandleFunc("POST /api/user-heads", s.saveUserHead)
-	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) { fail(w, 404, "Unknown API endpoint.") })
-	mux.Handle("/", spaFiles(c.StaticDir, c.Resources))
+	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) { fail(w, 404, "unknown_api_endpoint") })
+	mux.HandleFunc("GET /api/boot", s.getBoot)
+	mux.HandleFunc("POST /api/slot-offer", s.postSlotOffer)
+	mux.Handle("/", spaFiles(c.StaticDir, c.Resources, s.bootScript))
 	if c.Metrics {
 		mux.HandleFunc("GET /metrics", s.metrics)
 	}
@@ -1064,7 +1066,7 @@ func spaFiles(dir, resources string, boot func(*http.Request) []byte) http.Handl
 			http.NotFound(w, r)
 			return
 		}
-		cache.serve(w, r, file, st)
+		cache.serve(w, r, file, st, boot)
 	})
 }
 
