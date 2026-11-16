@@ -11,10 +11,10 @@ export async function serviceRequest(path: string, init: RequestInit = {}, missi
     if (!response.ok) throw await responseError(response);
     return response;
   } catch (error) {
-    const status = (error as { status?: number })?.status;
+    const { status, code } = (error ?? {}) as { status?: number; code?: string };
     if (missing && status === 404) return null;
-    const name = status === 409 ? 'ProjectConflictError' : status === 410 ? 'ProjectDeletedError'
-      : status === 507 || error instanceof Error && error.message === 'Oops! Server storage is full' ? 'QuotaExceededError' : 'ProjectServiceError';
+    const name = code === 'revision_conflict' || code === 'draft_conflict' ? 'ProjectConflictError' : status === 410 ? 'ProjectDeletedError'
+      : status === 507 ? 'QuotaExceededError' : 'ProjectServiceError';
     throw Object.assign(error instanceof Error ? error : new Error(String(error)), { name });
   }
 }

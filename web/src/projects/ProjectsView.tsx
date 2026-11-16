@@ -248,8 +248,8 @@ function Projects() {
     setError(null);const undo:ProjectUndo[]=[],failed:string[]=[];
     for(const p of targets){const run=await deleteProject(p.id);if(run){const entry={id:p.id,name:p.name,run};undo.push(entry);projectUndos.set(p.id,entry);}else failed.push(p.name);}
       setSelection(s=>reduceSelection(s,{type:'SYNC',scope:'projects',visible:visible.filter(id=>!undo.some(p=>p.id===id))}));
-      if(failed.length)setError(`Moved ${undo.length} to Trash, but ${failed.length} couldn't be moved: ${failed.join(', ')}.`);
-      if(undo.length)toast(`${undo.length===1?undo[0].name:`${undo.length} projects`} moved to Trash`,{label:'Undo',run:()=>void restore(undo)},10000);
+      if(failed.length && undo.length)setError(`Moved ${undo.length} to Trash, but ${failed.length} couldn't be moved: ${failed.join(', ')}.`);
+      if(undo.length)toast('moved_trash', { value: undo.length===1?undo[0].name:`${undo.length} projects` }, { action: {label:'Undo',run:()=>void restore(undo)} });
     });
   };
   const onKey=(e:KeyboardEvent)=>{
@@ -423,11 +423,11 @@ function Projects() {
       {error && <div className="pj-line" role="alert"><span>{error}</span><button type="button" className="btn-ghost" onClick={()=>setError(null)}>Dismiss</button></div>}
       {commands.map(command=>{
         const pending=command.state==='preparing' || command.state==='sending',name=list?.find(p=>p.id===command.id)?.name ?? trash?.find(p=>p.id===command.id)?.name ?? command.name ?? 'Project';
-        const state=pending?'Saving…':command.state==='acknowledged'?'Saved':command.state==='conflict'?`Changed elsewhere: ${command.error}`:`Not saved: ${command.error}`;
+        const state=pending?'Saving…':command.state==='acknowledged'?'Saved':command.held?command.error:command.state==='conflict'?`Changed elsewhere: ${command.error}`:`Not saved: ${command.error}`;
         return <div className={`pj-line${command.state==='failed'||command.state==='conflict'?' bad':''}`} key={command.operationId} aria-busy={pending} role="status">
           <span><strong>{commandVerb[command.kind]} {name}</strong><Sep/>{state}</span>
           {!pending && (command.kind!=='restore' || projectUndos.has(command.id) || trashRestores.has(command.id)) && <button type="button" className="btn" disabled={writing} onClick={()=>void retry(command)}>{command.state==='acknowledged'?'Finish':'Retry'}</button>}
-          {command.state==='conflict' && <button type="button" className="btn-ghost" disabled={writing} onClick={()=>void dismiss(command)}>Dismiss</button>}
+          {(command.state==='conflict' || command.held) && <button type="button" className="btn-ghost" disabled={writing} onClick={()=>void dismiss(command)}>Dismiss</button>}
         </div>;
       })}
       {!!projectUndos.size && !inTrash && <div className="pj-line"><span>{projectUndos.size} moved to Trash</span><button type="button" className="btn" disabled={writing} onClick={()=>void restore([...projectUndos.values()])}>{ops.value==='restoring'?'Restoring…':'Undo'}</button></div>}

@@ -62,7 +62,9 @@ function executeCommand(entry: PendingCommand): Promise<ProjectCommandAck | Proj
     entry.result = ack; entry.status.state = 'acknowledged'; publishCommands();
     return ack;
   }).catch((error: unknown) => {
-    entry.status.state = (error as { status?: number })?.status === 409 ? 'conflict' : 'failed';
+    const e = error as { status?: number; code?: string };
+    entry.status.held = e?.code === 'lease_held' || e?.code === 'lease_lost';
+    entry.status.state = e?.status === 409 && !entry.status.held ? 'conflict' : 'failed';
     entry.status.error = error instanceof Error ? error.message : 'Oops! Couldn\'t update project'; publishCommands(); throw error;
   });
   entry.running = task;
@@ -117,7 +119,7 @@ export const serviceStore: ProjectStore = {
   subscribeCommands(listener) { commandListeners.add(listener); return () => { commandListeners.delete(listener); }; },
   discardRejectedCommand(operationId) {
     const found = [...commands].find(([, entry]) => entry.status.operationId === operationId);
-    if (!found || found[1].status.state !== 'conflict' || found[1].running) throw new Error('Wait until the save conflict finishes checking before discarding changes.');
+    if (!found || found[1].status.state !== 'conflict' && !found[1].status.held || found[1].running) throw new Error('Wait until the save conflict finishes checking before discarding changes.');
     commands.delete(found[0]); publishCommands();
   },
   referenceDocuments: () => required<ProfileReferenceDocuments>('/api/projects/references'),

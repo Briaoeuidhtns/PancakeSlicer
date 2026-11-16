@@ -21,6 +21,7 @@ export interface ProjectCommandAck { revision: number; operationId: string }
 export interface ProjectCommandStatus {
   operationId: string; id: string; kind: 'rename' | 'duplicate' | 'archive' | 'restore'; name?: string; newId?: string;
   expectedRevision: number | null; state: 'preparing' | 'sending' | 'failed' | 'conflict' | 'acknowledged'; error: string | null;
+  held?: boolean;
 }
 
 export interface ProjectStore {

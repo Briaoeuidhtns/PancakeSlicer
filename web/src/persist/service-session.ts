@@ -1,4 +1,5 @@
-import { createServiceDocument } from './service-document';
+import { createServiceDocument, type KeyMerge } from './service-document';
+import { mergeSetups, type BlankSetup } from './blank-setup';
 import { requireWorkspaceService } from './service';
 const owners = (remote: unknown, local: unknown) => [...new Set([...(local as string[] ?? []), ...(remote as string[] ?? [])])].slice(0, 32);
 const latest = (_remote: unknown, local: unknown) => local;
@@ -16,10 +17,13 @@ export const serviceSessionSnapshot = session.snapshot;
 export const subscribeServiceSession = session.subscribe;
 export const sessionDocument = () => session.snapshot().document;
 export const loadServiceSession = session.hydrate;
-export async function patchServiceSession(document: Record<string, unknown>): Promise<void> {
-  const captured = structuredClone(document);
-  await requireWorkspaceService();
-  session.patch(captured);
-}
+export function patchServiceSession(document: SessionDocument): void { session.patch(structuredClone(document)); }
+export const retryServiceSession = () => session.flush(true);
 export const flushServiceSession = session.flush;
+export const sessionSettled = (): Promise<void> => new Promise((resolve) => {
+  const settled = () => !['debounced', 'writing'].includes(session.snapshot().state);
+  if (settled()) return resolve();
+  const stop = session.subscribe(() => { if (settled()) { stop(); resolve(); } });
+});
 export const reloadServiceSession = session.reload;
+export const serviceSessionUnreachable = () => session.machine.get().context.transient;

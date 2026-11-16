@@ -336,6 +336,14 @@ async function start(ready: Promise<unknown>) {
   try { if (store) Object.assign(session, await lineage.catch(() => journalTools().then((tools) => tools.draftSession(session.owner)))); }
   catch (error) { toast(errorText(error)); }
   journal = createDraftJournal<Doc>(session.owner, draftStorage, codec, (id) => draftActivity!.beginProjectDraftMutation(id));
+  void (async () => {
+    const [{ watchBlankSetup, forgetBlankSetup }, { loadServiceSession }] = await Promise.all([import('../persist/blank-setup'), import('../persist/service-session')]);
+    await loadServiceSession();
+    await new Promise<void>((resolve) => { if (getState().profileLibraryLoad.state === 'ready') { resolve(); return; } const stop = subscribeStore(() => { if (getState().profileLibraryLoad.state === 'ready') { stop(); resolve(); } }); });
+    watchBlankSetup(() => project.get().value === 'blank');
+    let wasBlank = project.get().value === 'blank';
+    project.subscribe(({ value }) => { if (wasBlank && value === 'saving') forgetBlankSetup(); wasBlank = value === 'blank'; });
+  })().catch(() => {});
   observed = snapshot();
   subscribeStore(() => {
     if (adopting || versionShown() || leaving) return;

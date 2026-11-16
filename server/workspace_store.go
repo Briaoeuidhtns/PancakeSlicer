@@ -24,12 +24,14 @@ import (
 )
 
 type workspaceStore struct {
-	mu     sync.Mutex
-	root   string
-	cached *workspaceData
-	stamp  [2]int64
-	views  map[string]any
-	leases map[string]*projectLease
+	mu             sync.Mutex
+	root           string
+	cached         *workspaceData
+	stamp          [2]int64
+	views          map[string]any
+	leases         map[string]*projectLease
+	watch          sync.Mutex
+	sessionChanged chan struct{}
 }
 
 func (st *workspaceStore) sessionWritten() {

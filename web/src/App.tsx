@@ -38,6 +38,7 @@ const Navigator = preloadable(() => import('./components/Navigator').then((m) =>
 const PlateChoice = preloadable(() => import('./components/PlateChoice'));
 const EmptyPlate = preloadable(() => import('./components/FirstRun'));
 const SavedPreferencesNotice = preloadable(() => import('./components/SavedPreferencesNotice'));
+const SessionNotice = preloadable(() => import('./components/SessionNotice'));
 const LeaseBar = preloadable(() => import('./components/LeaseBar'));
 const Setup = preloadable(() => import('./onboarding/Setup'));
 const ProjectStatus = preloadable(() => import('./projects/ProjectStatus').then((m) => ({ default: m.ProjectStatus })));

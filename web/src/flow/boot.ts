@@ -80,8 +80,6 @@ export async function startFlows() {
     }
   };
   subscribeStore(observe); observe();
-  project.subscribe(({ context }) => rememberRecovery({ projectId: context.id }));
-  rememberRecovery({ projectId: project.get().context.id });
   onLeaveDocument(() => {
     if (active && !jobTerminal(job.get().value)) void active.cancel().catch(() => {});
     active?.stop(); active = null; seenId = undefined;
