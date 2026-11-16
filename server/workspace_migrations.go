@@ -156,13 +156,13 @@ func retireUnreachableDrafts(d *workspaceData) {
 			Doc       map[string]json.RawMessage `json:"doc"`
 		}
 		json.Unmarshal(d.Drafts[key].Document, &x)
-		if x.Kind == "snapshot" {
-			retire(key, fmt.Sprintf("a snapshot of project %s, which nothing offers", x.ProjectID))
-			continue
-		}
 		if saved := projectDocument(d, x.ProjectID); saved != nil && x.Doc != nil && sameDocument(x.Doc, saved) {
 			retire(key, fmt.Sprintf("its document is project %s's saved one", x.ProjectID))
 			continue
+		}
+		if x.Kind == "snapshot" {
+			d.Drafts[key] = offeredSnapshot(d.Drafts[key])
+			log.Printf("workspace migration: draft %s, a snapshot of project %s (base revision %d), is offered when the project opens", key, x.ProjectID, x.Base)
 		}
 		dirty = append(dirty, draft{key, x.ProjectID, x.Base, max(x.EditedAt, x.UpdatedAt), x.Doc})
 	}
@@ -178,6 +178,22 @@ func retireUnreachableDrafts(d *workspaceData) {
 		kept = append(kept, x)
 	}
 	log.Printf("workspace migration: %d drafts kept, each offered when its project opens", len(d.Drafts))
+}
+
+func offeredSnapshot(dr workspaceDraft) workspaceDraft {
+	kind := func(raw json.RawMessage) json.RawMessage {
+		var m map[string]json.RawMessage
+		if json.Unmarshal(raw, &m) != nil || m == nil {
+			return raw
+		}
+		m["kind"] = json.RawMessage(`"dirty"`)
+		return must(json.Marshal(m))
+	}
+	dr.Document = kind(dr.Document)
+	if len(dr.Metadata) > 0 {
+		dr.Metadata = kind(dr.Metadata)
+	}
+	return dr
 }
 
 func dropPreference(d *workspaceData, key string) {
