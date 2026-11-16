@@ -38,8 +38,8 @@
 .device-fan > .orca-range { flex: 1; min-width: 0; }
 .device-row { --unit-w: 24px; }
 .device-row .number-box { flex: none; width: 96px; }
-.device-row .seg.slant-seg { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); width: 100%; }
-.device-row .seg.slant-seg > button { min-width: 0; padding: 0 var(--s-2); }
+.device-row .dropdown { width: 160px; max-width: 100%; }
+.device-row > .device-control-error { grid-column: 2; padding-top: 0; }
 .device-card > h2 { margin-bottom: var(--s-2); }
 .device-card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); margin-bottom: var(--s-4); }
 .device-camera { position: relative; min-width: 0; overflow: hidden; border-radius: var(--r-3); background: var(--sunken); }
@@ -150,3 +150,24 @@
   .device-job-meta { gap: var(--s-2) var(--s-3); }
   .device-camera-toolbar button { width: 36px; height: 36px; }
 }
+
+.device-slot-map { display: grid; grid-template-columns: minmax(40px, max-content) minmax(0, 280px); align-items: center; gap: var(--s-2); align-content: start; }
+.device-slot-map > h2 { grid-column: 1 / -1; }
+.device-slots-units, .device-slot-row { display: contents; }
+.device-slots-units > span, .device-slot-label { display: inline-flex; align-items: center; gap: var(--s-2); color: var(--ink-2); font: var(--t-body); white-space: nowrap; }
+.device-slot-label { justify-content: center; }
+.device-slots-units > span:first-child { padding-right: var(--s-2); }
+.device-slot-label .color-trigger.color-trigger { width: 20px; height: 20px; font-size: 11px; border-radius: 50%; }
+.device-slot-group { grid-column: 1 / -1; padding-top: var(--s-2); color: var(--ink-3); font: var(--t-small); }
+.device-offline { display: grid; gap: var(--s-5); align-content: start; }
+.device-offline .device-head { display: flex; align-items: center; gap: var(--s-4); }
+.device-offline .device-head img { width: 96px; height: 96px; object-fit: contain; }
+.device-offline .device-head h1 { margin: 0; font: var(--t-title); }
+.device-offline-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-2); margin: var(--s-1) 0 0; }
+.device-offline-line > .status-text { white-space: nowrap; }
+.device-offline-line > .device-network-off { flex: 1 1 100%; }
+.device-offline-line > .device-network-off { color: var(--ink-3); font: var(--t-small); }
+.device-connect { color: var(--accent-text); }
+.device-spool-text > .device-spool-report { font: var(--t-small); color: var(--ink-3); white-space: normal; overflow-wrap: anywhere; }
+.device-spool-text > .device-spool-why { color: var(--warn); }
+.device-spool-text > .device-spool-earlier { justify-self: start; font: var(--t-small); text-align: left; }

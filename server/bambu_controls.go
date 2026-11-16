@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"time"
 )
@@ -93,7 +94,9 @@ func (c *BambuControls) command(in bambuControlRequest) (map[string]any, error) 
 		if fan.Modern {
 			return map[string]any{"command": "set_fan", "fan_index": fan.Index, "speed": value}, nil
 		}
-		return map[string]any{"command": "gcode_line", "param": fmt.Sprintf("M106 P%d S%d\n", fan.Index, value*255/100)}, nil
+		step := (value + 5) / 10
+		gear := (3*step + 1) / 2
+		return map[string]any{"command": "gcode_line", "param": fmt.Sprintf("M106 P%d S%d\n", fan.Index, gear*17)}, nil
 	}
 	return nil, errors.New("Unrecognized printer control.")
 }
@@ -160,18 +163,21 @@ func (s *Server) deviceControl(w http.ResponseWriter, r *http.Request) {
 		fail(w, 409, err.Error())
 		return
 	}
-	if ok, retry := s.sends.allowBurst("control "+s.clientIP(r), 10); !ok {
+	if ok, retry := s.sends.allowBurst("device "+s.clientIP(r), deviceBurst, deviceRate); !ok {
 		w.Header().Set("Retry-After", fmt.Sprint(min(retry, 86400)))
 		fail(w, 429, "Whoa, slow down! Too many printer commands sent at once—wait a moment and try again.")
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), controlWait)
 	defer cancel()
 	if p.Kind == "bambu-lan" {
-		err = bambuScopedCommand(ctx, p, secret, scope, command)
-	} else {
-		err = controlHostDevice(ctx, p, secret, in)
+		result := s.runBambuCommand(ctx, p, secret, bambuCommand{scope: scope, body: command, codes: "control", what: "the " + in.Control + " change",
+			judge: shownBy(in.shownBy)})
+		audit(map[string]any{"event": "printer_device_control", "printer": p.Printer, "control": in.Control, "fan": in.Fan, "value": *in.Value, "client": s.clientIP(r), "state": result.State, "error": result.Error})
+		writeJSON(w, result.status(), result)
+		return
 	}
+	err = controlHostDevice(ctx, p, secret, in)
 	audit(map[string]any{"event": "printer_device_control", "printer": p.Printer, "control": in.Control, "fan": in.Fan, "value": *in.Value, "client": s.clientIP(r), "error": fmt.Sprint(err)})
 	if err != nil {
 		fail(w, 502, redact(err.Error(), secret))
@@ -179,4 +185,40 @@ func (s *Server) deviceControl(w http.ResponseWriter, r *http.Request) {
 	}
 	s.sends.hub.poke(p.Printer)
 	w.WriteHeader(204)
+}
+
+const controlWait = 10 * time.Second
+
+func (in bambuControlRequest) shownBy(st PrinterStatus) bool {
+	value := float64(*in.Value)
+	switch in.Control {
+	case "nozzle":
+		if len(st.NozzleTemps) > 0 {
+			for _, n := range st.NozzleTemps {
+				if in.Extruder != nil && n.ID == *in.Extruder {
+					return n.Target == value
+				}
+			}
+			return false
+		}
+		return st.Nozzle != nil && st.Nozzle.Target == value
+	case "bed":
+		return st.Bed != nil && st.Bed.Target == value
+	case "chamber":
+		return st.Chamber != nil && st.Chamber.Target == value
+	case "fan":
+		reported, ok := st.Fans[in.Fan]
+		if !ok || st.Controls == nil {
+			return false
+		}
+		if st.Controls.Fans[in.Fan].Modern {
+			return reported == value
+		}
+		return math.Abs(reported-float64((*in.Value+5)/10*10)) <= 5
+	case "speed":
+		return st.SpeedMode != nil && float64(*st.SpeedMode) == value
+	case "light":
+		return st.Light != nil && *st.Light == (value == 1)
+	}
+	return false
 }

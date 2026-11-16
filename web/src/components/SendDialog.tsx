@@ -15,7 +15,9 @@ import { Modal, ModalBody, ModalFooter, ModalTitle } from './Modal';
 import { download, exportFilename, outputKind } from '../actions';
 import { printerSend, usePrinterSend } from '../flow/transfer';
 import { filamentColor } from '../plater/filamentColor';
-import { effectiveConfig, getState, resolvePreset, toast, useStore } from '../state/store';
+import { effectiveConfig, getState, toast, useStore } from '../state/store';
+import { profileInfo, selectionValues, variantOf } from '../profiles/view';
+import { lineRead, loadedLine, tuningFor } from '../catalog/read';
 import { ConnectionEditor } from '../printers/ConnectionEditor';
 import { materialNote, slotOf } from '../printers/slots';
 import { setupOf } from '../printers/device-slots';
@@ -27,7 +29,12 @@ import { slotFilaments } from '../profiles/slots';
 
 const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const errorText = (e: unknown) => sentence(e instanceof Error ? e.message : String(e));
-const setupName = (key: string) => resolvePreset(getState(), 'machine', key).user?.name ?? key;
+const setupName = (id: string) => profileInfo(getState(), 'machine', id).name || id;
+function useFilamentLines(products: string[]) {
+  const [, bump] = useReducer((x: number) => x + 1, 0), key = products.join('\n');
+  useEffect(() => { const stops = products.filter(Boolean).map((p) => lineRead('filaments', p).subscribe(bump)); return () => stops.forEach((stop) => stop()); }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  return products.map((p) => p ? loadedLine('filaments', p) : undefined);
+}
 
 function closeSend(close: () => void) {
   const { value, context } = printerSend.machine.get();
@@ -41,9 +48,9 @@ export default function SendDialog({ close: dismiss }: { close: () => void }) {
   const close = () => closeSend(dismiss);
   const plate = useStore((s) => s.printer);
   const choices = useStore((s) => {
-    const base = resolvePreset(s, 'machine', s.printer).base?.name;
+    const variant = variantOf(s, s.printer).id;
     return [s.printer, ...s.printerConnections.connections.filter((c) => c.printer && c.printer !== s.printer
-      && resolvePreset(s, 'machine', c.printer).base?.name === base).map((c) => c.printer)].join('\n');
+      && !!variant && variantOf(s, c.printer).id === variant).map((c) => c.printer)].join('\n');
   }).split('\n');
   const [target, setTarget] = useState(plate);
   const printer = choices.includes(target) ? target : plate;
@@ -60,7 +67,7 @@ export default function SendDialog({ close: dismiss }: { close: () => void }) {
         ? <Dropdown className="combo" value={printer} aria-label="Printer" onValueChange={setTarget} options={choices.map((k) => ({ value: k, label: setupName(k) }))} />
         : <span className="send-target-name">{name}</span>}
       <span className="send-target-state status-text" data-tone={presence?.tone ?? 'offline'}>{presence?.label ?? 'Not connected'}</span>
-      {connection && <button type="button" className="btn slant send-action" onClick={() => setEditing(!editing)}>{editing ? 'Done' : 'Connection'}</button>}
+      {connection && <button type="button" className="btn send-action" onClick={() => setEditing(!editing)}>{editing ? 'Done' : 'Connection'}</button>}
     </div>
     {(!connection || editing) && <ConnectionEditor key={printer} printer={printer} name={name} onSaved={() => setEditing(false)} />}
   </>;
@@ -90,12 +97,13 @@ function SendView({ close, printer, head, edit }: { close: () => void; printer: 
   const [flowCali, setFlowCali] = useState(false);
   const [vibration, setVibration] = useState(true);
   const [timelapse, setTimelapse] = useState(false);
-  const filamentKey = useStore((s) => JSON.stringify(s.filamentSlots.map((name, i) => {
-    const config = effectiveConfig(s, 'filament', i), base = resolvePreset(s, 'filament', name).base;
-    return { key: name, type: valueAt(config.filament_type, 0), color: filamentColor(s, i + 1), name: (base?.name ?? name).replace(/\s+@.*$/, ''),
-      vendor: valueAt(config.filament_vendor, 0), id: base?.filament_id, requiredHRC: Number(valueAt(config.required_nozzle_HRC, 0, '0')),
-      printable: Number(valueAt(config.filament_printable, 0, '3')), compatibility: Number(valueAt(config.filament_extruder_compatibility, 0, '0')),
-      ...(extruderCount(effectiveConfig(s, 'machine')) > 1 && String(nozzleAssignments(s).filament_map_mode ?? '').includes('Manual') ? { extruder: assignedExtruder(s, i) } : {}) };
+  const products = useStore((s) => slotFilaments(s).map((id) => profileInfo(s, 'filament', id).product ?? '').join('\n')).split('\n');
+  const lines = useFilamentLines(products), variant = useStore((s) => variantOf(s, printer).id);
+  const filamentKey = useStore((s) => JSON.stringify(slotFilaments(s).map((key, i) => {
+    const config = effectiveConfig(s, 'filament', i), line = lines[i];
+    return { key, type: valueAt(config.filament_type, 0), color: filamentColor(s, i + 1), name: products[i] || profileInfo(s, 'filament', key).name,
+      vendor: valueAt(config.filament_vendor, 0), id: line && tuningFor(line, variant)?.source.filament_id, requiredHRC: Number(valueAt(config.required_nozzle_HRC, 0, '0')),
+      printable: Number(valueAt(config.filament_printable, 0, '3')), compatibility: Number(valueAt(config.filament_extruder_compatibility, 0, '0')) };
   })));
   const resolvedTypes = (JSON.parse(useStore((s) => JSON.stringify(slotFilaments(s).map((_, i) => { const v = selectionValues(s, 'filament', i); return v.state === 'ready' ? valueAt(v.values.filament_type, 0) : null; })))) as (string | null)[]).map((t) => t ?? undefined);
   const multiNozzle = useStore((st) => nozzleCount(st, printer)) > 1;
@@ -135,7 +143,6 @@ function SendView({ close, printer, head, edit }: { close: () => void; printer: 
     const current = printerSend.machine.get().context;
     if (current.jobId && (current.jobId !== jobId || current.target !== printer) && printerSend.machine.get().value !== 'sending') printerSend.reset();
   }, [jobId, printer]);
-  useEffect(() => setMapping(null), [printer]);
   useEffect(() => {
     setReadTrays(null); setAmsError('');
     if (!bambu || liveTrays) return;

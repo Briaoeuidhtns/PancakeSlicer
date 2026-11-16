@@ -39,7 +39,7 @@ export function PrintingChip() {
   const list = JSON.parse(jobs) as Job[];
   if (!list.length) return null;
   return <span className="print-rings">{list.map((j) =>
-    <button key={j.id} type="button" className="print-ring" data-paused={j.paused || undefined} onClick={openDevice}
+    <button key={j.id} type="button" className="print-ring" data-paused={j.paused || undefined} onClick={() => openDevice()}
       aria-label={`${j.detail}. Open Device`} data-truncated="true" data-full-text={j.detail}>
       <svg viewBox="0 0 28 28" aria-hidden="true">
         <circle className="print-ring-track" cx="14" cy="14" r={R} />

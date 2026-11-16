@@ -150,11 +150,8 @@ function useViewChoices() {
 function ViewChoices() {
   const v = useViewChoices();
   return <>
-    <span className="rail-menus">
-      {v.hasObjects && <MenuButton className="rail-menu" label={`Apply to: ${v.objects ? 'Objects' : 'Project'}`} items={v.scopeItems}>{v.objects ? 'Per object' : 'Whole project'}<Caret/></MenuButton>}
-      <MenuButton className="rail-menu" label={`Settings detail: ${v.detailLabel}`} items={v.detailItems}>{v.detailLabel}<Caret/></MenuButton>
-    </span>
-    <MenuButton className="icon-btn rail-act rail-menus-folded" label="View options" items={[...(v.hasObjects ? [{label: 'Apply to', header: true} as MenuEntry, ...v.scopeItems, 'sep' as const] : []), {label: 'Detail', header: true}, ...v.detailItems]}><Glyph name="settings"/></MenuButton>
+    <span className="rail-menus"><MenuButton className="rail-menu" label={`Settings detail: ${label}`} items={items}>{label}<Caret/></MenuButton></span>
+    <MenuButton className="icon-btn rail-act rail-menus-folded" label="View options" items={[{label: 'Detail', header: true}, ...items]}><Glyph name="view"/></MenuButton>
   </>;
 }
 function SliceSummary() {

@@ -3,7 +3,7 @@ import { MODE_LABELS } from '../nonplanar-mode';
 import { Dropdown } from './Dropdown';
 import { Caret } from './Caret';
 import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { effectiveConfig, getState } from '../state/store';
+import { effectiveConfig, getState, useStore } from '../state/store';
 import {
   CURVED_COLOR, EXTENDED_VIEWS, clearanceColor, NONPLANAR_COLORS, NONPLANAR_HUES, NONPLANAR_PLANAR_COLOR, OPTION_COLORS, RANGE_PALETTE, ROLE_COLORS, VIEW_TYPES, hexToRgb,
   nonplanarIndexColor, type ColorRange, type RGB, type Ranges, type ViewType,
@@ -233,6 +233,7 @@ export const Legend = memo(function Legend(props: {
         <div className="lg-summary">
           <div className="lg-stat"><span className="lg-stat-v">{spacedTime(total)}</span><span className="lg-stat-k">Print time</span></div>
           <div className="lg-stat"><span className="lg-stat-v">{spacedWeight(totalG)}</span><span className="lg-stat-k">Filament{totalMm > 0 && <><Sep/>{(totalMm / 1000).toFixed(2)} m</>}</span></div>
+          {!!printStats?.total_toolchanges && <div className="lg-stat"><span className="lg-stat-v">{printStats.total_toolchanges}</span><span className="lg-stat-k">{manualSwap ? 'Pauses' : 'Filament changes'}</span></div>}
         </div>
       )}
       {open && (

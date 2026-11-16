@@ -3,7 +3,6 @@ import { useStore, setState, getState } from '../state/store';
 import { listProfiles } from '../profiles/pickerSource';
 import { printerCover } from '../profiles/metadata';
 import { confirmDialog } from '../components/Ask';
-import { Segmented } from '../components/kit';
 import { Check } from '../components/Check';
 import { NumberBox } from '../components/Field';
 import { Range } from '../components/Range';
@@ -17,6 +16,7 @@ import { trayCode } from '../multinozzle/ams';
 import { Dropdown } from '../components/Dropdown';
 import { outcomeLabel, outcomeTone } from './sendOutcome';
 import type { Transfer } from '../flow/transfer';
+import { useDeviceControl, type DeviceCommand } from './device-controls';
 import './printers.css';
 import './device.css';
 import { pickSlotFilament, reportedUnits, setupOf } from './device-slots';
@@ -33,24 +33,29 @@ function ControlRow({ label, children }: { label: string; children(labelId: stri
   return <div className="device-row" role="group" aria-labelledby={id}><span id={id} className="device-row-label">{label}</span>{children(id)}</div>;
 }
 
-function TemperatureRow({ label, actual, target, min = 0, max, editable, busy, apply }: { label: string; actual: number; target?: number; min?: number; max: number; editable: boolean; busy: boolean; apply(value: number): void }) {
-  return <ControlRow label={label}>{(id) => <span className="device-row-value"><span className="device-row-actual">{Math.round(actual)} °C</span>
+const ControlError = ({ error }: { error: string | null }) => error ? <span className="control-error device-control-error" role="status">{error}</span> : null;
+
+function TemperatureRow({ printer, command, label, actual, target, min = 0, max, editable, offline }: { printer: string; command: DeviceCommand; label: string; actual: number; target?: number; min?: number; max: number; editable: boolean; offline: boolean }) {
+  const ctl = useDeviceControl(printer, command, target);
+  return <ControlRow label={label}>{(id) => <><span className="device-row-value"><span className="device-row-actual">{Math.round(actual)} °C</span>
     <span className="device-row-to">Target</span>
-    {editable ? <NumberBox labelledBy={id} label={`${label} target`} value={target ?? 0} min={min} max={max} unit="°C" readOnly={busy} onCommit={apply} />
-      : <span>{target != null ? Math.round(target) : '–'} °C</span>}</span>}</ControlRow>;
+    {editable ? <NumberBox labelledBy={id} label={`${label} target`} value={ctl.value ?? 0} min={min} max={max} unit="°C" readOnly={offline} onCommit={ctl.commit} />
+      : <span>{target != null ? Math.round(target) : '–'} °C</span>}</span><ControlError error={ctl.error} /></>}</ControlRow>;
 }
 
-function FanRow({ label, value, min, max, busy, apply }: { label: string; value: number; min: number; max: number; busy: boolean; apply(value: number): void }) {
+function FanRow({ printer, fan, label, reported, min, max, offline }: { printer: string; fan: string; label: string; reported: number; min: number; max: number; offline: boolean }) {
+  const ctl = useDeviceControl(printer, { control: 'fan', fan }, reported), value = ctl.value ?? reported, apply = ctl.commit;
   const [shown, show] = useState(value), timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => { if (!timer.current) show(value); }, [value]);
   useEffect(() => () => clearTimeout(timer.current), []);
-  const send = (v: number) => { show(v); clearTimeout(timer.current); timer.current = setTimeout(() => { timer.current = undefined; apply(v); }, 300); };
-  return <ControlRow label={label}>{(id) => <span className="device-row-value device-fan">
-    <Range aria-label={`${label} speed`} value={shown} min={min} max={max} disabled={busy} onValueChange={show} onValueCommit={send} />
-    <NumberBox labelledBy={id} label={label} value={shown} min={min} max={max} unit="%" readOnly={busy} onCommit={send} /></span>}</ControlRow>;
+  const send = (raw: number) => { const v = Math.min(max, Math.max(min, Math.round(raw / 10) * 10)); show(v); clearTimeout(timer.current); timer.current = setTimeout(() => { timer.current = undefined; apply(v); }, 300); };
+  return <ControlRow label={label}>{(id) => <><span className="device-row-value device-fan">
+    <Range aria-label={`${label} speed`} value={shown} min={min} max={max} step={10} disabled={offline} onValueChange={show} onValueCommit={send} />
+    <NumberBox labelledBy={id} label={label} value={shown} min={min} max={max} unit="%" readOnly={offline} onCommit={send} /></span><ControlError error={ctl.error} /></>}</ControlRow>;
 }
 
 const duration = (seconds: number) => { const n = Math.max(0, Math.round(seconds / 60)); return n >= 60 ? `${Math.floor(n / 60)} h ${n % 60} min` : `${n} min`; };
+const preciseDuration = (seconds: number) => { const n = Math.max(0, Math.floor(seconds)); return `${n >= 3600 ? `${Math.floor(n / 3600)}h ` : ''}${Math.floor(n / 60) % 60}m ${n % 60}s`; };
 const clock = (date: string | number) => new Date(date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 const when = (date: string) => {
   const d = new Date(date), days = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(date).setHours(0, 0, 0, 0)) / 864e5);
@@ -59,7 +64,6 @@ const when = (date: string) => {
 const jobName = (file: string) => file.replace(/\.gcode(\.3mf)?$/i, '').replace(/\.3mf$/i, '');
 const SPEEDS = [{ id: '1', label: 'Silent' }, { id: '2', label: 'Standard' }, { id: '3', label: 'Sport' }, { id: '4', label: 'Ludicrous' }] as const;
 type History = Transfer;
-type Control = 'nozzle' | 'bed' | 'chamber' | 'fan' | 'speed' | 'light';
 
 function Spool({ printer, tray, trays, report, chosen, choices, busy, choose, swatch }: { printer: string; tray: Tray; trays: readonly Tray[];
   report?: SlotReport; chosen: string; choices: { key: string; name: string; type: string }[]; busy: boolean; choose(filament: string): void;
@@ -145,19 +149,20 @@ function DevicePanel({ connection, model, cover, status, live }: { connection: P
     setPending(true); setError('');
     try { await work(); return true; } catch (e) { setError(e instanceof Error ? e.message : 'Oops! The printer didn\'t accept that command'); return false; } finally { setPending(false); }
   };
-  const busy = !live || !status?.online || pending;
+  const offline = !live || !status?.online, busy = offline || pending;
   const bambu = connection.kind === 'bambu-lan', temperaturesEditable = bambu || ['moonraker', 'octoprint', 'duet'].includes(connection.kind);
   const capabilities = printerCapabilities(model);
   const { lightLabel } = capabilities;
   const dual = (status?.nozzle_temps?.length ?? 0) > 1;
   const active = status?.state === 'printing' || status?.state === 'paused', canStop = active || status?.state === 'busy';
-  const set = (control: Control, value: number, fan?: string, extruder?: number) => act(() => controlDevice(connection.printer, { control, value, fan, extruder }));
   const run = (action: 'pause' | 'resume' | 'stop') => void act(async () => {
     if (action === 'stop' && !await confirmDialog('Stop print', `Stop the print on ${connection.name}? Once stopped, it can't be resumed.`, ['Stop print', 'Cancel'], true)) return;
     await controlPrinter(connection.printer, action);
   });
   const fans = bambu ? Object.entries(status?.fans ?? {}).filter(([name]) => status?.controls?.fans?.[name] && capabilities.fans.includes(name)).sort(([a], [b]) => ['part', 'auxiliary', 'chamber'].indexOf(a) - ['part', 'auxiliary', 'chamber'].indexOf(b)) : [];
-  const light = bambu ? status?.light : undefined, speed = bambu ? status?.speed_mode : undefined;
+  const lightCtl = useDeviceControl(connection.printer, { control: 'light' }, bambu && status?.light != null ? Number(status.light) : undefined);
+  const speedCtl = useDeviceControl(connection.printer, { control: 'speed' }, bambu ? status?.speed_mode : undefined);
+  const light = lightCtl.value === undefined ? undefined : lightCtl.value === 1, speed = speedCtl.value;
   const trays = status?.trays ?? [], units = new Map<number, Tray[]>();
   const reports = usePrinterSlots(bambu ? connection.printer : undefined);
   const stored = useStore((s) => setupOf(s, connection.printer));
@@ -173,15 +178,14 @@ function DevicePanel({ connection, model, cover, status, live }: { connection: P
   const runningId = canStop && status?.file ? history.find((job) => job.start && job.outcome === 'printing' && !job.job_end && job.filename === status.file)?.id : undefined;
   const filename = status?.file || (!canStop ? lastJob?.filename : undefined);
   const end = jobEnd(status);
-  const platePrinter = useStore((s) => s.printer), [syncing, setSyncing] = useState(false);
-  const useFilaments = () => { setSyncing(true); void import('../plater/amsSync').then((m) => m.syncAms(connection.printer)).finally(() => setSyncing(false)); };
   const eta = canStop && status?.remaining_s != null ? clock(new Date(status.at).getTime() + status.remaining_s * 1000) : undefined;
-  const temperatureRows = <>{status?.nozzle_temps?.length ? status.nozzle_temps.map((t) => <TemperatureRow key={t.id} label={dual ? `${t.id === 0 ? 'Right' : 'Left'} nozzle` : 'Nozzle'} actual={t.actual} target={t.target} max={350} editable={bambu} busy={busy} apply={(v) => void set('nozzle', v, undefined, t.id)} />)
-    : status?.nozzle && <TemperatureRow label="Nozzle" actual={status.nozzle.actual} target={status.nozzle.target} max={300} editable={temperaturesEditable && (status.nozzles?.length ?? 0) <= 1} busy={busy} apply={(v) => void set('nozzle', v)} />}
-    {status?.bed && <TemperatureRow label="Bed" actual={status.bed.actual} target={status.bed.target} max={120} editable={temperaturesEditable} busy={busy} apply={(v) => void set('bed', v)} />}
-    {capabilities.chamber && status?.chamber && <TemperatureRow label="Chamber" actual={status.chamber.actual} target={status.controls?.chamber ? status.chamber.target : undefined} min={status.controls?.chamber?.min} max={status.controls?.chamber?.max ?? 60} editable={bambu && !!status.controls?.chamber} busy={busy} apply={(v) => void set('chamber', v)} />}</>;
+  const temperatureRows = <>{status?.nozzle_temps?.length ? status.nozzle_temps.map((t) => <TemperatureRow key={t.id} label={dual ? `${t.id === 0 ? 'Right' : 'Left'} nozzle` : 'Nozzle'} actual={t.actual} target={t.target} max={350} editable={bambu} offline={offline} printer={connection.printer} command={{ control: 'nozzle', extruder: t.id }} />)
+    : status?.nozzle && <TemperatureRow label="Nozzle" actual={status.nozzle.actual} target={status.nozzle.target} max={300} editable={temperaturesEditable && (status.nozzles?.length ?? 0) <= 1} offline={offline} printer={connection.printer} command={{ control: 'nozzle' }} />}
+    {status?.bed && <TemperatureRow label="Bed" actual={status.bed.actual} target={status.bed.target} max={120} editable={temperaturesEditable} offline={offline} printer={connection.printer} command={{ control: 'bed' }} />}
+    {capabilities.chamber && status?.chamber && <TemperatureRow label="Chamber" actual={status.chamber.actual} target={status.controls?.chamber ? status.chamber.target : undefined} min={status.controls?.chamber?.min} max={status.controls?.chamber?.max ?? 60} editable={bambu && !!status.controls?.chamber} offline={offline} printer={connection.printer} command={{ control: 'chamber' }} />}</>;
   const phrase = !live ? 'Reconnecting…' : canStop ? status?.state === 'paused' ? 'Paused' : status?.state === 'busy' ? 'Printer busy' : 'Printing' : end.label;
   const tone = !live ? 'offline' : canStop ? status?.state === 'busy' ? undefined : 'printing' : end.tone;
+  const moonraker = connection.kind === 'moonraker', jobDuration = moonraker ? preciseDuration : duration;
   const progress = canStop ? status?.progress : status?.state === 'finished' && filename ? 1 : undefined;
   const ams = bambu && trays.length > 0 && <Card title="AMS & filament" className="device-ams">{[...units].sort(([a], [b]) => a - b).map(([id, slots]) => <div className="device-ams-unit" key={id}>{units.size > 1 && <h3>AMS {id + 1}</h3>}<div className="device-slots">{slots.sort((a, b) => a.slot - b.slot).map((tray) => <Spool key={tray.id} printer={connection.printer} tray={tray} trays={trays} report={reportOf(tray)} chosen={chosenOf(tray)} swatch={swatchOf(tray)} choices={choices} busy={busy || choosing} choose={choose(tray)} />)}</div></div>)}
           {trays.filter((t) => t.kind === 'external' && !(feedOf(model)?.external === 'exclusive' && units.size > 0)).map((tray) => <div className="device-external" key={tray.id}><Spool printer={connection.printer} tray={tray} trays={trays} report={reportOf(tray)} chosen={chosenOf(tray)} swatch={swatchOf(tray)} choices={choices} busy={busy || choosing} choose={choose(tray)} /></div>)}
@@ -191,8 +195,8 @@ function DevicePanel({ connection, model, cover, status, live }: { connection: P
     <RecordProblem kind="machine" id={connection.printer} className="device-problem"/>
     {error && <p role="alert" className="device-command-error">{error}</p>}
     <div className="device-layout">
-      <div className="device-left"><DeviceCamera printer={connection.printer} cover={cover} light={light} lightLabel={lightLabel} cameraLabel={capabilities.cameraLabel} busy={busy} onLight={() => void set('light', light ? 0 : 1)} />
-        {ams}
+      <div className="device-left"><DeviceCamera printer={connection.printer} cover={cover} light={light} lightLabel={lightLabel} cameraLabel={capabilities.cameraLabel} busy={offline} onLight={() => lightCtl.commit(light ? 0 : 1)} />
+        {ams || amsSkeleton || <SlotsCard printer={connection.printer} live={live}/>}
       </div>
       <div className="device-status">
         <section className="device-job" aria-label="Print job">
@@ -200,16 +204,21 @@ function DevicePanel({ connection, model, cover, status, live }: { connection: P
           <div className="device-job-content">
             <strong className="device-job-name">{filename ? jobName(filename) : 'No active print'}</strong>
             <span className="device-job-state">{status?.job && filename && <span>Plate {status.job.plate}</span>}<span className="status-text" data-tone={tone}>{phrase}</span>{!canStop && live && end.reason && <span>{end.reason}</span>}</span>
-            {progress != null && <div className="device-job-progress"><progress max="1" value={progress} aria-label="Print progress" /><strong>{Math.round(progress * 100)}<small>%</small></strong></div>}
-            {canStop && <div className="device-job-meta">{status?.layer != null && status.layer > 0 && <span>Layer {status.layer}{status.layers != null && ` / ${status.layers}`}</span>}{status?.remaining_s != null && <span>{duration(status.remaining_s)} left</span>}{eta && <span>ETA {eta}</span>}</div>}
+            {progress != null && <div className="device-job-progress"><progress max="1" value={progress} aria-label="Print progress" /><strong>{moonraker ? Math.floor(progress * 100) : Math.round(progress * 100)}<small>%</small></strong></div>}
+            {canStop && moonraker && <div className="device-job-meta">
+              {status?.elapsed_s != null && <span>Elapsed {preciseDuration(status.elapsed_s)}</span>}
+              <span>File estimate {status?.file_estimate_s != null ? preciseDuration(status.file_estimate_s) : '–'}</span>
+              <span>Slicer estimate {status?.slicer_estimate_s != null ? preciseDuration(status.slicer_estimate_s) : '–'}</span>
+            </div>}
+            {canStop && <div className="device-job-meta">{status?.layer != null && status.layer > 0 && <span>Layer {status.layer}{status.layers != null && ` / ${status.layers}`}</span>}{status?.remaining_s != null && <span>{jobDuration(status.remaining_s)} left</span>}{eta && <span>ETA {eta}</span>}</div>}
           </div>
-          {canStop && <div className="device-job-actions">{active && <button className="btn slant" type="button" disabled={busy} onClick={() => run(status?.state === 'paused' ? 'resume' : 'pause')}>{status?.state === 'paused' ? 'Resume' : 'Pause'}</button>}<button className="btn btn-danger" type="button" disabled={busy} onClick={() => run('stop')}>Stop</button></div>}
+          {canStop && <div className="device-job-actions">{active && <button className="btn" type="button" disabled={busy} onClick={() => run(status?.state === 'paused' ? 'resume' : 'pause')}>{status?.state === 'paused' ? 'Resume' : 'Pause'}</button>}<button className="btn btn-danger" type="button" disabled={busy} onClick={() => run('stop')}>Stop</button></div>}
         </section>
         {temperatures && <Card title="Temperatures" className="device-temperatures">{temperatureRows}</Card>}
         {(fans.length > 0 || speed != null || light != null) && <Card title="Controls" className="device-controls">
-          {fans.map(([name, value]) => { const capability = status!.controls!.fans![name]; return <FanRow key={name} label={name === 'part' ? 'Part fan' : name === 'auxiliary' ? 'Aux fan' : `${name[0].toUpperCase()}${name.slice(1)} fan`} value={value} min={capability.min} max={capability.max} busy={busy} apply={(v) => void set('fan', v, name)} />; })}
-          {speed != null && <ControlRow label="Speed">{() => <Segmented label="Print speed" value={String(speed)} options={SPEEDS.map((o) => ({ ...o, disabled: busy }))} onChange={(value) => void set('speed', Number(value))} />}</ControlRow>}
-          {light != null && <ControlRow label={lightLabel}>{(id) => <Check aria-labelledby={id} checked={light} disabled={busy} onCheckedChange={(on) => void set('light', on ? 1 : 0)} />}</ControlRow>}
+          {fans.map(([name, value]) => { const capability = status!.controls!.fans![name]; return <FanRow key={name} printer={connection.printer} fan={name} label={name === 'part' ? 'Part fan' : name === 'auxiliary' ? 'Aux fan' : `${name[0].toUpperCase()}${name.slice(1)} fan`} reported={value} min={capability.min} max={capability.max} offline={offline} />; })}
+          {speed != null && <ControlRow label="Speed">{() => <><Dropdown aria-label="Print speed" value={String(speed)} disabled={offline} options={SPEEDS.map((o) => ({ value: o.id, label: o.label }))} onValueChange={(value) => speedCtl.commit(Number(value))} /><ControlError error={speedCtl.error} /></>}</ControlRow>}
+          {light != null && <ControlRow label={lightLabel}>{(id) => <><Check aria-labelledby={id} checked={light} disabled={offline} onCheckedChange={(on) => lightCtl.commit(on ? 1 : 0)} /><ControlError error={lightCtl.error} /></>}</ControlRow>}
         </Card>}
         {!!status?.messages?.length && <Card title={`Printer messages (${status.messages.length})`} className="device-messages"><ul>{status.messages.map((message, i) => <li key={`${message.code}:${i}`}><p>{message.message || message.code}</p>{message.message && <span>{message.code}</span>}</li>)}</ul></Card>}
       </div>
@@ -221,23 +230,35 @@ function DevicePanel({ connection, model, cover, status, live }: { connection: P
   </article>;
 }
 
-const openConnection = (printer: string) => setState({ presetUx: { kind: 'presets', type: 'machine', name: printer } });
+const openConnection = (printer: string) => openLibrary('machine', { name: printer });
+
+function OfflinePanel({ printer, name, cover }: { printer: string; name: string; cover?: string }) {
+  const enabled = useStore((s) => s.printerConnections.enabled);
+  return <div className="device-panel device-offline">
+    <header className="device-head"><PrinterRender cover={cover} /><div><h1>{name}</h1>
+      <RecordProblem kind="machine" id={printer}/>
+      <p className="device-offline-line"><span className="status-text" data-tone="offline">Not connected</span>{enabled ? <button type="button" className="btn-ghost device-connect" onClick={() => openConnection(printer)}>Connect</button>
+        : <span className="device-network-off">Printer connections are switched off on this PancakeSlicer service right now.</span>}</p></div></header>
+    <SlotsCard printer={printer} live={false}/>
+  </div>;
+}
 
 export function DeviceView() {
   const connections = useStore((s) => s.printerConnections);
   const records = useStore((s) => s.records.printers);
   const platePrinter = useStore((s) => s.printer), [selected, select] = useState(platePrinter);
-  const setups = listProfiles('machine').map((setup) => ({ ...setup, model: printerModel(getState(), setup.key) }));
-  const printers = connections.connections.filter((c) => c.printer && setups.some((p) => p.key === c.printer));
-  const current = printers.find((c) => c.printer === selected) ?? printers[0];
-  const shown = current && setups.find((p) => p.key === current.printer);
-  useEffect(() => { document.querySelector('.device-printer[aria-pressed=true]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }, [current?.printer]);
+  const setups = records.filter((r) => !r.archived).map((r) => ({ key: r.id, name: r.name, vendor: r.vendor, model: r.model })).sort((a, b) => a.name.localeCompare(b.name));
+  const printers = setups.map((setup) => ({ setup, connection: connections.connections.find((c) => c.printer === setup.key) }));
+  const current = printers.find((p) => p.setup.key === selected) ?? printers[0];
+  const asked = useStore((s) => s.device);
+  useEffect(() => { if (asked.at && asked.printer) select(asked.printer); }, [asked.at]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { document.querySelector('.device-printer[aria-pressed=true]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }, [current?.setup.key]);
   return <main className="device-view" aria-label="Device">
-    <aside className="device-list" aria-label="Printers"><h2>Printers</h2><div className="device-printer-rows">{printers.map((connection) => {
-      const setup = setups.find((p) => p.key === connection.printer)!;
-      const own = connection.name && connection.name !== setup.name ? connection.name : connection.serial ? `Serial ${connection.serial.slice(-4)}` : undefined;
-      const cover = printerCover(setup.vendor, setup.config, setup.model), state = presenceStatus(connections.live, connection, connections.status[connection.printer], true);
-      return <button type="button" className="device-printer" aria-pressed={connection.printer === current?.printer} key={connection.printer} onClick={() => select(connection.printer)}>
+    <aside className="device-list" aria-label="Printers"><h2>Printers</h2><div className="device-printer-rows">{printers.map(({ setup, connection }) => {
+      const own = connection?.name && connection.name !== setup.name ? connection.name : connection?.serial ? `Serial ${connection.serial.slice(-4)}` : undefined;
+      const cover = printerCover(setup.vendor, {}, setup.model);
+      const state = connection ? presenceStatus(connections.live, connection, connections.status[connection.printer], true) : { label: 'Not connected', tone: 'offline' as const };
+      return <button type="button" className="device-printer" aria-pressed={setup.key === current?.setup.key} key={setup.key} onClick={() => select(setup.key)}>
         <PrinterRender cover={cover} /><span><strong>{setup.name}</strong>{own && <span className="device-printer-own">{own}</span>}<span className="status-text" data-tone={state.tone}>{state.label}</span></span>
       </button>;
     })}{!printers.length && <p className="device-muted">No printers connected</p>}</div>

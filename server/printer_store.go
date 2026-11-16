@@ -540,7 +540,7 @@ func (s *Server) testConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	client := s.clientIP(r)
-	if ok, retry := s.sends.allowBurst("test "+client, 10); !ok {
+	if ok, retry := s.sends.allowBurst("test "+client, 10, sendRate); !ok {
 		w.Header().Set("Retry-After", fmt.Sprint(min(retry, 86400)))
 		fail(w, 429, "Too many connection tests in a row—wait a few seconds and try again.")
 		return
@@ -610,7 +610,7 @@ func (s *Server) amsConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	client := s.clientIP(r)
-	if ok, retry := s.sends.allowBurst("ams "+client, 10); !ok {
+	if ok, retry := s.sends.allowBurst("ams "+client, 10, sendRate); !ok {
 		w.Header().Set("Retry-After", fmt.Sprint(min(retry, 86400)))
 		fail(w, 429, "Checking AMS too frequently—wait a few seconds and try again.")
 		return
@@ -647,16 +647,30 @@ func (s *Server) controlConnection(w http.ResponseWriter, r *http.Request) {
 		fail(w, 409, err.Error())
 		return
 	}
-	if ok, retry := s.sends.allowBurst("control "+s.clientIP(r), 10); !ok {
+	if ok, retry := s.sends.allowBurst("control "+s.clientIP(r), 10, sendRate); !ok {
 		w.Header().Set("Retry-After", fmt.Sprint(min(retry, 86400)))
-		fail(w, 429, "Whoa, slow down! Too many printer commands sent at once—wait a moment and try again.")
+		fail(w, 429, "slow_down_too_many")
+		return
+	}
+	if p.Kind == "bambu-lan" {
+		ctx, cancel := context.WithTimeout(r.Context(), controlWait)
+		defer cancel()
+		shows := map[string]func(PrinterStatus) bool{
+			"pause":  func(st PrinterStatus) bool { return st.State == "paused" },
+			"resume": func(st PrinterStatus) bool { return st.State == "printing" },
+			"stop": func(st PrinterStatus) bool {
+				return st.State != "printing" && st.State != "paused" && st.State != "busy"
+			},
+		}[body.Action]
+		result := s.runBambuCommand(ctx, p, secret, bambuCommand{scope: "print", body: map[string]any{"command": body.Action, "param": ""},
+			codes: "control", what: "the " + body.Action, judge: shownBy(shows)})
+		audit(map[string]any{"event": "printer_" + body.Action, "printer": p.Printer, "kind": p.Kind, "client": s.clientIP(r), "state": result.State, "error": result.Error})
+		writeJSON(w, result.status(), result)
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	switch p.Kind {
-	case "bambu-lan":
-		err = controlBambu(ctx, p, secret, body.Action)
 	case "duet":
 		err = controlDuet(ctx, p, secret, body.Action)
 	case "flashforge":

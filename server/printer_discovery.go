@@ -43,7 +43,7 @@ func (s *Server) discoverPrinters(w http.ResponseWriter, r *http.Request) {
 		fail(w, 403, "Printer network connections are disabled on this server.")
 		return
 	}
-	if ok, retry := m.allowBurst("discover "+s.clientIP(r), 3); !ok {
+	if ok, retry := m.allowBurst("discover "+s.clientIP(r), 3, sendRate); !ok {
 		w.Header().Set("Retry-After", fmt.Sprint(min(retry, 86400)))
 		fail(w, 429, "Network scan was just run—wait a few seconds before scanning again.")
 		return

@@ -360,6 +360,8 @@ type SendManager struct {
 const sendBurst = 3
 const sendRate = 0.1
 
+const deviceBurst, deviceRate = 20, 2
+
 func NewSendManager(store *printerStore) *SendManager {
 	m := &SendManager{store: store, busy: map[string]bool{}, live: map[string]*Job{}, cards: map[string]string{}, buckets: map[string]tokenBucket{}}
 	m.hub = newStatusHub(m)
@@ -400,7 +402,7 @@ func (m *SendManager) connections() []*PrinterConfig {
 
 func (m *SendManager) allow(client string) (bool, int) { return m.allowBurst(client, sendBurst) }
 
-func (m *SendManager) allowBurst(client string, burst float64) (bool, int) {
+func (m *SendManager) allowBurst(client string, burst, rate float64) (bool, int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	now := time.Now()
@@ -408,11 +410,11 @@ func (m *SendManager) allowBurst(client string, burst float64) (bool, int) {
 	if !ok {
 		b = tokenBucket{burst, now}
 	}
-	b.tokens = math.Min(burst, b.tokens+now.Sub(b.at).Seconds()*sendRate)
+	b.tokens = math.Min(burst, b.tokens+now.Sub(b.at).Seconds()*rate)
 	b.at = now
 	if b.tokens < 1 {
 		m.buckets[client] = b
-		return false, int(math.Ceil((1 - b.tokens) / sendRate))
+		return false, int(math.Ceil((1 - b.tokens) / rate))
 	}
 	b.tokens--
 	m.buckets[client] = b

@@ -1,4 +1,6 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useMachine } from '../flow/fsm';
+import { connectionEditFor, type ConnectionEditContext, type ConnectionOp } from '../flow/connection-edit';
 import { confirmDialog } from '../components/Ask';
 import { Dropdown } from '../components/Dropdown';
 import { getState, toast, useStore, type State } from '../state/store';
@@ -7,7 +9,7 @@ import { loadedPrinterVendors, printerCatalog, type CatalogModel } from '../prof
 import type { PrinterRecord } from '../profiles/records';
 import {
   adoptConnection, connectionOf, discoverPrinters, KIND_LABEL, removeConnection, saveConnection, statusLine, statusTone, tempLine, testConnection, unassigned,
-  type ConnectionEdit, type ConnectionKind, type ConnectionTest, type Discovered,
+  type ConnectionEdit, type ConnectionKind, type Discovered,
 } from './connections';
 import { printerModel } from './capabilities';
 import './printers.css';
@@ -51,10 +53,7 @@ export function ConnectionEditor({ printer, name, onSaved }: { printer: string; 
   const [user, setUser] = useState(saved?.username ?? '');
   const [secret, setSecret] = useState('');
   const [model, setModel] = useState(saved?.model ?? '');
-  const [test, setTest] = useState<ConnectionTest | null>(null);
-  const [found, setFound] = useState<{ printers: Discovered[]; notes: string[] } | null>(null);
-  const [working, setWorking] = useState('');
-  const [error, setError] = useState('');
+  const m = connectionEditFor(printer), snap = useMachine(m), { test, found, error } = snap.context, working = snap.value !== 'idle';
   const sameKind = saved?.kind === kind;
   const bambu = kind === 'bambu-lan', flashforge = kind === 'flashforge', http = !!kind && !bambu && !flashforge && kind !== 'bambu-connect';
   const digest = kind === 'prusalink' && auth === 'digest';
@@ -68,12 +67,9 @@ export function ConnectionEditor({ printer, name, onSaved }: { printer: string; 
   const touched = () => m.send({ type: 'EDIT' });
   const changed = <T,>(set: (v: T) => void) => (v: T) => { set(v); touched(); };
 
-  const run = async (what: string, action: () => Promise<void>) => {
-    setWorking(what); setError('');
-    try { await action(); } catch (e) { setError(errorText(e)); } finally { setWorking(''); }
-  };
-  const modelOf = (preset?: string) => preset ? machines.find((m) => m.name === preset)?.model : undefined;
-  const setupModel = useStore((s) => String(resolvePreset(s, 'machine', printer).config?.printer_model ?? '')) || undefined;
+  const run = (op: ConnectionOp, action: () => Promise<Partial<ConnectionEditContext> | void>) =>
+    m.send({ type: 'RUN', op, run: () => action().catch((e: unknown) => { throw new Error(errorText(e)); }) });
+  const modelOf = (d: Discovered) => foundModel(d)?.id;
   const use = async (d: Discovered) => {
     const found = modelOf(d);
     if (found && setupModel && found !== setupModel && !await confirmDialog('Printer model mismatch',
@@ -129,20 +125,18 @@ export function ConnectionEditor({ printer, name, onSaved }: { printer: string; 
           <input className="text" type="password" autoComplete="new-password" value={secret} placeholder={hasSecret ? 'Stored' : ''} onChange={(e) => changed(setSecret)(e.target.value)} />
         </label>
       </>}
-      {working === 'test' && <div role="status" className="hint-text">Testing…</div>}
+      {snap.value === 'testing' && <div role="status" className="hint-text">Testing…</div>}
       {test && (test.ok ? <div role="status" className="send-ok">{sentence(test.message)}</div>
         : <div role="alert" className="warning-text">{STAGE[test.stage] ? `${STAGE[test.stage]}: ` : ''}{test.message}</div>)}
       {error && <div role="alert" className="warning-text">{error}</div>}
       <div className="connection-buttons">
-        <button type="button" className="btn" disabled={!ready || !!working} onClick={() => void run('test', async () => {
-          const mine = fields.current;
+        <button type="button" className="btn" disabled={!ready || working} onClick={() => run('test', async () => {
           const result = await testConnection(printer, edit());
-          if (mine !== fields.current) return;
-          setTest(result);
           if (result.ok && result.model && bambu) setModel(result.model);
+          return { test: result };
         })}>Test connection</button>
-        <button type="button" className="btn-primary" disabled={!ready || !!working} onClick={() => void run('save', async () => {
-          await saveConnection(printer, edit()); setSecret(''); toast(`Saved connection for ${name}!`); onSaved?.();
+        <button type="button" className="btn-primary" disabled={!ready || working} onClick={() => run('save', async () => {
+          await saveConnection(printer, edit()); setSecret(''); toast('saved_connection', { name }); onSaved?.();
         })}>Save</button>
         <button type="button" className="btn" disabled={working} onClick={() => run('find', async () => ({ found: (await Promise.all([discoverPrinters(), printerCatalog()]))[0] }))}>{snap.value === 'finding' ? 'Searching…' : 'Find printers'}</button>
         {saved && <button type="button" className="btn-ghost connection-remove" disabled={working} onClick={() => run('remove', async () => { await removeConnection(printer); toast('removed_connection', { name }); })}>Remove connection</button>}
@@ -166,8 +160,8 @@ export function ConnectionEditor({ printer, name, onSaved }: { printer: string; 
                   {d.connection === 'cloud' && <span className="found-tag">cloud mode</span>}
                 </td>
                 <td className="found-acts">
-                  <button type="button" className="btn-ghost" disabled={!!working} aria-label={`Use ${label} for ${name}`} onClick={() => void use(d)}>Use</button>
-                  {preset && <button type="button" className="btn-ghost" disabled={!!working} aria-label={`Add ${label} as a new printer`} onClick={() => void addAsNew(d)}>Add</button>}
+                  <button type="button" className="btn-ghost" disabled={working} aria-label={`Use ${label} for ${name}`} onClick={() => void use(d)}>Use</button>
+                  {preset && <button type="button" className="btn-ghost" disabled={working} aria-label={`Add ${label} as a new printer`} onClick={() => void addAsNew(d)}>Add</button>}
                 </td>
               </tr>
             );
@@ -183,8 +177,8 @@ export function ConnectionEditor({ printer, name, onSaved }: { printer: string; 
               <td className="found-kind">{KIND_LABEL[c.kind]}</td>
               <td className="found-tags" />
               <td className="found-acts">
-                <button type="button" className="btn-ghost" disabled={!!working} aria-label={`Use this connection for ${name}`} onClick={() => void run('adopt', async () => { await adoptConnection(printer, c.id, name); onSaved?.(); })}>Use</button>
-                <button type="button" className="btn-ghost" disabled={!!working} aria-label="Remove this connection" onClick={() => void run('remove', () => removeConnection(`unassigned:${c.id}`))}>Remove</button>
+                <button type="button" className="btn-ghost" disabled={working} aria-label={`Use this connection for ${name}`} onClick={() => run('adopt', async () => { await adoptConnection(printer, c.id, name); onSaved?.(); })}>Use</button>
+                <button type="button" className="btn-ghost" disabled={working} aria-label="Remove this connection" onClick={() => run('remove', async () => { await removeConnection(`unassigned:${c.id}`); })}>Remove</button>
               </td>
             </tr>
           ))}</tbody>

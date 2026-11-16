@@ -1,10 +1,14 @@
-import { useId, useState } from 'react';
+import { setupOf } from '../printers/device-slots';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Popover } from 'radix-ui';
-import { getState, toast, useStore } from '../state/store';
+import { getState, useStore } from '../state/store';
 import { inkOn } from '../components/SlotChip';
 import { FILAMENT_PALETTE } from '../components/filament-palette';
-import { findProfile } from './identity';
-import { changeFilamentColour, colourName, saveFilamentAsColour, slotColour, slotColourOverride, useProfileColour } from './filament-colour';
+import { colourName, EMPTY_SLOT_COLOUR, reportedTray, slotColour } from './filament-colour';
+import { useMachine } from '../flow/fsm';
+import { slotColourFor } from '../flow/slot-colour';
+import { slotFilaments } from './slots';
+import { InLayer } from '../components/PageLayer';
 
 const PALETTE = FILAMENT_PALETTE.map((c) => c.hex);
 const normal = (v: string) => /^#?[\da-f]{6}$/i.test(v) ? `#${v.replace('#', '').toUpperCase()}` : null;
