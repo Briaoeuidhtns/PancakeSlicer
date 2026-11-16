@@ -56,6 +56,7 @@
 :where(.orca-parity) .opt-line.is-switch .opt-label { cursor: pointer; }
 :where(.orca-parity) fieldset.opt-field { display: flex; align-items: center; gap: var(--s-2); min-width: 0; min-inline-size: 0; margin: 0; padding: 0; border: 0; }
 :where(.orca-parity) fieldset.opt-field:disabled { opacity: .5; }
+:where(.orca-parity) fieldset.opt-field:has(input.text:read-only) > :not(.field-reset) { opacity: .5; }
 :where(.orca-parity) .opt-line.is-switch > fieldset.opt-field { justify-content: flex-start; }
 :where(.orca-parity) .opt-field > :where(.text, .dropdown, .control-number, .control-text, .control-stack, .seg.choice, .pk-slot) { flex: 1 1 0; min-width: 0; width: 100%; }
 :where(.orca-parity) .opt-field :is(input.text, .dropdown) { height: var(--h-compact); min-height: var(--h-compact); font: var(--t-body); }
@@ -194,7 +195,13 @@
 :where(.orca-parity) :is(.sidebar, .pf-full-editor, .modal > .settings-tab) :is(.opt-line, .option-row) .opt-label-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; overflow-wrap: normal; }
 :where(.orca-parity) .sidebar .opt-line:not(.full) > .opt-field { grid-column: 2; grid-row: 1; }
 :where(.orca-parity) .sidebar .opt-line:not(.full) > .opt-undo { grid-column: 1; grid-row: 1; justify-self: end; }
-:where(.orca-parity) .sidebar .optgroup-aside { box-sizing: content-box; width: max(clamp(104px, calc(0.32 * (100% - 2 * var(--space-section, var(--s-5)))), 140px), min(calc(0.5 * (100% - 2 * var(--space-section, var(--s-5)) - 12px - var(--s-3))), 168px)); }
+:where(.orca-parity) .sidebar .opt-line.full { grid-template-columns: minmax(0, 1fr); padding-right: var(--s-3); }
+:where(.orca-parity) .sidebar .opt-line.full > .opt-undo { grid-column: 1; grid-row: 1; justify-self: end; }
+:where(.orca-parity) .sidebar .option-row { grid-template-columns: minmax(0, 1fr) auto max(var(--ctl-w), min(50%, 168px)); padding-right: var(--s-3); }
+:where(.orca-parity) .sidebar .option-row > .opt-line > .opt-label { grid-column: 2; grid-row: auto; justify-self: start; }
+:where(.orca-parity) .sidebar .option-row > .opt-line > .opt-field { grid-column: 3; grid-row: auto; }
+:where(.orca-parity) .sidebar .option-row > .opt-line > .opt-undo { grid-column: 2; grid-row: auto; justify-self: start; }
+:where(.orca-parity) .sidebar .optgroup-aside { box-sizing: content-box; width: max(clamp(104px, calc(0.32 * (100% - 2 * var(--space-section, var(--s-5)))), 140px), min(calc(0.5 * (100% - var(--space-section, var(--s-5)) - 12px - 2 * var(--s-3))), 168px)); padding-right: var(--s-3); }
 :where(.orca-parity) .sidebar .optgroup-aside .opt-field { flex: 1; }
 :where(.orca-parity) .sidebar .optgroup-aside .opt-undo { order: -1; margin-left: calc(-1 * (var(--opt-end, 20px) + var(--s-3))); }
 :where(.orca-parity) .sidebar .opt-field > .control-number { position: relative; grid-template-columns: minmax(0, 1fr) auto; column-gap: 0; }

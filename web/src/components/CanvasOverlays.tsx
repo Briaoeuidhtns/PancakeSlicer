@@ -6,7 +6,9 @@ import { Glyph } from './Glyph';
 import { Check } from './Check';
 import { Range } from './Range';
 import { slicingText } from '../api/progress';
-import { accessNotice, accessSnapshot, saveAccessToken, subscribeAccess } from '../api/access';
+import { ACCESS_FAILURES, accessNotice, accessSnapshot, saveAccessToken, subscribeAccess } from '../api/access';
+import { useMachine } from '../flow/fsm';
+import { libraryWrites } from '../profiles/library-writes';
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement } from 'react';
 import { createPortal } from 'react-dom';
 import { addInstance, arrangeAll, cancelSlice, fileUse, openFileDialog, removeInstance, toolbarOperation, outsideVolumeWarning, canBoolean, toggleBoolean, toggleSvg, toggleText } from '../actions';
@@ -160,7 +162,8 @@ const cleanError = (msg = '') => msg.replace(/^(error:\s*)?(validate:\s*)?/i, ''
 export function AccessNotification() {
   const notice = useSyncExternalStore(subscribeAccess, accessSnapshot);
   const [value, setValue] = useState('');
-  if (!notice) return null;
+  const libraryOffline = useMachine(libraryWrites).value === 'offline';
+  if (!notice || libraryOffline && [502, 503, 504].includes(notice.status)) return null;
   return (
     <div className={`notification ${notice.status === 429 || notice.status === 503 ? 'warning' : 'failed'}`} role="alert">
       <button className="notif-close icon-btn" aria-label="Close" onClick={() => accessNotice(null)}><Glyph name="close" size={14} /></button>

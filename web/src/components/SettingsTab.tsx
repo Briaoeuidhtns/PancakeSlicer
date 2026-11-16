@@ -229,9 +229,9 @@ export function SettingsTab({ type, slot = 0, compact, hidePreset, editor, overr
               : type === 'machine' && key === 'nonplanar_head' ? <Suspense fallback={null}><HeadPicker value={String(config[key] ?? '')} onCommit={(v) => editor ? editor.set(key, v) : v === String(system[key] ?? '') ? resetOption(type, key) : setOption(type, key, v)} /></Suspense>
               : undefined} key={`${k}:${i}`} optKey={indexedKey} type={type} value={config[key]} systemValue={system[key]} dirty={unsaved(key)}
               slot={slot} onSet={fields?.set} onReset={fields?.reset} mixed={overrides?.mixed[key]} resetTitle={overrides ? 'Reset to project' : undefined} mode={method}
-              source={source} sourceText={editor?.sourceText?.[key]} onResetToBase={source === 'set' && !readOnly ? editor?.resetToBase : undefined}
-              disabled={readOnly || editor?.readOnlyKeys?.has(key) || states[key]?.enabled === false}
-              definition={definition(key, line)}
+              source={source} sourceText={editor?.sourceText?.[key]}
+              disabled={readOnly || states[key]?.enabled === false}
+              definition={editor?.readOnlyKeys?.has(key) ? { ...definition(key, line), readonly: true } : definition(key, line)}
               inheritedValue={env[key.replace(/^filament_/, '')] as ConfigValue}
               overrideChecked={editor?.overridden?.(key)}
               overrideDisabled={readOnly}

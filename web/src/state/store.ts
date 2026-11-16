@@ -443,6 +443,7 @@ const settingName = (key: string) => `Change setting "${OPTIONS[key]?.label || k
 
 export function setOption(type: PresetType, key: string, value: ConfigValue, slot = 0) {
   if (type === 'process' && key === 'layer_height') { const h = Number(Array.isArray(value) ? value[0] : value); if (h > 0) setLayerHeight(h); return; }
+  if (type === 'process' && key.endsWith('_speed')) void import('../flow/speed-cap-notice').then((m) => m.noteSpeedCap(key, value));
   undoable(settingName(key), () => setState((s) => {
     const edits = { ...presetEdits(s, type, slot), [key]: value };
     const patch:Partial<State>={...(type==='filament' ? {filamentEdits:{...s.filamentEdits,[slotFilaments(s)[slot]]:edits}} : {dirty:{...s.dirty,[type]:edits}}),job:markStale(s.job)};

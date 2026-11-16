@@ -158,8 +158,30 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(value)
 }
-func fail(w http.ResponseWriter, status int, message string) {
-	writeJSON(w, status, map[string]string{"error": message})
+
+func jobUsedSlots(r *http.Request, slots int, sent []int) ([]int, error) {
+	if plate := r.FormValue("plate"); plate != "" {
+		used, err := resolve.PlateUsedSlots([]byte(plate), slots)
+		if err != nil {
+			return nil, errors.New("The plate needs at least one model on it.")
+		}
+		return used, nil
+	}
+	var files []struct {
+		Name string `json:"name"`
+	}
+	json.Unmarshal([]byte(r.FormValue("files")), &files)
+	if len(files) > 0 && strings.EqualFold(filepath.Ext(files[0].Name), ".3mf") {
+		if len(sent) > 0 && !slices.ContainsFunc(sent, func(n int) bool { return n < 1 || n > slots }) {
+			return sent, nil
+		}
+		all := make([]int, slots)
+		for i := range all {
+			all[i] = i + 1
+		}
+		return all, nil
+	}
+	return []int{1}, nil
 }
 
 func (s *Server) listPresets(w http.ResponseWriter, r *http.Request) {
@@ -1393,33 +1415,9 @@ func bundleResourceHash(root string) (string, error) {
 		if !d.Type().IsRegular() {
 			return errors.New("nonregular resource")
 		}
-		names = append(names, name)
-		return nil
-	})
-	if err != nil {
-		return "", err
-	}
-	digests, errs := make([]string, len(names)), make([]error, len(names))
-	next := make(chan int)
-	var wg sync.WaitGroup
-	for range min(len(names), max(4, 2*runtime.NumCPU())) {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for i := range next {
-				digests[i], errs[i] = bundleFileHash(names[i])
-			}
-		}()
-	}
-	for i := range names {
-		next <- i
-	}
-	close(next)
-	wg.Wait()
-	h := sha256.New()
-	for i, name := range names {
-		if errs[i] != nil {
-			return "", errs[i]
+		digest, err := bundleFileHash(name)
+		if err != nil {
+			return err
 		}
 		relative, err := filepath.Rel(root, name)
 		if err != nil {

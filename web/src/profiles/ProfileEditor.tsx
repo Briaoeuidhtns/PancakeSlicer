@@ -185,7 +185,7 @@ export function ProfileEditor({type, name, draft, update, onBack, onClose, onSav
     const base = settingSources(getState(), type, name);
     if (type !== 'process') return base;
     const out: Record<string, SettingOrigin> = {};
-    for (const [k, v] of Object.entries(base)) if (v !== 'auto') out[k] = v;
+    for (const [k, v] of Object.entries(base)) if (v !== 'auto' || !savedScales.some((r) => r.key === k)) out[k] = v;
     for (const r of scales) out[r.key] = 'auto';
     for (const k of Object.keys(changes)) if (!scales.some((r) => r.key === k)) out[k] = 'set';
     const own = (source as {overlay?: Config} | undefined)?.overlay ?? {};

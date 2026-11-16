@@ -30,9 +30,14 @@ function bounded(def: OptionDef): OptionDef {
   return top > 0 && (def.max === undefined || top < def.max) ? { ...def, max: top } : def;
 }
 function rejectField(text: string, previous: string, def: OptionDef, label: string): boolean {
+  const own = def; def = bounded(def);
   const issue = fieldIssue(text, def);
   if (!issue) return false;
-  toast(`${label}: ${fieldNumber(text, def)} ${issue.detail}—kept ${fieldNumber(previous, def)} instead.`, null, undefined, 'warning');
+  if (def.max !== own.max && Number(text) > def.max!) {
+    toast('printer_tops_out_mm', { max: def.max, previous });
+    return true;
+  }
+  toast('kept_instead', { label, value: fieldNumber(text, def), detail: issue.detail, value2: fieldNumber(previous, def) });
   return true;
 }
 

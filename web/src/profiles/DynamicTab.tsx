@@ -86,6 +86,7 @@ export function DynamicTab({ speedModel, speeds: firstSpeeds = {}, nozzleSpeeds,
    fromPrinter?: { name: string; values: Config; printer?: PrinterRecord };
 }) {
   const [split, setSplit] = useState<ReadonlySet<string>>(() => new Set());
+  const [side, setSide] = useState(0), speeds = nozzleSpeeds?.[side]?.speeds ?? firstSpeeds;
   const [adding, setAdding] = useState<{ key: string; basis: ScaleBasis } | null>(null);
   const [folded, setFolded] = useState<ReadonlySet<number>>(() => new Set());
   const formulas = formulasOf(rows.filter(r => !SPEED_KEYS.has(r.key)), split);
@@ -114,6 +115,8 @@ export function DynamicTab({ speedModel, speeds: firstSpeeds = {}, nozzleSpeeds,
       <div className="dyn-speed-controls">
         <label>Outer-wall ceiling <span><input className="text num" type="number" min="1" max="2000" step="5" aria-label="Outer-wall ceiling" value={speedModel.outerWallCeiling} disabled={readOnly}
           onChange={e => {const n = Number(e.target.value); if (n > 0 && n <= 2000) onSpeedModel?.({...speedModel, outerWallCeiling: n});}}/> mm/s</span></label>
+        {nozzleSpeeds && nozzleSpeeds.length > 1 && <label>Values for <Dropdown className="combo" aria-label="Speeds for nozzle" value={String(Math.min(side, nozzleSpeeds.length - 1))}
+          options={nozzleSpeeds.map((n, i) => ({ value: String(i), label: n.label }))} onValueChange={(v) => setSide(Number(v))}/></label>}
       </div>
       <p className="hint-text">Speed = printer base speed × multiplier (automatically capped by your hotend's max flow rate and printer speed limits). Adjust any multiplier to tune print speed.</p>
       <div className="dyn-speed-scroll"><table className="dyn-table dyn-speed-table">
