@@ -14,23 +14,14 @@ export function allFlush(s: State): { matrix: number[]; multipliers: number[] } 
   return nozzles ? { matrix: nozzles.flatMap((n) => n.matrix), multipliers: nozzles.map((n) => n.multiplier) } : null;
 }
 
-export function defaultMultiplier(s: State, nozzle = 0): number {
-  const v = effectiveConfig(s, 'process').flush_multiplier ?? (OPTIONS.flush_multiplier?.default as number[] | undefined);
-  const first = Array.isArray(v) ? v[Math.min(nozzle, v.length - 1)] : v;
-  return Number.isFinite(Number(first)) ? Number(first) : 1;
-}
-
-export function currentFlush(s: State, nozzle = 0): { matrix: number[]; multiplier: number } {
-  const n = s.filamentSlots.length;
-  const table = s.flush.matrix ?? (s.project ? s.projectMaterials?.matrix : null);
-  const count = extruderCount(effectiveConfig(s, 'machine'));
-  const saved = table?.length === n * n * count ? table.slice(nozzle * n * n, (nozzle + 1) * n * n) : table?.length === n * n ? table : null;
-  return { matrix: saved ?? autoFlushMatrix(s, nozzle), multiplier: s.flush.multiplier ?? defaultMultiplier(s, nozzle) };
-}
-
-export function allFlush(s: State): { matrix: number[]; multipliers: number[] } {
-  const tables = Array.from({ length: extruderCount(effectiveConfig(s, 'machine')) }, (_, nozzle) => currentFlush(s, nozzle));
-  return { matrix: tables.flatMap((t) => t.matrix), multipliers: tables.map((t) => t.multiplier) };
+export function flushUnavailable(s: State): string {
+  if (slotFilaments(s).filter(Boolean).length < 2) return 'Pop filaments into at least two slots to see flushing volumes!';
+  if (allFlush(s)) return '';
+  const r = s.resolved;
+  if (!s.printer || !s.process) return 'Pick your print settings to check out the flushing volumes.';
+  if (r.state === 'failed') return `Oops! Couldn't fetch the flushing volumes: ${r.error ?? 'the slicing service didn\'t answer'}.`;
+  if (r.state === 'resolving' || r.answeredFor?.printer !== s.printer) return 'Hanging tight for the slicing service…';
+  return 'Hmm, the slicing service didn\'t return any flushing volumes for this printer\'s filaments.';
 }
 
 export function flushModified(s: State): boolean {

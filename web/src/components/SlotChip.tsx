@@ -24,21 +24,27 @@ export function useSlots() {
   return slotsOf(getState());
 }
 
-export function SlotPicker({ value, onChange, label, disabled = false, inherit }: {
+export function SlotPicker({ value, onChange, label, disabled = false, inherit, painted = [] }: {
   value: number;
   onChange(slot: number): void;
   label: string;
   disabled?: boolean;
   inherit?: number;
+  painted?: number[];
 }) {
   const slots = useSlots();
   const shown = value || inherit || 1, colour = slots[shown - 1]?.colour ?? '#808080';
-  const chip = <SlotChip n={shown} colour={colour} />;
-  if (slots.length < 2 && !inherit) return <span className="slot-pick" role="img" aria-label={`${label}: slot ${shown}`}>{chip}</span>;
+  const paints = painted.filter((n) => n !== shown);
+  const parts = [shown, ...paints];
+  const chip = paints.length ? <span className="slot-split" aria-hidden>{parts.map((n) => { const c = slots[n - 1]?.colour ?? '#808080';
+    return <span key={n} data-ink={inkOn(c)} style={{ backgroundColor: c }}>{n}</span>; })}</span>
+    : <SlotChip n={shown} colour={colour} />;
+  const named = `${label}: slot ${shown}${paints.length ? `, painted ${paints.join(', ')}` : ''}`;
+  if (slots.length < 2 && !inherit) return <span className="slot-pick" role="img" aria-label={named}>{chip}</span>;
   return (
     <Menu.Root>
       <Menu.Trigger asChild disabled={disabled}>
-        <button type="button" className="slot-pick" data-follows={value === 0 && inherit ? '' : undefined} aria-label={`${label}: slot ${shown}${value === 0 && inherit ? ' (the object’s)' : ''}`}
+        <button type="button" className="slot-pick" data-follows={value === 0 && inherit ? '' : undefined} aria-label={`${named}${value === 0 && inherit ? ' (the object’s)' : ''}`}
           onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>{chip}</button>
       </Menu.Trigger>
       <InLayer portal={Menu.Portal}>

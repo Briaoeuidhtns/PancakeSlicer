@@ -1,4 +1,5 @@
 import { savePreferences } from '../saved-preferences';
+import { Dropdown } from './Dropdown';
 import { preloadable } from '../preloadable';
 import { Check } from './Check';
 import { Suspense, useState, useSyncExternalStore } from 'react';
@@ -43,12 +44,10 @@ function Preferences() {
     <Modal size="m" label="Preferences" onClose={close}>
       <ModalTitle title="Preferences" onClose={close} />
       <ModalBody className="modal-fields">
-        <div className="form-row"><span>Theme</span><span className="seg" role="radiogroup" aria-label="Theme">{THEMES.map(([value, label]) =>
-          <button key={value} type="button" role="radio" aria-checked={pref === value} data-autofocus={pref === value ? '' : undefined} onClick={() => setThemePref(value)}>{label}</button>)}</span></div>
+        <div className="form-row"><span>Theme</span><Dropdown className="combo" aria-label="Theme" value={pref} onValueChange={(next) => setThemePref(next as typeof pref)} options={THEMES.map(([value, label]) => ({ value, label }))} /></div>
         <h3 className="modal-group">Camera</h3>
         <div className="form-row"><span>Mouse controls<InfoTip label="Mouse controls">{'Default: Left-drag to rotate, right- or middle-drag to pan.\nTouchpad: Alt+drag to rotate, Shift+drag to pan.'}</InfoTip></span>
-          <span className="seg" role="radiogroup" aria-label="Camera style">{(['default', 'touchpad'] as const).map((value) =>
-            <button key={value} type="button" role="radio" aria-checked={camera.style === value} onClick={() => setCameraPrefs({ style: value as CameraPrefs['style'] })}>{value === 'default' ? 'Default' : 'Touchpad'}</button>)}</span></div>
+          <Dropdown className="combo" aria-label="Camera style" value={camera.style} onValueChange={(next) => setCameraPrefs({ style: next as CameraPrefs['style'] })} options={[{ value: 'default', label: 'Default' }, { value: 'touchpad', label: 'Touchpad' }]} /></div>
         <label className="form-row"><span>Orbit speed</span>
           <input className="text num" type="number" min={0.05} max={2} step={0.05} value={camera.orbitMult}
             onChange={(e) => { const v = Number(e.target.value); if (v >= 0.05 && v <= 2) setCameraPrefs({ orbitMult: v }); }} /></label>

@@ -92,8 +92,9 @@ export function FilamentPicker({ slot }: { slot: number }) {
     <span className="pk-slot">
       <FilamentColourMenu slot={slot}/>
       <Picker label={`Filament ${slot + 1}`} value={name} sections memory="orca.web.picker.filament" facetHeads groups={sameStateGroups(`filament:${slot}`, () => filamentGroups(slot))}
-        onPick={(id) => pickOrOpen('filament', id, (id) => id !== name && requestPreset('filament', slot, id))} footer={[addFilament, presets('filament', name)]}>
-        {pending ? <PickerSkeleton/> : <><span className="pk-type">{first(c.filament_type) || '—'}</span>
+        empty={listProfiles('filament').length ? 'No filaments here yet' : 'No filaments in your library yet'}
+        onPick={(id) => id !== name && requestPreset('filament', slot, id)} footer={[addFilament, presets('filament', name)]}>
+        {pending ? <PickerSkeleton/> : !name ? <span className="pk-name pk-empty">Pick a filament…</span> : <><span className="pk-type">{first(c.filament_type) || '—'}</span>
         <span className="pk-brand">{b.brand}</span>
         <span className="pk-name">{label}</span></>}
       </Picker>

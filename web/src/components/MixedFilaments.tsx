@@ -146,6 +146,7 @@ function MixDialog({ slot, close }: { slot: number | null; close(): void }) {
             ))}
           </div>
         </>}
+        {same && !mismatch && <p className="hint-text" role="note">Both slots have the same filament and colour, so the mix will print just like either one!</p>}
         {mismatch && <p className="modal-error" role="alert">Mix filaments of one type ({m.components.map((c, k) => `${c}: ${types[k]}`).join(', ')}).</p>}
         {!mismatch && unknownType && <p className="hint-text" role="status">Checking filament types…</p>}
         {split && <p className="modal-error" role="alert">Mix filaments on one nozzle ({m.components.map((c, k) => `${c}: ${sides[k] === undefined ? 'no nozzle' : extruderLabel(sides[k]!, count, printer?.vendor === 'BBL')}`).join(', ')}).</p>}

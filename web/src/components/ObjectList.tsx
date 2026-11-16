@@ -21,6 +21,7 @@ import { rangeLabel } from '../plater/ranges';
 import { overrideCount } from '../plater/overrides';
 import { setHoverLink, useHoverLink } from '../plater/hoverLink';
 import { Sep } from '../separator';
+import { paintedSlots } from '../printers/slot-check';
 
 interface SliceRecord {
   objects?: { id: number; name: string; mode?: string; instances?: { id: number; shift_mm?: [number, number] }[] }[];

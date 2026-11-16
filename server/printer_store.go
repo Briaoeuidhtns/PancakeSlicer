@@ -546,7 +546,7 @@ func (s *Server) testConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if body.Kind == "bambu-connect" {
-		writeJSON(w, 200, PrinterTest{OK: true, Stage: "ok", Message: "Bambu Connect opens on this computer when you send"})
+		writeJSON(w, 200, PrinterTest{OK: true, Stage: "ok", Message: "Bambu Connect will pop open on this computer when you send!"})
 		return
 	}
 	saved := s.sends.printer(body.Printer)

@@ -96,7 +96,7 @@ export function ConnectionEditor({ printer, name, onSaved }: { printer: string; 
         </div>
       )}
       <label className="form-row"><span>Host type</span>
-        <Dropdown className="combo" value={kind} onValueChange={(v) => changed(setKind)(v as ConnectionKind)}
+        <Dropdown className="combo" value={kind ?? ''} placeholder={kindValues?.state === 'failed' ? kindValues.error ?? 'Hmm, we couldn\'t find that printer' : 'Resolving…'} onValueChange={(v) => changed(setKind)(v as ConnectionKind)}
           options={(Object.keys(KIND_LABEL) as ConnectionKind[]).map((k) => ({ value: k, label: KIND_LABEL[k] }))} />
       </label>
       {bambu && <>
@@ -109,7 +109,7 @@ export function ConnectionEditor({ printer, name, onSaved }: { printer: string; 
         <label className="form-row"><span>Printer IP</span><input className="text" value={host} placeholder="192.168.1.60" spellCheck={false} onChange={(e) => changed(setHost)(e.target.value)} /></label>
         <label className="form-row"><span>Serial number (optional)</span><input className="text" value={serial} spellCheck={false} onChange={(e) => changed(setSerial)(e.target.value)} /></label>
         <label className="form-row"><span>Check code (optional)</span><input className="text" type="password" autoComplete="new-password" value={secret} placeholder={hasSecret ? 'Stored' : ''} onChange={(e) => changed(setSecret)(e.target.value)} /></label>
-        <div className="hint-text connection-hint">The IP address is enough. With the serial number and check code from the printer's network settings, uploads use its HTTP API.</div>
+        <div className="hint-text connection-hint">Just the IP address is enough to get started! If you also add the serial number and check code from your printer's network settings, uploads can use its faster HTTP API.</div>
       </>}
       {kind === 'bambu-connect' && <div className="hint-text">{DESKTOP
         ? "Sending opens your sliced file in Bambu Connect on this computer to print through your Bambu account—handy when your printer is in cloud mode."

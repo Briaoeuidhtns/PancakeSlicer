@@ -118,8 +118,9 @@ export function DynamicTab({ speedModel, speeds: firstSpeeds = {}, nozzleSpeeds,
         {nozzleSpeeds && nozzleSpeeds.length > 1 && <label>Values for <Dropdown className="combo" aria-label="Speeds for nozzle" value={String(Math.min(side, nozzleSpeeds.length - 1))}
           options={nozzleSpeeds.map((n, i) => ({ value: String(i), label: n.label }))} onValueChange={(v) => setSide(Number(v))}/></label>}
       </div>
-      <p className="hint-text">Speed = printer base speed × multiplier (automatically capped by your hotend's max flow rate and printer speed limits). Adjust any multiplier to tune print speed.</p>
-      <div className="dyn-speed-scroll"><table className="dyn-table dyn-speed-table">
+      {!missingReference && slowerNote && <p className="hint-text">Slower filaments will cruise at their own flow limit.</p>}
+      {!missingReference && <p className="hint-text">Speed = printer base speed × multiplier (automatically capped by your hotend's max flow rate and printer speed limits). Adjust any multiplier to tune print speed.</p>}
+      {missingReference ? <p role="status">This printer doesn't have base speed values for dynamic profiles yet—pick a regular print profile instead.</p> : <div className="dyn-speed-scroll"><table className="dyn-table dyn-speed-table">
         <thead><tr><th>Feature</th>{SPEED_HEADS.map(([label, tip, n]) => <th key={label} className={n ? 'n' : undefined} data-truncated="true" data-full-text={tip}>{label}</th>)}</tr></thead>
         <tbody>{SPEED_FEATURES.map(f => {const d = speeds[f.key]; if (!d) return null; return <tr key={f.key}>
           <th scope="row">{f.label}</th><td className="n">{Math.round(d.base)}</td>

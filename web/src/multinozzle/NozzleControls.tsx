@@ -4,8 +4,6 @@ import { extruderLabel, installedVariant, type ExtruderSelection } from './confi
 import type { PrinterRecord } from '../profiles/records';
 import { filament_options_with_variant, printer_extruder_options, printer_options_with_variant_1, print_options_with_variant } from './variant-keys';
 import { useEffect } from 'react';
-import { Choice } from '../components/kit';
-import { SEP } from '../separator';
 
 export const perExtruderKeys = (type: PresetType): ReadonlySet<string> => type === 'process' ? print_options_with_variant : type === 'filament' ? filament_options_with_variant
   : new Set([...printer_options_with_variant_1, ...printer_extruder_options]);

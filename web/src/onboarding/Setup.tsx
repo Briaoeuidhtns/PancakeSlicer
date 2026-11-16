@@ -14,6 +14,7 @@ import { setup, TOUR_PAGES, useSetup } from './setup-flow';
 import { TOUR } from './tour';
 import { FacetGroup, FacetsHead } from '../components/Facets';
 import { Check } from '../components/Check';
+import { Dropdown } from '../components/Dropdown';
 import { materialRank } from '../profiles/Pickers';
 import './setup.css';
 import { Sep } from '../separator';
@@ -60,7 +61,7 @@ function Welcome() {
   return ready
     ? <Frame step="welcome" title="Want a quick 1-minute tour?">
       <div className="setup-welcome">
-        <p>Take a quick peek at what makes PancakeSlicer different: smooth curved tops, dynamic profiles, and projects that keep every version.</p>
+        <p>Take a quick look at what makes PancakeSlicer special: smooth curved tops, dynamic profiles, and projects that remember every version!</p>
         <div className="setup-welcome-actions"><button type="button" className="btn-ghost" onClick={() => send({ type: 'CLOSE' })}>Not now</button><Next label="Start tour" /></div>
       </div>
     </Frame>
@@ -102,15 +103,18 @@ function Printer() {
   const [nozzles, setNozzles] = useState<number[]>(choices.nozzles);
   const q = search.trim().toLowerCase();
   const shown = (models ?? []).filter((m) => q ? `${m.vendorName} ${m.model}`.toLowerCase().includes(q) : m.vendor === vendor);
-  const pick = (m: PrinterModel) => { setModel(m); setNozzles(m.nozzles.includes('0.4') ? ['0.4'] : m.nozzles.slice(0, 1)); };
-  const toggle = (n: string) => setNozzles((list) => list.includes(n) ? list.filter((x) => x !== n) : (model?.nozzles ?? []).filter((x) => x === n || list.includes(x)));
-  const next = async () => {
-    if (!model) return;
-    setBusy(true);
-    try { choices = { ...choices, model: { ...model, presets: await loadModel(model, nozzles) }, nozzles }; send({ type: 'NEXT' }); }
-    catch (e) { setFailed(e instanceof Error ? e.message : String(e)); }
-    finally { setBusy(false); }
-  };
+  const pick = (m: PrinterModel) => { setModel(m); setNozzles(m.nozzles.includes(0.4) ? [0.4] : m.nozzles.slice(0, 1)); };
+  useEffect(() => {
+    if (model || !models) return;
+    const current = selectedPrinter(getState());
+    const found = current && models.find((m) => m.vendor === current.vendor && m.catalog.id === current.model);
+    if (!found) return;
+    const nozzle = current.nozzles[0]?.diameter ?? 0;
+    setVendor(found.vendor); setModel(found); setNozzles(found.nozzles.includes(nozzle) ? [nozzle] : found.nozzles.includes(0.4) ? [0.4] : found.nozzles.slice(0, 1));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [models]);
+  const toggle = (n: number) => setNozzles((list) => list.includes(n) ? list.filter((x) => x !== n) : [...list, n].sort((a, b) => a - b));
+  const next = () => { if (model) { choices = { ...choices, model, nozzles }; send({ type: 'NEXT' }); } };
   return <Frame step="printer" foot={<><Back /><span className="setup-grow" />{failed && <span className="setup-test bad">{failed}</span>}
     {model && <span className="setup-count">{model.model}<Sep/>{nozzles.join(', ')} mm</span>}<Next disabled={!model || !nozzles.length} onClick={next} /></>}>
     <h2>Your printer</h2>
@@ -170,8 +174,7 @@ function Connect() {
     {Array.isArray(found) && <div className="setup-found">{found.map((d, i) => (
       <button key={`${d.host ?? d.url}-${i}`} type="button" className="setup-chip" aria-pressed={!!d.host && d.host === edit.host || !!d.url && d.url === edit.url} onClick={() => use(d)}>
         {d.name ?? d.model ?? d.host ?? d.url} <span className="setup-n">{d.host ?? d.url}</span></button>))}</div>}
-    <div className="setup-chips" role="radiogroup" aria-label="Connection">{KINDS.map(([k, l]) =>
-      <button key={k} type="button" role="radio" aria-checked={edit.kind === k} className="setup-chip" onClick={() => set({ kind: k })}>{l}</button>)}</div>
+    <label className="setup-field setup-kind"><span className="setup-k">Connection</span><Dropdown className="combo" aria-label="Connection" value={edit.kind} onValueChange={(next) => set({ kind: next as ConnectionKind })} options={KINDS.map(([k, l]) => ({ value: k, label: l }))} /></label>
     <div className="setup-form">
       {edit.kind === 'bambu-lan' ? <>{field('host', 'IP address')}{field('serial', 'Serial number')}{field('access_code', 'Access code', 'password')}</>
         : edit.kind === 'flashforge' ? <>{field('host', 'IP address')}{field('serial', 'Serial number (optional)')}{field('access_code', 'Check code (optional)', 'password')}</>
@@ -220,8 +223,7 @@ function Filaments({ error }: { error: string | null }) {
     .sort((a, b) => materialRank(baseMaterial(a.material)) - materialRank(baseMaterial(b.material))).map((r) => r.product) }; send({ type: 'APPLY' }); void applyChoices(); };
   const active = brands.length + materials.length;
   const item = (r: FilamentRow) => <label key={r.key} className="setup-check"><Check checked={chosen.has(r.key)} onCheckedChange={(v) => setMany([r.key], v)} /><span>{r.name}</span><span className="setup-n">{r.material}</span></label>;
-  const other = shown.filter((r) => !r.tuned);
-  return <Frame step="filaments" foot={<><Back /><span className="setup-grow" />{(error ?? readError) && <span className="setup-test bad">{error ?? readError}</span>}<span className="setup-count">{chosen.size} selected</span><Next label="Done" disabled={!chosen.size} onClick={apply} /></>}>
+  return <Frame step="filaments" foot={<><Back /><span className="setup-grow" />{(error ?? readError) && <span className="setup-test bad">{error ?? readError}</span>}<span className="setup-count">{chosen.size} selected</span><Next disabled={!chosen.size} onClick={apply} /></>}>
     <h2>Your filaments</h2>
     <div className={`setup-filaments${filtersOpen ? ' filters-open' : ''}`}>
       <aside className="facets setup-facets" aria-label="Filters">
@@ -262,6 +264,13 @@ async function applyChoices() {
     if (first) requestPreset('filament', 0, first);
     send({ type: 'APPLIED' });
   } catch (e) { send({ type: 'FAILED', error: e instanceof Error ? e.message : String(e) }); }
+}
+
+function Done() {
+  const finish = () => { savePreferences({ 'orca.setup': '1' }); setState({ tab: 'prepare' }); send({ type: 'CLOSE' }); };
+  return <Frame step="done" foot={<><Back /><span className="setup-grow" /><Next label="Start printing" onClick={finish} /></>}>
+    <div className="setup-hero"><img src="/logo.svg" width={96} height={96} alt="" /><h1>Ready</h1></div>
+  </Frame>;
 }
 
 export default function Setup() {

@@ -1,3 +1,4 @@
+import { Dropdown } from './Dropdown';
 import { useId, useState } from 'react';
 import { Modal, ModalBody, ModalFooter, ModalTitle } from './Modal';
 import type { Config, ConfigValue } from '../api/types';
@@ -69,8 +70,7 @@ export default function BedShapeDialog({ config, close, onSet = (key, value) => 
     <form onSubmit={(e) => { e.preventDefault(); if (!valid) return; onSet('printable_area', points.map(([x, y]) => `${Number(x.toFixed(6))}x${Number(y.toFixed(6))}`)); onSet('bed_custom_texture', texture); onSet('bed_custom_model', model); close(); }}>
       <ModalTitle title="Bed shape" onClose={close} />
       <ModalBody className="modal-split"><div className="modal-fields">
-        <div className="form-row"><span>Shape</span><span className="seg" role="radiogroup" aria-label="Shape">{([['Rectangular', 'Rectangle'], ['Circular', 'Circle'], ['Custom', 'Custom']] as const).map(([name, label]) =>
-          <button key={name} type="button" role="radio" aria-checked={shape === name} onClick={() => setShape(name)}>{label}</button>)}</span></div>
+        <div className="form-row"><span>Shape</span><Dropdown className="combo" aria-label="Shape" value={shape} onValueChange={(next) => setShape(next as typeof shape)} options={[{ value: 'Rectangular', label: 'Rectangle' }, { value: 'Circular', label: 'Circle' }, { value: 'Custom', label: 'Custom' }]} /></div>
         {shape === 'Rectangular' && <>{num('Width', size[0], at(size, setSize, 0), SIZE_MIN, SIZE_MAX)}{num('Depth', size[1], at(size, setSize, 1), SIZE_MIN, SIZE_MAX)}
           {num('Origin X', origin[0], at(origin, setOrigin, 0), -ORIGIN_LIMIT, ORIGIN_LIMIT)}{num('Origin Y', origin[1], at(origin, setOrigin, 1), -ORIGIN_LIMIT, ORIGIN_LIMIT)}</>}
         {shape === 'Circular' && num('Diameter', diameter, setDiameter, SIZE_MIN, SIZE_MAX)}

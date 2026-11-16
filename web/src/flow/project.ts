@@ -285,7 +285,7 @@ function remote(message: { type?: string; id?: string; sender?: string }) {
     if (hasUnsavedProject()) {
       const failure = projectFailure({ name: 'ProjectDeletedError', message: recoveryCore.TRASHED }, message.id, project.get().context.revision);
       project.send({ type: 'ERROR', error: failure.message, failure }); checkpointProject();
-    } else project.send({ type: 'MISSING', id: message.id });
+    } else { project.send({ type: 'MISSING', id: message.id }); notFound(); writeRoute('/', true); void route(); }
   } else if (message.type === 'saved') {
     project.send({ type: 'REMOTE' }); checkpointProject();
   }
@@ -304,7 +304,10 @@ async function route() {
       if ((project.get().value === 'opening' || project.get().value === 'missing')) project.send({ type: 'BLANK' });
       openingBusy.end(); setState({ tab: 'projects' });
     }
-    else if (r.kind === 'project') await openProject(r.id, { history: false });
+    else if (r.kind === 'project') {
+      await openProject(r.id, { history: false });
+      if (mine === routeVersion && project.get().value === 'missing') { notFound(); writeRoute('/', true); await route(); }
+    }
     else if (r.kind === 'blank') {
       versionView.send({ type: 'LATEST' });
       await flushProject();

@@ -134,9 +134,9 @@ func (st *workspaceStore) leaseConflict(w http.ResponseWriter, id, session strin
 	return true
 }
 func leaseFailure(w http.ResponseWriter, l *projectLease, session string, revision uint64) {
-	body := workspaceError("lease_held", "This project is open in another tab or device.", "take_control", revision)
-	if session != "" && session == l.Previous {
-		body = workspaceError("lease_lost", "Another tab or device took control of this project.", "take_control", revision)
+	body := workspaceError("lease_held", "Heads up — this project is open in another tab or device.", "take_control", revision)
+	if session == l.Displaced {
+		body = workspaceError("lease_lost", "Another tab or device took the wheel on this project!", "take_control", revision)
 	}
 	body["holder"] = l.holder()
 	writeJSON(w, 409, body)

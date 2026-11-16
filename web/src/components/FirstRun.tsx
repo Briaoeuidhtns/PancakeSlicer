@@ -102,7 +102,7 @@ function Sample({ label, variants }: SampleDef) {
       onBlur={(e) => { const to = e.relatedTarget as Node | null; if (!e.currentTarget.contains(to) && to !== chip.current) setOpen(false); }}>
       <div className="sample-preview" aria-hidden style={{ backgroundImage: `url(${variants[shown].preview})` }} />
       {steps &&
-        <div className="seg slant-seg" role="group" aria-label={`${label} top slope`}
+        <div className="seg" role="group" aria-label={`${label} top slope`}
           onKeyDown={(e) => {
             const all = segments(), i = all.indexOf(document.activeElement as HTMLButtonElement);
             if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); all[(i + (e.key === 'ArrowRight' ? 1 : all.length - 1)) % all.length]?.focus(); }

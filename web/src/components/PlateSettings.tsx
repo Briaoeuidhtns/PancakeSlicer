@@ -59,7 +59,7 @@ export default function PlateSettings({ close }: { close(): void }) {
     close();
   };
   const seg = (label: string, value: string, set: (v: string) => void, options: [string, string][]) => <div className="form-row"><span>{label}</span>
-    <span className="seg" role="radiogroup" aria-label={label}>{options.map(([v, text]) => <button key={v} type="button" role="radio" aria-checked={value === v} onClick={() => set(v)}>{text}</button>)}</span></div>;
+    <Dropdown className="combo" aria-label={label} value={value} onValueChange={set} options={options.map(([v, text]) => ({ value: v, label: text }))} /></div>;
   return (
     <Modal size="m" label="Plate settings" onClose={close}>
       <ModalTitle title="Plate settings" onClose={close} />

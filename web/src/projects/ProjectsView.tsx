@@ -411,7 +411,7 @@ function Projects() {
   return <div className={`projects${dragging?` dragging-${dragging}`:''}`} onDragOver={e=>{if(e.dataTransfer.types.includes('Files'))e.preventDefault();}} onDrop={onDrop}><div className="pj-layout">
     {railOpen && <div className="pj-scrim" aria-hidden onClick={closeRail}/>}
     <nav className="pj-side" id="pj-rail" aria-label="Projects" data-open={railOpen} onKeyDown={e=>{if(railOpen && e.key==='Escape'){e.stopPropagation();closeRail();}}}>
-      {PLACES.map(x=>railItem(x.kind,x.label,place.kind===x.kind && !searching,x.kind==='home'?undefined:counts[x.kind],()=>go({kind:x.kind}),x.kind==='unsorted'?{folder:null}:x.kind==='home'?{folder:null}:undefined))}
+      {PLACES.filter(x=>x.kind!=='recent').map(x=>railItem(x.kind,x.label,place.kind===x.kind && !searching,x.kind==='home'?undefined:counts[x.kind],()=>go({kind:x.kind}),x.kind==='unsorted'?{folder:null}:x.kind==='home'?{folder:null}:undefined))}
       <div className="pj-tree" role="tree" aria-label="Folders">
         {tree.map(({folder:f,depth})=>{const has=childFolders(folders,f.id).length>0,open=!collapsed.has(f.id),on=place.kind==='folder' && place.id===f.id && !searching;
           return <div key={f.id} className="pj-node" role="treeitem" aria-level={depth+1} aria-expanded={has?open:undefined} aria-selected={on} style={{paddingLeft:`${depth*12}px`}}

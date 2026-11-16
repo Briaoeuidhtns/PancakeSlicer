@@ -452,6 +452,12 @@ export function setOption(type: PresetType, key: string, value: ConfigValue, slo
 }
 
 export function setLayerHeight(layerHeight: number) {
+  const limit = getState().resolved.answer?.print.heights?.limits.reduce<{ max: number; diameter: number } | null>((low, l) => !low || l.max < low.max ? l : low, null);
+  if (limit && layerHeight > limit.max + 1e-9) {
+    const kept = getState().processVariant?.layerHeight ?? Number([effectiveConfig(getState(), 'process').layer_height].flat()[0]);
+    toast('maxes_out_mm_mm', { max: limit.max, diameter: limit.diameter, value: kept ? `: kept ${kept}` : '' });
+    return;
+  }
   undoable('Layer height', () => setState((s) => ({ processVariant: { layerHeight }, job: markStale(s.job) })), 'process:layer_height');
 }
 

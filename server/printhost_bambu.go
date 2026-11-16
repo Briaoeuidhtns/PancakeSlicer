@@ -114,7 +114,7 @@ func dialError(err error, host string, port int) error {
 	case errors.Is(err, syscall.EHOSTUNREACH) || errors.Is(err, syscall.ENETUNREACH):
 		msg = fmt.Sprintf("no route from the server to %s", host)
 	case errors.As(err, &dns):
-		msg = "cannot resolve " + host
+		msg = "couldn't find " + host
 	}
 	return &connError{"unreachable", msg}
 }
@@ -607,7 +607,7 @@ func testBambu(ctx context.Context, p *PrinterConfig, secret string) PrinterTest
 		if m := message.Print; m.Command == "gcode_line" && m.Sequence == sequence {
 			if refusedForAuth(m.Result, m.Reason, m.ErrCode) {
 				mqttWrite(conn, 0xE0, nil)
-				return PrinterTest{Stage: "developer_mode", Message: "the printer refused a LAN command (" + m.Reason + ")"}
+				return PrinterTest{Stage: "developer_mode", Message: "the printer turned down a LAN command (" + m.Reason + ")"}
 			}
 			answered = true
 		}
@@ -645,7 +645,7 @@ func testBambu(ctx context.Context, p *PrinterConfig, secret string) PrinterTest
 		message += " to " + model
 	}
 	if !answered {
-		message += "; the printer did not answer the test command, so Developer Mode is unconfirmed"
+		message += "; the printer didn't answer the test command, so Developer Mode isn't confirmed yet"
 	}
 	return PrinterTest{OK: true, Stage: "ok", Message: message, Model: model}
 }

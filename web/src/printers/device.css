@@ -140,7 +140,9 @@
   .device-manage { display: none; }
 }
 @media (max-width: 599px) {
-  .device-row .seg.slant-seg > button { font: var(--t-small); }
+  .device-list { flex-wrap: wrap; }
+  .device-printer-rows { flex-wrap: wrap; overflow: visible; flex: 1 1 100%; }
+  .device-printer { flex: 1 1 calc(50% - var(--s-3)); max-width: none; min-width: 0; }
   .device-row { grid-template-columns: 80px minmax(0, 1fr); }
   .device-panel { padding: var(--s-4); }
   .device-job { grid-template-columns: 64px minmax(0,1fr); gap: var(--s-3) var(--s-4); }

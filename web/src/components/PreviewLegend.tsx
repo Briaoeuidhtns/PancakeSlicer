@@ -230,7 +230,7 @@ export const Legend = memo(function Legend(props: {
       <div className="lg-head">
         <Dropdown className="lg-view" aria-label="Color scheme" value={ui.view} onValueChange={(next) => setUi((u) => ({ ...u, view: next as ViewType }))} options={[...VIEW_TYPES.filter((v) => d.header?.extended || canExtend(d) || !EXTENDED_VIEWS.has(v.key)).map((v) => ({ value: v.key, label: v.label }))]} />
         {props.headAction}
-        <button type="button" className="lg-collapse" aria-expanded={open} aria-label={open ? 'Fold legend' : 'Open legend'} onClick={() => setOpen(!open)}><Caret dir={open ? 'up' : 'down'} /></button>
+        <button type="button" className="lg-collapse" aria-expanded={open} aria-label={open ? 'Fold legend' : 'Open legend'} onClick={() => setOpen(!open)}> {open ? <Caret dir="up" /> : 'Show'}</button>
       </div>
       {props.summary ?? (
         <div className="lg-summary">
@@ -305,24 +305,8 @@ function NonplanarKey({ d, ui, setUi, ranges, mode }: { d: PreviewData; ui: Prev
   else if (ui.nonplanar === 'curved') rows = [{ c: CURVED_COLOR, label: (mode && MODE_LABELS[mode]) || 'Curved' }];
   return (
     <div>
-      <div className="seg lg-seg" role="radiogroup" aria-label="Colour curved passes by"
-        onKeyDown={(e) => {
-          const i = NONPLANAR_COLORS.findIndex((c) => c.key === ui.nonplanar);
-          const d = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
-          if (!d) return;
-          e.preventDefault();
-          const next = NONPLANAR_COLORS[(i + d + NONPLANAR_COLORS.length) % NONPLANAR_COLORS.length].key;
-          setUi((u) => ({ ...u, nonplanar: next }));
-          (e.currentTarget.querySelector(`[data-key="${next}"]`) as HTMLElement | null)?.focus();
-        }}>
-        {NONPLANAR_COLORS.map((c) => (
-          <button key={c.key} type="button" role="radio" data-key={c.key} aria-checked={ui.nonplanar === c.key}
-            tabIndex={ui.nonplanar === c.key || (c.key === 'shell' && !NONPLANAR_COLORS.some((x) => x.key === ui.nonplanar)) ? 0 : -1} aria-label={c.label}
-            onClick={() => setUi((u) => ({ ...u, nonplanar: c.key }))}>
-            {c.key === 'bead_height' ? 'Bead' : c.label}
-          </button>
-        ))}
-      </div>
+      <Dropdown className="lg-np-by" aria-label="Colour curved passes by" value={NONPLANAR_COLORS.some((c) => c.key === ui.nonplanar) ? ui.nonplanar : 'shell'}
+        onValueChange={(next) => setUi((u) => ({ ...u, nonplanar: next as typeof u.nonplanar }))} options={NONPLANAR_COLORS.map((c) => ({ value: c.key, label: c.label }))} />
       {shellCount === 0 && <div className="lg-row lg-dim">No curved passes</div>}
       {shellCount > 0 && rows.map((r, i) => (
         <div className="lg-row" key={i}><Swatch c={r.c} /><span>{r.label}</span></div>

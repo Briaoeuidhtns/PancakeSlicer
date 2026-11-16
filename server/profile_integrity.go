@@ -35,7 +35,7 @@ func profileSelectionProblem(code, kind, name, vendor string, slot int) *profile
 	if code == "profile_missing" {
 		p.Message = "Choose a " + kind + " profile before continuing."
 	} else {
-		p.Message = fmt.Sprintf("The selected %s profile %q is unavailable. Choose another profile or import it again.", kind, presetDisplayName(name))
+		p.Message = fmt.Sprintf("Oops! The selected %s profile %q isn't available. Pick another one or import it again.", kind, presetDisplayName(name))
 	}
 	return p
 }

@@ -321,13 +321,11 @@ func collidingObjects(raw json.RawMessage, c Config, j *Job) (failures []map[str
 			}
 			continue
 		}
-		reason := "Could not check " + method + " for collisions; try again or slice flat"
+		reason := "Couldn't check " + method + " for bumps — give it another try or slice flat!"
 		if checked && body > 0 {
-			reason = method + " would hit the part in " + strconv.Itoa(body) + " moves, up to " + strconv.FormatFloat(depth, 'f', 2, 64) +
-				" mm deep, past your " + strconv.FormatFloat(v.Tolerance, 'f', -1, 64) + " mm collision tolerance"
+			reason = "Watch out! " + method + " would bump the part in " + strconv.Itoa(body) + " moves (up to " + strconv.FormatFloat(depth, 'f', 2, 64) + " mm deep, past your " + strconv.FormatFloat(v.Tolerance, 'f', -1, 64) + " mm tolerance)."
 		} else if checked {
-			reason = method + " would graze the part with the fan duct in " + strconv.Itoa(duct) + " moves, past your limit of " +
-				strconv.Itoa(v.DuctLimit)
+			reason = "Careful! " + method + " would graze the part with the fan duct in " + strconv.Itoa(duct) + " moves (past your " + strconv.Itoa(v.DuctLimit) + " limit)."
 		}
 		failures = append(failures, map[string]any{"object": i, "name": o["name"], "mode": mode, "method": method, "planar_limit": "clearance",
 			"reason": reason, "try_ignore_duct": checked && duct > v.DuctLimit && body == 0})

@@ -150,7 +150,7 @@ func methodSelection(config map[string]any, decisions []methodDecision) *methodP
 		if id == nil || id == "off" {
 			continue
 		}
-		reason, recovery := "The saved method is not supported by this printer and engine.", "change_method"
+		reason, recovery := "Hmm, the saved slicing method isn't supported by this printer and engine.", "change_method"
 		supported := false
 		for _, d := range decisions {
 			if d.Target == selection[0] && d.ID == id {
@@ -177,7 +177,7 @@ func (s *Server) validateJobMethods(j *Job, req JobRequest, presets *jobPresets)
 	if !req.Plate && len(req.Files) > 0 && strings.EqualFold(filepath.Ext(req.Files[0]), ".3mf") {
 		saved, scopes, err := savedProjectMethods(filepath.Join(j.Dir, "input", req.Files[0]))
 		if err != nil {
-			return &methodProblem{Message: "The saved project's slicing methods could not be read. Repair or reimport the project before slicing.", Code: "mode_incompatible", Recovery: "change_method"}
+			return &methodProblem{Message: "Oops! Couldn't read the saved project's slicing methods — repair or reimport the project before slicing.", Code: "mode_incompatible", Recovery: "change_method"}
 		}
 		for key, value := range saved {
 			config[key] = value

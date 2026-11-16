@@ -6,6 +6,7 @@ export type CheckpointDocument = StoredDocBase & { recoveryCheckpoint?: DraftChe
 export type DraftDurability = { state: 'none' } | { state: 'pending'; checkpoint: DraftCheckpoint }
   | { state: 'durable'; checkpoint: DraftCheckpoint; updatedAt: number }
   | { state: 'failed'; checkpoint: DraftCheckpoint; message: string };
+export const TRASHED = 'This project is hanging out in the Trash.';
 export function projectFailure(error: unknown, projectId: string, expectedRevision: number, loading = false): ProjectFailure {
   const source = error && typeof error === 'object' ? error as { name?: unknown; message?: unknown; failure?: ProjectFailure } : {};
   if (source.failure?.projectId === projectId) return { ...source.failure };

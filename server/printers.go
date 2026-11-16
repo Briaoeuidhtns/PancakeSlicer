@@ -131,7 +131,7 @@ func (p *PrinterConfig) validate(resources string) error {
 			return errors.New("Serial must be your printer's serial number.")
 		}
 		if p.URL != "" || p.TLS != "" {
-			return errors.New("Flashforge printers use the Host IP field rather than a URL.")
+			return errors.New("Flashforge printers use the Host IP field instead of a URL.")
 		}
 	case "bambu-connect":
 		if p.URL != "" || p.Host != "" || p.TLS != "" {

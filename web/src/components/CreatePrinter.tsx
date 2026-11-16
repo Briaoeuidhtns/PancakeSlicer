@@ -67,7 +67,7 @@ export default function CreatePrinter({ close }: { close(): void }) {
     close();
   };
   const seg = <T extends string>(label: string, value: T, set: (v: T) => void, options: [T, string][]) => <div className="form-row"><span>{label}</span>
-    <span className="seg" role="radiogroup" aria-label={label}>{options.map(([v, text]) => <button key={v} type="button" role="radio" aria-checked={value === v} onClick={() => set(v)}>{text}</button>)}</span></div>;
+    <Dropdown className="combo" aria-label={label} value={value} onValueChange={(next) => set(next as T)} options={options.map(([v, text]) => ({ value: v, label: text }))} /></div>;
   return (
     <Modal size="m" label="Create printer" onClose={close}>
       <ModalTitle title="Create printer" onClose={close} />

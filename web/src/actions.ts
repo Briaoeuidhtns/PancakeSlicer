@@ -418,7 +418,7 @@ let sliceGeneration = 0;
 
 export function outsideVolumeWarning(s = getState()): string | null {
   const machine = printerPreset(s);
-  if (!machine) return null;
+  if (!machine || machine.config.printable_area === undefined) return null;
   const objects = s.objects.filter((o) => !o.project?.placeholder);
   if (!objects.length) return null;
   const area = parsePoints(machine.config.printable_area), height = Number(machine.config.printable_height ?? 1e6);

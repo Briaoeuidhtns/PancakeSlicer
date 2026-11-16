@@ -1,4 +1,5 @@
 import { openUrlImport } from '../url-import';
+import { NoticeLog } from './NoticeLog';
 import { More } from './kit';
 import { preloadable } from '../preloadable';
 import { MenuButton, type MenuEntry } from './Menu';
@@ -239,6 +240,7 @@ export function SliceNotification() {
   const failedIds = new Set(failures.map((f) => f.objectId));
   const results = done ? sliced.filter((r) => !failedIds.has(r.objectId)) : [];
   const suggestIds = useStore((s) => pendingRecommendations(s).map((o) => o.id).join(','));
+  const tab = useStore((s) => s.tab);
   const plateObjects = useStore((s) => s.objects);
   const orientPrompts = useStore((s) => s.orientPrompts);
   const orientConfirm = useStore((s) => s.orientConfirm !== null);
@@ -267,6 +269,7 @@ export function SliceNotification() {
     return () => timers.forEach(clearTimeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transient.join('|'), held]);
+  const inPreview = tab === 'preview';
   const compareLink = <button type="button" className="notif-link" onClick={() => (setCompareWanted('standard'), setState({ tab: 'preview' }))}>Compare</button>;
   const tier = useTier();
   const [tipsOpen, setTipsOpen] = useState(false);
@@ -301,11 +304,11 @@ export function SliceNotification() {
         <div className="notif-title">Slicing canceled</div>
       </div>
     ),
-    ...perObject.filter((n) => !n.f && !closed.has(n.key) && !expired.has(n.key)).map(({ bare, key, r, ws }) => (
+    ...perObject.filter((n) => !n.f && !closed.has(n.key) && !expired.has(n.key) && !(inPreview && !n.ws.length && !n.r?.partial)).map(({ bare, key, r, ws }) => (
       <div key={key} className={`notification ${ws.length && !r ? 'warning' : 'done'}`}>
         {close(key)}
         <div className="notif-title notif-sentence">{r ? `${bare}: ${r.style}` : bare}</div>
-        {r && <div className="notif-body">{r.fact}{r.curved && <><Sep/>{compareLink}</>}</div>}
+        {r && !inPreview && <div className="notif-body">{r.fact}{r.curved && <><Sep/>{compareLink}</>}</div>}
         {r?.partial && <div className="notif-body">{r.partial[0].toUpperCase() + r.partial.slice(1)}</div>}
         <WarningLines warnings={ws} open={details.has(key)} onToggle={() => toggleDetails(key)} />
       </div>
@@ -374,6 +377,7 @@ export function SliceNotification() {
         <button type="button" className="notif-chip" aria-expanded={tipsOpen} onClick={() => setTipsOpen(!tipsOpen)}>{tips.length} tips</button>
       )}
       {(tips.length < 2 || tier !== 'phone' || tipsOpen) && tips}
+      <NoticeLog />
     </div>
   );
 }
@@ -398,7 +402,7 @@ export function SlantPanel() {
       {e.limit !== undefined && (over
         ? <div className="slant-warn" role="alert">Steeper than the head reaches ({deg(e.limit)}) in this direction: {strict
           ? `prints at ${deg(e.limit)}`
-          : 'prints as set, the head may touch the part'}</div>
+          : 'prints as set, though the head might give the part a little nudge'}</div>
         : <div className="slant-note">The head reaches {deg(e.limit)} in this direction</div>)}
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
         <button className="btn" disabled={e.auto} onClick={resetSlantAuto}>Reset to auto</button>

@@ -273,9 +273,11 @@ export function DeviceView() {
       return <button type="button" className="device-printer" aria-pressed={setup.key === current?.setup.key} key={setup.key} onClick={() => select(setup.key)}>
         <PrinterRender cover={cover} /><span><strong>{setup.name}</strong>{own && <span className="device-printer-own">{own}</span>}<span className="status-text" data-tone={state.tone}>{state.label}</span></span>
       </button>;
-    })}{!printers.length && <p className="device-muted">No printers connected</p>}</div>
-      <div className="device-list-actions">{current && <button type="button" className="btn slant" onClick={() => openConnection(current.printer)}>Connection</button>}
-        <button type="button" className="btn slant device-manage" onClick={() => setState({ presetUx: { kind: 'presets', type: 'machine' } })}>Manage printers</button></div></aside>
-    {current && shown ? <DevicePanel key={current.printer} connection={{ ...current, name: shown.name }} model={shown.model || current.model || ''} cover={printerCover(shown.vendor, shown.config, shown.model)} status={connections.status[current.printer]} live={connections.live} /> : <div className="device-empty"><h1>Connect a printer</h1><p>Watch live progress and control your printer from here.</p><button type="button" className="btn-primary" onClick={() => setState({ appDialog: 'send' })}>Connect</button></div>}
+    })}{!printers.length && <p className="device-muted">No printers yet</p>}</div>
+      <div className="device-list-actions">{current && connections.enabled && <button type="button" className="btn" onClick={() => openConnection(current.setup.key)}>Connection</button>}
+        <button type="button" className="btn device-manage" onClick={() => openLibrary('machine')}>Manage printers</button></div></aside>
+    {current?.connection ? <DevicePanel key={current.setup.key} connection={{ ...current.connection, name: current.setup.name }} model={current.setup.model || current.connection.model || ''} cover={printerCover(current.setup.vendor, {}, current.setup.model)} status={connections.status[current.setup.key]} live={connections.live} />
+      : current ? <OfflinePanel key={current.setup.key} printer={current.setup.key} name={current.setup.name} cover={printerCover(current.setup.vendor, {}, current.setup.model)}/>
+      : <div className="device-empty"><h1>Add a printer</h1><p>Add your printer to start slicing for it and keep all its filaments handy here.</p></div>}
   </main>;
 }

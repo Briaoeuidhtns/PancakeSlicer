@@ -359,7 +359,7 @@ func (s *Server) versionRoutes(mux *http.ServeMux) {
 					return
 				}
 			}
-			workspaceFailure(w, 404, "version_missing", "This version is no longer kept.", "open_versions", 0)
+			workspaceFailure(w, 404, "version_missing", "Hmm, this version isn't kept anymore.", "open_versions", 0)
 		})
 	}
 	mux.HandleFunc("GET /api/versions/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -381,7 +381,7 @@ func (s *Server) versionRoutes(mux *http.ServeMux) {
 		version(w, r, func(d *workspaceData, id string, _ *versionIndex, v *projectVersion) {
 			raw, err := os.ReadFile(filepath.Join(st.versionDir(id), "records", v.Record+".json"))
 			if err != nil {
-				workspaceFailure(w, 503, "version_unavailable", "This version could not be read.", "retry_storage", 0)
+				workspaceFailure(w, 503, "version_unavailable", "Oops! Couldn't read this version.", "retry_storage", 0)
 				return
 			}
 			w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
@@ -408,7 +408,7 @@ func (s *Server) versionRoutes(mux *http.ServeMux) {
 				err = json.Unmarshal(migrateVersionRecord(d, raw, v.At), &rec)
 			}
 			if err != nil {
-				workspaceFailure(w, 503, "version_unavailable", "This version could not be read.", "retry_storage", 0)
+				workspaceFailure(w, 503, "version_unavailable", "Oops! Couldn't read this version.", "retry_storage", 0)
 				return
 			}
 			doc := map[string]json.RawMessage{}
@@ -456,7 +456,7 @@ func (s *Server) versionRoutes(mux *http.ServeMux) {
 			j.AwaitFinished(r.Context())
 		}
 		if j == nil || !sliceJob(j) {
-			workspaceFailure(w, 409, "slice_unavailable", "The slice is not finished or no longer exists.", "slice_again", 0)
+			workspaceFailure(w, 409, "slice_unavailable", "Oops, that slice isn't finished or isn't around anymore.", "slice_again", 0)
 			return
 		}
 		key := j.ID
@@ -467,7 +467,7 @@ func (s *Server) versionRoutes(mux *http.ServeMux) {
 		view := j.View()
 		root := filepath.Join(st.root, "versions")
 		if err := os.MkdirAll(root, 0700); err != nil {
-			workspaceFailure(w, 507, "slice_copy_failed", "The slice could not be kept with this version.", "retry_storage", 0)
+			workspaceFailure(w, 507, "slice_copy_failed", "Uh-oh, couldn't keep the slice with this version.", "retry_storage", 0)
 			return
 		}
 		var pending string
@@ -481,12 +481,12 @@ func (s *Server) versionRoutes(mux *http.ServeMux) {
 			err = errors.Join(copyKeptSlice(j.Dir, pending), atomicJobFile(filepath.Join(pending, "record.json"), view.Slice), atomicJobFile(filepath.Join(pending, "request.json"), request))
 		}
 		if err != nil {
-			workspaceFailure(w, 507, "slice_copy_failed", "The slice could not be kept with this version.", "retry_storage", 0)
+			workspaceFailure(w, 507, "slice_copy_failed", "Uh-oh, couldn't keep the slice with this version.", "retry_storage", 0)
 			return
 		}
 		version(w, r, func(d *workspaceData, id string, x *versionIndex, v *projectVersion) {
 			if v.Revision != in.Revision {
-				workspaceFailure(w, 409, "version_moved", "This version changed after the slice started.", "slice_again", 0)
+				workspaceFailure(w, 409, "version_moved", "Heads up — this version changed after the slice started.", "slice_again", 0)
 				return
 			}
 			target := filepath.Join(st.versionDir(id), "slices", key)
@@ -497,7 +497,7 @@ func (s *Server) versionRoutes(mux *http.ServeMux) {
 					err = errors.Join(os.MkdirAll(filepath.Dir(target), 0700), os.Rename(pending, target), syncWorkspaceDirectory(filepath.Dir(target)))
 				}
 				if err != nil {
-					workspaceFailure(w, 507, "slice_copy_failed", "The slice could not be kept with this version.", "retry_storage", 0)
+					workspaceFailure(w, 507, "slice_copy_failed", "Uh-oh, couldn't keep the slice with this version.", "retry_storage", 0)
 					return
 				}
 			}
@@ -513,7 +513,7 @@ func (s *Server) versionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/versions/{id}/{v}/open-slice", func(w http.ResponseWriter, r *http.Request) {
 		version(w, r, func(d *workspaceData, id string, x *versionIndex, v *projectVersion) {
 			if v.Slice == nil {
-				workspaceFailure(w, 404, "slice_missing", "This version was not sliced.", "slice_again", 0)
+				workspaceFailure(w, 404, "slice_missing", "This version hasn't been sliced yet!", "slice_again", 0)
 				return
 			}
 			if j := s.jobs.Get(v.Slice.Job); j != nil && sliceJob(j) {
@@ -535,7 +535,7 @@ func (s *Server) versionRoutes(mux *http.ServeMux) {
 			}
 			if err != nil {
 				log.Printf("project %s version %d slice: %v", id, v.ID, err)
-				workspaceFailure(w, 503, "slice_unavailable", "The kept slice could not be opened.", "slice_again", 0)
+				workspaceFailure(w, 503, "slice_unavailable", "Oops! Couldn't open the saved slice.", "slice_again", 0)
 				return
 			}
 			v.Slice.Job = j.ID

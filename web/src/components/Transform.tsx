@@ -16,6 +16,7 @@ const PartManipulation = preloadable(() => import('./PartManipulation'));
 let moveCoordinates: 'world' | 'object' = 'world';
 const DEG = Math.PI / 180;
 const AX = ['X', 'Y', 'Z'] as const;
+const aboveZero = (v: number): NumIssue | undefined => v > 0 ? undefined : { inline: 'Needs to be above 0!', detail: 'needs to be above 0!' };
 const rotationOf = (rot: [number, number, number]) => new THREE.Matrix4().makeRotationZ(rot[2] * DEG)
   .multiply(new THREE.Matrix4().makeRotationY(rot[1] * DEG)).multiply(new THREE.Matrix4().makeRotationX(rot[0] * DEG));
 
@@ -30,13 +31,8 @@ function setRotation(objectId: number, instanceId: number, rot: [number, number,
 
 export function CoordToggle({ value, onChange, enabled }: { value: 'world' | 'object'; onChange: (v: 'world' | 'object') => void; enabled: boolean }) {
   return (
-    <span className="seg" role="radiogroup" aria-label="Coordinates">
-      {(['world', 'object'] as const).map((v) => (
-        <button key={v} type="button" role="radio" aria-checked={value === v} disabled={!enabled} onClick={() => onChange(v)}>
-          {v === 'world' ? 'World' : 'Object'}
-        </button>
-      ))}
-    </span>
+    <Dropdown aria-label="Coordinates" value={value} disabled={!enabled} onValueChange={(next) => onChange(next as 'world' | 'object')}
+      options={[{ value: 'world', label: 'World' }, { value: 'object', label: 'Object' }]} />
   );
 }
 

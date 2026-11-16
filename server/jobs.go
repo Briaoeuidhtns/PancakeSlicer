@@ -1277,7 +1277,7 @@ func (m *JobManager) Retry(parent *Job, client string) (*Job, error) {
 	for _, name := range required {
 		info, err := os.Stat(filepath.Join(parent.Dir, "input", name))
 		if err != nil || !info.Mode().IsRegular() {
-			return nil, &admissionError{410, "Original job inputs are unavailable. Reimport the original project before slicing again; retained outputs remain available.", 0}
+			return nil, &admissionError{410, "Oops, the original job inputs are gone! Reimport the original project before slicing again (your saved outputs are still here).", 0}
 		}
 	}
 	j, err := m.newJobLocked(client)
