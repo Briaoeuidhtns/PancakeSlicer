@@ -1,4 +1,5 @@
 #include "ConformalLayers.hpp"
+#include "libslic3r/Nonplanar/Research.hpp"
 #include "CurvedTopsSurface.hpp"
 
 #include "libslic3r/ExtrusionEntity.hpp"
@@ -736,7 +737,7 @@ std::shared_ptr<const ConformalLayerField> build_conformal_layer_field(const ind
             const double pmax = rr > 1e-9 ? s_hi / rr : rr < -1e-9 ? s_lo / rr : 1e9;
             col.ease          = std::clamp(1. - 1. / std::max(pmax, 1.), 0., 0.25);
         }
-    if (const char *dump = std::getenv("NP_CONFORMAL_DUMP"); dump != nullptr && *dump != 0) {
+    if (const char *dump = research_switch("NP_CONFORMAL_DUMP"); dump != nullptr && *dump != 0) {
         FILE *f = std::fopen(dump, "w");
         if (f) {
             std::fprintf(f, "# x y T c L zb omega shell_depth=%g identity=%g\n", F->m_shell_depth, ident);
@@ -853,7 +854,7 @@ std::string conformal_planar_limit(const PrintObject &object, std::string &reaso
     conformal_layers_field(object, &summary);
     const bool base = summary.find("too close to the flat base") != std::string::npos;
     if (!base && summary.find("could not reach") != std::string::npos) {
-        reason = "Conformal layers: top surface height varies too much to stay within a single layer's thickness limits";
+        reason = "Conformal layers: the top surface height varies too much to fit inside a single layer's thickness limits.";
         return "bounds";
     }
     reason = base ? "Conformal layers: the top surfaces sit too close to the flat base layers to squeeze in a curved shell and transition ramp." :

@@ -6,6 +6,7 @@
 #include "admesh/stl.h"
 #include <Eigen/Geometry>
 #include <boost/filesystem/directory.hpp>
+#include "libslic3r/Nonplanar/Research.hpp"
 #include "libslic3r/Nonplanar/Report.hpp"
 #include "libslic3r/Nonplanar/Rests.hpp"
 #include "libslic3r/Nonplanar/StageCache.hpp"
@@ -22,6 +23,7 @@
 #include "libslic3r/enum_bitmask.hpp"
 #include "libslic3r/ExPolygon.hpp"
 #include "libslic3r/Exception.hpp"
+#include "libslic3r/Flow.hpp"
 #include "libslic3r/ExtrusionEntity.hpp"
 #include "libslic3r/Emboss.hpp"
 #include "libslic3r/NSVGUtils.hpp"
@@ -80,6 +82,7 @@
 #include "libslic3r/miniz_extension.hpp"
 
 #include <boost/algorithm/string/predicate.hpp>
+#include <boost/algorithm/string/trim.hpp>
 #include <boost/filesystem/operations.hpp>
 #include <boost/filesystem/path.hpp>
 #include <boost/nowide/fstream.hpp>
@@ -110,6 +113,7 @@
 #include <memory>
 #include <iterator>
 #include <mutex>
+#include <new>
 #include <optional>
 #include <tuple>
 #include <ostream>
@@ -226,10 +230,14 @@ void clear_object_modes(Model &model)
 
 Model read_input(const std::string &file)
 {
-    if (boost::algorithm::iends_with(file, ".step") || boost::algorithm::iends_with(file, ".stp"))
-        return Model::read_from_step(file, LoadStrategy::LoadModel | LoadStrategy::AddDefaultInstances, nullptr, nullptr, nullptr,
-                                     step_meshing.linear_deflection, step_meshing.angle_deflection, step_meshing.split_compound);
-    return Model::read_from_file(file, nullptr, nullptr, LoadStrategy::LoadModel | LoadStrategy::AddDefaultInstances);
+    try {
+        if (boost::algorithm::iends_with(file, ".step") || boost::algorithm::iends_with(file, ".stp"))
+            return Model::read_from_step(file, LoadStrategy::LoadModel | LoadStrategy::AddDefaultInstances, nullptr, nullptr, nullptr,
+                                         step_meshing.linear_deflection, step_meshing.angle_deflection, step_meshing.split_compound);
+        return Model::read_from_file(file, nullptr, nullptr, LoadStrategy::LoadModel | LoadStrategy::AddDefaultInstances);
+    } catch (const std::exception &e) {
+        throw SlicingError(e.what(), "mesh_invalid", warning_object(fs::path(file).filename().string()));
+    }
 }
 
 [[noreturn]] void usage(const std::string &error)
@@ -246,6 +254,7 @@ Model read_input(const std::string &file)
                  "       -o OUT.gcode (MODEL | PROJECT.3mf | --plate PLATE.json | --project SPEC.json | --calib TEST)\n"
                  "       [--moves-out FILE [--moves-extended]] [--progress] [--calib-params key=value,...] [--preset-cache DIR]\n"
                  "       [--stage-cache DIR [--stage-cache-max-mb N]]\n"
+                 "       [--research NAME=VALUE]...   (a research switch, Nonplanar/Research.hpp; the engine reads no environment)\n"
                  "       (plate JSON objects take \"plate\": N; a plate JSON of several plates slices with --plate-index N)\n"
                  "       (plate JSON objects and volumes take \"paint\"; plate JSON objects take \"layer_height_profile\")\n"
                  "       (plate JSON volumes take \"type\": \"seam\" and \"seam_mode\": center|left|right|enforced|blocked|neutral)\n"
@@ -516,6 +525,13 @@ Args parse_args(int argc, char **argv)
         else if (arg == "--tip-out") a.tip_out = next();
         else if (arg == "--planned-out") a.planned_out = next();
         else if (arg == "--verify-gcode") a.verify_gcode = next();
+        else if (arg == "--research") {
+            const std::string kv = next();
+            const size_t      eq = kv.find('=');
+            if (eq == std::string::npos || eq == 0)
+                throw std::runtime_error("--research takes NAME=VALUE");
+            Slic3r::set_research_switch(kv.substr(0, eq), kv.substr(eq + 1));
+        }
         else if (arg == "--calib") a.calib = next();
         else if (arg == "--calib-head") a.calib_head = next();
         else if (arg == "--calib-fit") a.calib_fit = std::atoi(next().c_str());
@@ -1392,7 +1408,8 @@ OrientSlice slice_orientation(const Args &args, const Model &source, const Matri
         if (args.allow_mixed_temperatures)
             print.set_check_multi_filaments_compatibility(false);
         if (const StringObjectException err = print.validate(); ! err.string.empty())
-            throw std::runtime_error("validate: " + err.string);
+            throw SlicingError(err.string, err.code.code.empty() ? std::string("settings_invalid") : err.code.code, err.code.object,
+                               err.code.code.empty() && !err.opt_key.empty() ? nlohmann::json{ { "option", err.opt_key } }.dump() : err.code.params);
         print.process();
         GCodeProcessorResult result;
         const fs::path       gcode = dir / fs::unique_path("orient_%%%%%%%%.gcode");
@@ -3257,6 +3274,44 @@ void explode_3mf(const Args &args)
 
 #include "nonplanar_calib_classic.ipp"
 
+nlohmann::json coded_json(const std::string &code, const std::string &object, const std::string &params, const std::string &detail)
+{
+    nlohmann::json j{ { "code", code }, { "params", nlohmann::json::parse(params.empty() ? "{}" : params, nullptr, false) } };
+    if (j["params"].is_discarded() || !j["params"].is_object())
+        j["params"] = nlohmann::json::object();
+    if (!object.empty())
+        j["object"] = object;
+    if (!detail.empty())
+        j["detail"] = detail;
+    return j;
+}
+
+std::string validation_object(const ObjectBase *object)
+{
+    if (const auto *po = dynamic_cast<const PrintObject *>(object))
+        return warning_object(po->model_object()->name);
+    if (const auto *mo = dynamic_cast<const ModelObject *>(object))
+        return warning_object(mo->name);
+    return {};
+}
+
+struct CodedWarnings
+{
+    nlohmann::json         *record = nullptr;
+    std::set<std::string>   seen;
+    void add(const WarningCode &code, const std::string &detail)
+    {
+        if (!seen.insert(code.code + '\x1f' + code.object + '\x1f' + detail).second)
+            return;
+        nlohmann::json j = coded_json(code.code, code.object, code.params, detail);
+        nlohmann::json live = j;
+        live.erase("detail");
+        std::cerr << nlohmann::json{ { "warning", live } }.dump() << "\n";
+        if (record != nullptr)
+            (*record)["warnings"].push_back(std::move(j));
+    }
+};
+
 int main(int argc, char **argv)
 {
     if (argc == 3 && std::string(argv[1]) == "--load-gcode") {
@@ -3284,7 +3339,10 @@ int main(int argc, char **argv)
     if (!args.stage_cache.empty())
         Slic3r::Nonplanar::set_stage_cache(args.stage_cache, args.stage_cache_max_mb << 20);
     nlohmann::json record;
-    if (const char *level = std::getenv("NP_LOG_LEVEL"))
+    CodedWarnings  coded;
+    if (!args.json.empty())
+        coded.record = &record;
+    if (const char *level = Slic3r::research_switch("NP_LOG_LEVEL"))
         set_logging_level(unsigned(std::atoi(level)));
     try {
         if (!args.dump_options.empty()) dump_options(args.dump_options);
@@ -3346,12 +3404,22 @@ int main(int argc, char **argv)
             GCodeProcessor processor;
             processor.apply_config(full);
             processor.process_file(args.verify_gcode);
-            ClearanceParams params;
-            params.head        = Nonplanar::resolve_head_envelope(full);
-            params.contact_bar = true;
-            if (full.nonplanar_mode.value == NonplanarMode::Auto && full.nonplanar_kinematics.value == RotaryLayout::None)
-                full.nonplanar_mode.value = NonplanarMode::NonplanarTop;
-            params.cone_tolerance = curved_cone_tolerance(full.nonplanar_mode.value);
+            std::optional<NonplanarMode> clearance_mode;
+            {
+                boost::nowide::ifstream in(args.verify_gcode);
+                const std::string       key = "; nonplanar_clearance_mode = ";
+                for (std::string line; std::getline(in, line) && line.rfind("; HEADER_BLOCK_END", 0) != 0;)
+                    if (line.rfind(key, 0) == 0) {
+                        ConfigOptionEnum<NonplanarMode> mode;
+                        if (!mode.deserialize(boost::trim_copy(line.substr(key.size()))))
+                            throw std::runtime_error("--verify-gcode: unknown nonplanar_clearance_mode in " + args.verify_gcode);
+                        clearance_mode = mode.value;
+                        break;
+                    }
+            }
+            if (!clearance_mode)
+                throw std::runtime_error("--verify-gcode: " + args.verify_gcode + " has no nonplanar_clearance_mode header line; slice it again");
+            const ClearanceParams params = clearance_params(full, *clearance_mode, true);
             GCodeProcessorResult &result = processor.result();
             result.clearance_report = verify_clearance(result, params, *make_tool_kinematics(full));
             const ClearanceReport &report = result.clearance_report;
@@ -3369,7 +3437,7 @@ int main(int argc, char **argv)
             std::cout << "clearance_duct_moves " << report.duct_moves << "\n";
             std::cout << "clearance_hit_classes land " << report.hit_land_moves << " cone " << report.hit_cone_moves << " body "
                       << report.hit_body_moves << " travel " << report.hit_travel_moves << " extrusion " << report.hit_extrusion_moves << "\n";
-            if (const char *lines = std::getenv("NP_VERIFY_LINES")) {
+            if (const char *lines = Slic3r::research_switch("NP_VERIFY_LINES")) {
                 std::map<unsigned, float> least;
                 std::stringstream         list(lines);
                 for (std::string item; std::getline(list, item, ',');)
@@ -3419,9 +3487,13 @@ int main(int argc, char **argv)
             std::vector<Preset *> presets;
             Semver version;
             DynamicPrintConfig project_config;
-            model = Model::read_from_archive(args.model, &project_config, &substitutions, type,
-                LoadStrategy::LoadModel | LoadStrategy::LoadConfig | LoadStrategy::AddDefaultInstances,
-                &plates, &presets, &version);
+            try {
+                model = Model::read_from_archive(args.model, &project_config, &substitutions, type,
+                    LoadStrategy::LoadModel | LoadStrategy::LoadConfig | LoadStrategy::AddDefaultInstances,
+                    &plates, &presets, &version);
+            } catch (const std::exception &e) {
+                throw SlicingError(e.what(), "project_unreadable");
+            }
             if (!project_config.empty()) {
                 config = DynamicPrintConfig::full_print_config();
                 config.apply(project_config);
@@ -3670,10 +3742,17 @@ int main(int argc, char **argv)
         std::vector<StringObjectException> warnings;
         if (args.allow_mixed_temperatures)
             print.set_check_multi_filaments_compatibility(false);
-        if (const StringObjectException err = print.validate(&warnings); ! err.string.empty())
-            throw std::runtime_error("validate: " + err.string);
+        if (const StringObjectException err = print.validate(&warnings); ! err.string.empty()) {
+            const std::string object = err.code.object.empty() ? validation_object(err.object) : err.code.object;
+            if (!err.code.code.empty())
+                throw SlicingError(err.string, err.code.code, object, err.code.params);
+            throw SlicingError(err.string, "settings_invalid", object,
+                               err.opt_key.empty() ? std::string("{}") : nlohmann::json{ { "option", err.opt_key } }.dump());
+        }
         for (const StringObjectException &w : warnings)
-            std::cerr << "warning: " << w.string << "\n";
+            coded.add({ w.code.code.empty() ? "settings_warning" : w.code.code, w.code.object.empty() ? validation_object(w.object) : w.code.object,
+                        !w.code.code.empty() || w.opt_key.empty() ? w.code.params : nlohmann::json{ { "option", w.opt_key } }.dump() },
+                      w.string);
         if (!args.plan_tops.empty()) {
             write_plan_tops(args, model, config, print);
             return 0;
@@ -3690,16 +3769,15 @@ int main(int argc, char **argv)
         try {
             print.process();
         } catch (const SlicingErrors &errors) {
-            throw std::runtime_error(print.slicing_errors_message(errors));
+            const SlicingError &first = errors.errors_.front();
+            throw SlicingError(print.slicing_errors_message(errors), first.code().empty() ? std::string("slicing_failed") : first.code(),
+                               first.object(), first.params());
         }
         if (args.progress) print.set_status_callback([&](const PrintBase::SlicingStatus &status) {
             std::lock_guard<std::mutex> lock(progress_mutex);
             const int percent = std::min(99, (status.percent - 80) * 5);
             if (percent > 0 && percent > export_percent) { export_percent = percent; progress("export", percent); }
         });
-        for (const PrintObject *object : print.objects())
-            for (const PrintStateBase::Warning &w : object->step_state_with_warnings(posSupportMaterial).warnings)
-                std::cerr << "warning: " << w.message << "\n";
         if (last_percent < 100) progress("slice", 100);
         progress("export", 0);
         const auto   t_export = std::chrono::steady_clock::now();
@@ -3718,8 +3796,13 @@ int main(int argc, char **argv)
         }, args.verify || !args.json.empty());
         GCodeWriter::planned_moves = nullptr;
         if (args.progress) print.set_status_default();
-        for (const PrintStateBase::Warning &w : print.step_state_with_warnings(psGCodeExport).warnings)
-            std::cerr << "warning: " << w.message << "\n";
+        for (int step = 0; step < int(psCount); ++step)
+            for (const PrintStateBase::Warning &w : print.step_state_with_warnings(PrintStep(step)).warnings)
+                coded.add(w.code, w.message);
+        for (const PrintObject *object : print.objects())
+            for (int step = 0; step < int(posCount); ++step)
+                for (const PrintStateBase::Warning &w : object->step_state_with_warnings(PrintObjectStep(step)).warnings)
+                    coded.add(w.code, w.message);
         if (!args.planned_out.empty()) {
             boost::nowide::ofstream out(args.planned_out);
             out << "# x y z b c planned_tip_speed duration\n" << std::setprecision(10);
@@ -3781,33 +3864,6 @@ int main(int argc, char **argv)
             text["max_vz_planned_line"] = text_value(vz_line);
             text["machine_max_speed_z"] = text_value(config.opt<ConfigOptionFloats>("machine_max_speed_z")->get_at(0));
         }
-        for (const auto &warning : print.step_state_with_warnings(psSkirtBrim).warnings) {
-            std::cout << "print_warning " << warning.message << "\n";
-            if (!args.json.empty()) {
-                if (!record["text_summary"].contains("print_warning"))
-                    record["text_summary"]["print_warning"] = warning.message;
-                record["print_warnings"].push_back(warning.message);
-            }
-        }
-        for (const auto &warning : print.step_state_with_warnings(psGCodeExport).warnings)
-            std::cout << "export_warning " << warning.message << "\n";
-        if (! args.json.empty()) {
-            std::string all;
-            for (const auto &warning : print.step_state_with_warnings(psGCodeExport).warnings)
-                all += (all.empty() ? "" : "\n") + warning.message;
-            if (! all.empty())
-                record["text_summary"]["export_warning"] = all;
-        }
-        for (const PrintObject *object : print.objects())
-            for (int step = 0; step < int(posCount); ++step)
-                for (const auto &warning : object->step_state_with_warnings(PrintObjectStep(step)).warnings) {
-                    std::cout << "object_warning " << warning.message << "\n";
-                    if (! args.json.empty()) {
-                        if (! record["text_summary"].contains("object_warning"))
-                            record["text_summary"]["object_warning"] = warning.message;
-                        record["object_warnings"].push_back(warning.message);
-                    }
-                }
         Nonplanar::FlowModStats flow;
         for (const PrintObject *object : print.objects())
             flow.merge(object->conformal().flow_mod);
@@ -3979,10 +4035,7 @@ int main(int argc, char **argv)
         }
         progress("verify", 0);
         if (args.verify) {
-            ClearanceParams params;
-            params.head               = Nonplanar::resolve_head_envelope(print.config());
-            params.contact_bar        = true;
-            params.cone_tolerance     = curved_tops_cone_tolerance(print);
+            const ClearanceParams params = clearance_params(print.config(), print_clearance_mode(print), true);
             result.clearance_report   = verify_clearance(result, params, *make_tool_kinematics(print.config()));
         }
         if (!args.moves_out.empty() && args.moves_extended)
@@ -4071,6 +4124,8 @@ int main(int argc, char **argv)
                                                                                            result.nonplanar_report;
         for (size_t i = 0; i < report.objects.size(); ++i) {
             const Nonplanar::ReportObject &object = report.objects[i];
+            for (const CodedWarning &w : object.warnings)
+                coded.add(w.code, w.message);
             if (print.objects()[i]->auto_z_contouring()) {
                 std::cout << "nonplanar_auto_z_contouring " << object.name << "\n";
                 if (!args.json.empty())
@@ -4161,14 +4216,25 @@ int main(int argc, char **argv)
             progress("package", 100);
         }
     } catch (const std::exception &e) {
-        std::cerr << "error: " << e.what() << "\n";
+        std::string code = "slicing_failed", object, params = "{}";
+        if (const auto *coded_error = dynamic_cast<const SlicingError *>(&e); coded_error != nullptr && !coded_error->code().empty())
+            code = coded_error->code(), object = coded_error->object(), params = coded_error->params();
+        else if (dynamic_cast<const FlowError *>(&e) != nullptr)
+            code = "line_width_invalid";
+        else if (dynamic_cast<const std::bad_alloc *>(&e) != nullptr)
+            code = "out_of_memory";
+        else if (dynamic_cast<const CanceledException *>(&e) != nullptr)
+            code = "canceled";
+        const std::string detail = boost::algorithm::trim_copy(std::string(e.what()));
         if (! args.json.empty()) {
             record["status"] = "error";
+            record["error"]  = coded_json(code, object, params, detail);
             record["totals"]["aborts"].push_back(e.what());
             record["totals"]["exceptions"].push_back(e.what());
             try { write_slice_json(args.json, record); }
             catch (const std::exception &json_error) { std::cerr << "error: " << json_error.what() << "\n"; }
         }
+        std::cerr << nlohmann::json{ { "error", coded_json(code, object, params, detail) } }.dump() << "\n";
         return 1;
     }
     return 0;
