@@ -409,7 +409,9 @@ func (j *Job) morphClearance(c Config) clearanceVerdict {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), verifierTimeout)
 		defer cancel()
-		out, err := exec.CommandContext(ctx, c.Tool, "--verify-gcode", gcode, "--profiles", filepath.Join(c.Resources, "profiles")).Output()
+		cmd := exec.CommandContext(ctx, c.Tool, "--verify-gcode", gcode, "--profiles", filepath.Join(c.Resources, "profiles"))
+		cmd.Env = engineEnv(os.TempDir())
+		out, err := cmd.Output()
 		v := clearanceVerdict{}
 		duct := false
 		for _, line := range strings.Split(string(out), "\n") {
@@ -433,7 +435,7 @@ func (j *Job) morphClearance(c Config) clearanceVerdict {
 		}
 		settings := gcodeSettings(gcode, "nonplanar_collision_tolerance", "nonplanar_duct_graze_limit", "nonplanar_ignore_duct", "nonplanar_collision_check")
 		v.Check = settings["nonplanar_collision_check"]
-		defaults := optionDefaults(optionData)
+		defaults := optionDefaults(c.Options.plain)
 		for key, policy := range map[string]string{"nonplanar_collision_tolerance": "1", "nonplanar_duct_graze_limit": "200", "nonplanar_ignore_duct": "0"} {
 			if _, ok := settings[key]; ok {
 				continue

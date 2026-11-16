@@ -65,17 +65,14 @@ export function CanvasToolbar() {
   const instances = useStore((s) => s.objects.find((o) => o.id === s.selected?.object)?.instances.length ?? 0);
   const project = useStore((s) => !!s.project);
   const toggle = (g: Gizmo) => setState({ gizmo: gizmo === g ? 'none' : g });
-  const brimEars = useStore((s) => !!s.features.brim_ears);
   const booleanOk = useStore(canBoolean);
-  const text = useStore((s) => !!s.features.emboss_text);
   const assemblyOn = useAssembly().on;
-  const svg = useStore((s) => !!s.features.emboss_svg);
   const native = useStore((s) => !!s.objects.find((o) => o.id === s.selected?.object)?.native);
   const volumes = useStore((s) => !!s.objects.find((o) => o.id === s.selected?.object)?.volumes?.length);
   const locked = project ? ' — instances cannot be added or removed from an opened project' : '';
   const placeholder = useStore((s) => s.objects.find((o) => o.id === s.selected?.object)?.project?.placeholder);
   const edit = !!sel && !placeholder && !sel.all;
-  const splitParts = useStore((s) => !!s.features.volumes && !s.objects.find((o) => o.id === s.selected?.object)?.volumes?.length);
+  const splitParts = useStore((s) => !s.objects.find((o) => o.id === s.selected?.object)?.volumes?.length);
   const cutBlock = useStore(cutBlocked);
   const paint = useStore(canPaint);
   const layers = useStore(canEditLayers);
@@ -99,9 +96,9 @@ export function CanvasToolbar() {
     {label: 'Mesh boolean', shortcut: 'B', icon: menuGlyph('toolbar_meshboolean'), action: toggleBoolean, disabled: !booleanOk && gizmo !== 'boolean'},
     'sep',
     ...PAINT_GIZMOS.map(([kind, icon, label, key]): MenuEntry => ({label, shortcut: key, icon: menuGlyph(icon), action: () => togglePaint(kind), disabled: !paint && gizmo !== kind, checked: gizmo === kind})),
-    ...(brimEars ? [{label: 'Brim ears', icon: menuGlyph('toolbar_brimears'), action: () => toggle('brimears'), disabled: !sel || !!placeholder || !!native || volumes} as MenuEntry] : []),
-    ...(text ? [{label: 'Emboss text', shortcut: 'T', icon: menuGlyph('toolbar_text'), action: toggleText, disabled: !!sel?.all || !!placeholder || !!native} as MenuEntry] : []),
-    ...(svg ? [{label: 'SVG', icon: menuGlyph('menu_obj_svg'), action: toggleSvg, disabled: !!sel?.all || !!placeholder || !!native} as MenuEntry] : []),
+    {label: 'Brim ears', icon: menuGlyph('toolbar_brimears'), action: () => toggle('brimears'), disabled: !sel || !!placeholder || !!native || volumes},
+    {label: 'Emboss text', shortcut: 'T', icon: menuGlyph('toolbar_text'), action: toggleText, disabled: !!sel?.all || !!placeholder || !!native},
+    {label: 'SVG', icon: menuGlyph('menu_obj_svg'), action: toggleSvg, disabled: !!sel?.all || !!placeholder || !!native},
     ...(preview ? [{label: 'Non-planar surfaces', icon: menuGlyph('toolbar_nonplanar_paint'), action: toggleNonplanarView, checked: nonplanarView} as MenuEntry] : []),
   ];
   const needSelection = !hasObjects ? 'add an object' : sel?.all ? 'select one object' : 'select an object';
@@ -128,7 +125,6 @@ function ToolButton({ icon, name, keys, active = false, unavailable, onClick }: 
 function ArrangeOptions({ at }: { at: HTMLElement | null }) {
   const a = useSyncExternalStore(subscribeArrangeSettings, arrangeSettings);
   const hasObjects = useStore((s) => s.objects.length > 0);
-  const canMulti = useStore((s) => !!s.features.arrange_materials);
   const r = at?.getBoundingClientRect();
   return createPortal(
     <div className="manip-panel" role="dialog" aria-label="Arrange options" style={{ position: 'fixed', top: (r?.bottom ?? 40) + 8, left: r?.left ?? 0, zIndex: 5 }}>
@@ -141,7 +137,7 @@ function ArrangeOptions({ at }: { at: HTMLElement | null }) {
         <label className="select-row" style={{ gridColumn: '1 / -1' }}>
           <Check checked={a.rotation} onCheckedChange={(next) => setArrangeSettings({ rotation: next })} />Auto rotate for arrangement
         </label>
-        {canMulti && (
+        {(
           <label className="select-row" style={{ gridColumn: '1 / -1' }}>
             <Check checked={a.multiMaterials} onCheckedChange={(next) => setArrangeSettings({ multiMaterials: next })} />Allow multiple materials on same plate
           </label>
@@ -407,7 +403,7 @@ const CutJoints = preloadable(() => import('./CutJoints'));
 export function CutPanel() {
   const cut = useStore((s) => (s.gizmo === 'cut' ? s.cut : null));
   const can = useStore(canPerformCut);
-  const joints = useStore((s) => !!s.features.cut_connectors && !s.objects.find((o) => o.instances.some((i) => i.id === s.selected?.instance))?.project);
+  const joints = useStore((s) => !s.objects.find((o) => o.instances.some((i) => i.id === s.selected?.instance))?.project);
   if (!cut) return null;
   if (cut.editing) return <div className="manip-panel"><Suspense fallback={null}><CutJoints /></Suspense></div>;
   const joined = cut.mode === 'dovetail' || !!cut.connectors?.length;

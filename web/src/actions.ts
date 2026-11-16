@@ -15,7 +15,7 @@ import type * as THREE from 'three';
 import { T3 } from './three-runtime';
 import type { Config, ConfigValue, JobRequest, JobStatus, PresetType } from './api/types';
 import { sliceProgress } from './api/progress';
-import { canEditProject, canLoadStep, connect, surfaceConfigBlocker, toolFeatures, type Api } from './api/client';
+import { connect, surfaceConfigBlocker, type Api } from './api/client';
 import { validateProfileSubmission } from './profiles/submission';
 import { normalizeUserPreset } from './profiles/model';
 import { shortTime } from './preview/format';
@@ -40,9 +40,8 @@ export async function init() {
   const api = await connectService();
   setState({ api }); startupBusy.relabel('Loading presets');
   if (!api.mock) {
-    setState({ features: toolFeatures });
-    if (toolFeatures.orient_scores === true) void import('./plater/orientPrompt').then((m) => m.startOrientPrompt());
-    if (toolFeatures.wipe_tower === true) void import('./plater/wipeTower').then((m) => m.startWipeTower());
+    void import('./plater/orientPrompt').then((m) => m.startOrientPrompt());
+    void import('./plater/wipeTower').then((m) => m.startWipeTower());
   }
   if (!api.mock) void import('./printers/connections').then((m) => m.followConnections());
   await loadCatalog();
@@ -147,16 +146,16 @@ export async function importFiles(files: FileList | File[], opts: { sourceUrl?: 
   }
   list = list.filter((f) => !/\.3mf$/i.test(f.name));
   if (!list.length) return imported;
-  if (getState().project && !canEditProject()) {
-    toast('You\'re viewing an imported 3MF project—start a new project if you\'d like to add more models.');
+  if (getState().project && false) {
+    toast('youre_viewing_imported_3mf');
     return imported;
   }
   const project = !!getState().project;
   for (const f of list) void Promise.all([import('./api/blobs'), import('./persist/session')])
     .then(([{ blobDigest }, { assignBlobKey }]) => blobDigest(f).then((sum) => assignBlobKey(f, `sha256-${sum}`))).catch(() => {});
   const step = /\.(step|stp|drc)$/i;
-  list = list.filter((f) => /\.(stl|obj|3mf)$/i.test(f.name) || step.test(f.name) && (canLoadStep() || /\.drc$/i.test(f.name)) ||
-    (toast(`Oops! ${f.name} isn't a supported 3D model. Please pick an STL, OBJ${canLoadStep() ? ', STEP' : ''}, or 3MF file.`), false));
+  list = list.filter((f) => /\.(stl|obj|3mf)$/i.test(f.name) || step.test(f.name) ||
+    (toast('isnt_supported_3d_model', { name: f.name, value: ', STEP' }), false));
   const task = importing.begin('loading');
   const added: PlateObject[] = [];
   for (const f of list) {
@@ -268,7 +267,7 @@ export function pickModelFiles(onFiles: (files: FileList) => unknown) {
   const input = document.createElement('input');
   input.type = 'file';
   input.multiple = true;
-  input.accept = ['stl', 'obj', '3mf', ...(canLoadStep() ? ['step', 'stp'] : [])].flatMap((e) => [`.${e}`, `.${e.toUpperCase()}`]).join(',');
+  input.accept = ['stl', 'obj', '3mf', 'step', 'stp'].flatMap((e) => [`.${e}`, `.${e.toUpperCase()}`]).join(',');
   input.onchange = () => input.files && void onFiles(input.files);
   input.click();
 }
@@ -288,7 +287,7 @@ export function arrangeAll(allPlates = true) {
 export function addInstance() {
   const s = getState();
   const o = s.objects.find((ob) => ob.id === s.selected?.object);
-  if (!o || o.project && (o.project.placeholder || !canEditProject())) return;
+  if (!o || o.project && (o.project.placeholder)) return;
   const spot = nextFreeSpot(s.objects, o, bedArea());
   const src = o.instances.find((i) => i.id === s.selected!.instance) ?? o.instances[0];
   const inst = { id: newId(), x: spot?.x ?? src.x, y: spot?.y ?? src.y, rotZ: src.rotZ, z: src.z, printable: src.printable };
@@ -312,7 +311,7 @@ export function removeInstance() {
 export async function setInstanceCount() {
   const s = getState();
   const o = s.objects.find((ob) => ob.id === s.selected?.object);
-  if (!o || o.project && (o.project.placeholder || !canEditProject())) return;
+  if (!o || o.project && (o.project.placeholder)) return;
   const num = await numberDialog('Copies of the selected object', 'Number of copies:', o.instances.length, 0, 1000);
   if (num === null || num === o.instances.length) return;
   undoable(`Set number of copies to ${num}`, () => setState((st) => {
@@ -337,7 +336,7 @@ export async function setInstanceCount() {
 export function fillBed() {
   const s = getState();
   const o = s.objects.find((ob) => ob.id === s.selected?.object);
-  if (!o || o.project && (o.project.placeholder || !canEditProject())) return;
+  if (!o || o.project && (o.project.placeholder)) return;
   const area = bedArea();
   const src = o.instances[o.instances.length - 1];
   const withCopies = (n: number) => arrange(s.objects.map((ob) => ob.id !== o.id ? ob : { ...ob, instances: [...ob.instances,
@@ -388,12 +387,11 @@ export async function jobRequest(s = getState(), saving = false): Promise<JobReq
     const parts = await Promise.all(volumes.map(({ o, k }) => bakeStl({ ...o, geometry: o.volumes![k].geometry }, new T3.Matrix4())));
     return { ...fields, files: [{ name: s.project.name, blob: s.project as Blob }, ...files, ...volumes.map(({ name }, i) => ({ name, blob: parts[i] }))] };
   }
-  const locks = !!s.features.plate_locks;
-  if (saving && s.features.mesh_plates && (s.projectPlates.length > 1 || s.projectPlates.some((p) => Object.keys(p.settings).length || p.name || locks && p.locked))) {
+  if (saving && (s.projectPlates.length > 1 || s.projectPlates.some((p) => Object.keys(p.settings).length || p.name || p.locked))) {
     const plates = currentPlates(s);
     const { plate, files } = await plateJson(plates.flatMap((p) => p.objects), firstLayer(s));
     plates.flatMap((p) => p.objects.map(() => p.index)).forEach((index, k) => { plate.objects[k].plate = index; });
-    plate.plates = plates.map((p) => ({ index: p.index, name: p.name, settings: Object.fromEntries(Object.entries(p.settings).map(([k, v]) => [k, String(v)])), ...(locks && p.locked ? { locked: true } : {}) }));
+    plate.plates = plates.map((p) => ({ index: p.index, name: p.name, settings: Object.fromEntries(Object.entries(p.settings).map(([k, v]) => [k, String(v)])), ...(p.locked ? { locked: true } : {}) }));
     return { ...fields, plate, files };
   }
   const { plate, files } = await plateJson(s.objects, firstLayer(s));
@@ -638,7 +636,7 @@ export async function saveProject(as = false) {
 
 export function toggleText() {
   const s = getState();
-  if (!s.features.emboss_text || s.tab !== 'prepare') return;
+  if (s.tab !== 'prepare') return;
   if (s.gizmo === 'text') return setState({ gizmo: 'none' });
   void import('./plater/text').then((m) => {
     if (m.editedText()) return setState({ gizmo: 'text' });
@@ -650,7 +648,7 @@ export function toggleText() {
 
 export const canBoolean = (s: State) => {
   const o = s.objects.find((x) => x.id === s.selected?.object);
-  return !!s.features.mesh_boolean && !!o && !s.selected?.all && !o.project?.placeholder && !o.native && !!o.volumes?.length;
+  return !!o && !s.selected?.all && !o.project?.placeholder && !o.native && !!o.volumes?.length;
 };
 export function toggleBoolean() {
   const s = getState();
@@ -659,7 +657,7 @@ export function toggleBoolean() {
 
 export function toggleSvg() {
   const s = getState();
-  if (!s.features.emboss_svg || s.tab !== 'prepare') return;
+  if (s.tab !== 'prepare') return;
   if (s.gizmo === 'svg') return setState({ gizmo: 'none' });
   void import('./plater/svg').then((m) => {
     if (m.editedSvg()) return setState({ gizmo: 'svg' });

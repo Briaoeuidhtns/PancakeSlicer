@@ -98,8 +98,8 @@ export function loadTab(tab: TabDesc['tab']): Promise<void> {
   const cached = pending.get(tab);
   if (cached) return cached;
   const mock = new URLSearchParams(location.search).has('mock');
-  const promise = (mock ? Promise.resolve(null) : engineCapabilities()).then((engine) => new Promise<void>((resolve, reject) => {
-    const worker = catalogWorker();
+  const promise = new Promise<void>((resolve, reject) => {
+    const worker = settingsWorker();
     const id = workerId();
     const cleanup = () => {
       worker.removeEventListener('message', on);
@@ -128,8 +128,8 @@ export function loadTab(tab: TabDesc['tab']): Promise<void> {
     };
     const unsubscribe = onWorkerFailure(fail);
     worker.addEventListener('message', on);
-    worker.postMessage({ id, type: 'settings', engine, optionsUrl: new URL(optionsUrl, location.href).href, tabUrl: new URL(URLs[tab], location.href).href } satisfies CatalogIn);
-  })).catch((error) => { pending.delete(tab); throw error; });
+    worker.postMessage({ id, type: 'settings', native: !mock, optionsUrl: new URL(optionsUrl, location.href).href, tabUrl: new URL(URLs[tab], location.href).href } satisfies SettingsIn);
+  }).catch((error) => { pending.delete(tab); throw error; });
   pending.set(tab, promise);
   return promise;
 }

@@ -1,7 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 import { mutation } from './api/access';
-import { toolFeatures } from './api/client';
 import { jobRequest } from './actions';
 import { withBlobs } from './api/blobs';
 import { bakeStl, instanceMatrix } from './plater/geometry';
@@ -343,7 +342,7 @@ async function request() {
   loading = true;
   emit();
   try {
-    if (toolFeatures.plan_tops === true && !s.project) {
+    if (!s.project) {
       source = 'plan';
       const built = await planned(s, objects, mine);
       if (mine !== generation) return built.forEach((b) => b.geometry.dispose());

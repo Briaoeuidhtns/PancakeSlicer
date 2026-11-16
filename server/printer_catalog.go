@@ -123,9 +123,8 @@ func bedOf(machines map[string]rawPreset, model string) string {
 		if stringValue(p["printer_model"]) != model || stringValue(p["instantiation"]) == "false" {
 			continue
 		}
-		if name == "" || strings.Contains(n, "0.4") != strings.Contains(name, "0.4") && strings.Contains(n, "0.4") ||
-			strings.Contains(n, "0.4") == strings.Contains(name, "0.4") && n < name {
-			name = n
+		if machine := s.catalog.Machine(variant); machine != nil {
+			e.Bed, e.Extruders = bedSize(machine), s.catalog.VariantByID(variant).Extruders
 		}
 	}
 	if name == "" {

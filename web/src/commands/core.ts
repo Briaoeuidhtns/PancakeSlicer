@@ -15,7 +15,6 @@ import { cutBlocked, toggleCut } from '../plater/cut';
 import { addPlate, canAddPlate, duplicatePlate, exportAll, exportablePlates, sliceAll } from '../plater/plates';
 import { assembly, setAssembly } from '../plater/assembly';
 import { openGcode } from '../preview/jump';
-import { canCalibrate } from '../api/client';
 import { setThemePref } from '../theme';
 import { canEditLayers } from '../components/LayerHeight';
 import { registerCommand, type Command } from './registry';
@@ -100,9 +99,9 @@ export const CORE: Command[] = [
   { id: 'tool.cut', title: 'Cut', group: 'Tools', keys: 'C', keywords: 'gizmo split plane', enabled: () => !cutBlocked() || cutBlocked()!, run: () => { setState({ tab: 'prepare' }); toggleCut(); } },
   { id: 'tool.measure', title: 'Measure', group: 'Tools', keys: 'U', keywords: 'distance', enabled: selection, run: gizmo('measure') },
   { id: 'tool.boolean', title: 'Mesh boolean', group: 'Tools', keys: 'B', keywords: 'union difference intersection', enabled: () => canBoolean(s()) || 'Select an object with parts', run: toggleBoolean },
-  { id: 'tool.text', title: 'Text', group: 'Tools', keys: 'T', keywords: 'emboss label', enabled: () => !!s().features.emboss_text || 'Not with this tool', run: toggleText },
-  { id: 'tool.svg', title: 'SVG', group: 'Tools', keywords: 'emboss image logo', enabled: () => !!s().features.emboss_svg || 'Not with this tool', run: toggleSvg },
-  { id: 'tool.brimears', title: 'Brim ears', group: 'Tools', keys: 'E', enabled: () => !!s().features.brim_ears ? editable() : 'Not with this tool', run: gizmo('brimears') },
+  { id: 'tool.text', title: 'Text', group: 'Tools', keys: 'T', keywords: 'emboss label', run: toggleText },
+  { id: 'tool.svg', title: 'SVG', group: 'Tools', keywords: 'emboss image logo', run: toggleSvg },
+  { id: 'tool.brimears', title: 'Brim ears', group: 'Tools', keys: 'E', enabled: editable, run: gizmo('brimears') },
   { id: 'tool.layers', title: 'Variable layer height', group: 'Tools', keywords: 'adaptive', enabled: () => canEditLayers(s()) || 'Select one object', run: gizmo('layers') },
   ...PAINTS.map(([k, title, keys]): Command => ({ id: `tool.paint.${k}`, title, group: 'Tools', keys, keywords: 'paint brush', enabled: () => canPaint(s()) || 'Select one object', run: () => { setState({ tab: 'prepare' }); togglePaint(k); } })),
   { id: 'tool.assembly', title: 'Assembly view', group: 'Tools', keywords: 'explode', enabled: objects, run: () => setAssembly({ on: !assembly().on }) },
@@ -143,7 +142,7 @@ export const CORE: Command[] = [
   { id: 'help.about', title: 'About PancakeSlicer', group: 'Help', keywords: 'version licence', run: app('about') },
   { id: 'help.report', title: 'Report a problem', group: 'Help', keywords: 'bug issue feedback github', run: reportProblem },
   { id: 'help.calibguide', title: 'Calibration guide', group: 'Help', run: () => void window.open('https://www.orcaslicer.com/wiki/calibration_guide', '_blank', 'noopener') },
-  ...CALIB.map(([k, title]): Command => ({ id: `calib.${k}`, title: `Calibrate: ${title}`, group: 'Calibration', enabled: () => canCalibrate() || 'Not with this tool', run: () => setState({ calibDialog: k }) })),
+  ...CALIB.map(([k, title]): Command => ({ id: `calib.${k}`, title: `Calibrate: ${title}`, group: 'Calibration', run: () => setState({ calibDialog: k }) })),
 
   { id: 'key.tab', title: 'Model / Layers (in a 3D view)', group: 'View', keys: 'Tab' },
   { id: 'key.views', title: 'Views', group: 'View', keys: '0 … 6' },

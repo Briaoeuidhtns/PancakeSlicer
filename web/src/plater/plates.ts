@@ -12,7 +12,7 @@ const plateJobs = new Map<number, JobView>();
 
 const busy = (s: State) => s.job.state === 'running' || s.job.state === 'submitting';
 
-export const canAddPlate = (s: State) => !s.project && !!s.features.mesh_plates;
+export const canAddPlate = (s: State) => !s.project;
 
 export function currentPlates(s: State) {
   return s.projectPlates.map((p) => (p.index === s.plateIndex ? { ...p, objects: s.objects, events: s.events } : p));

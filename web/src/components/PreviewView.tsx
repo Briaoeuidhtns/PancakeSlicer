@@ -48,7 +48,7 @@ let live: { header(d: PreviewData): void; chunk(d: PreviewData): void; done(d: P
 
 const extendedJobs = new Set<string>();
 let extendedView = false;
-export const canExtend = (d: PreviewData) => !!getState().features.moves_extended && !!d.sourceUrl && d.sourceUrl === getState().api?.movesUrl(getState().job.id ?? '');
+export const canExtend = (d: PreviewData) => !!d.sourceUrl && d.sourceUrl === getState().api?.movesUrl(getState().job.id ?? '');
 
 function startLoad(src: { key: string; url?: string; file?: File; shellLayers?: boolean }) {
   current?.cancel();
@@ -77,7 +77,7 @@ function source(): { key: string; url?: string; file?: File; shellLayers?: boole
   if (q) return { key: `url:${q}`, url: q };
   const s = getState();
   if (s.job.state !== 'done' || !s.job.id || !s.api) return null;
-  const ext = extendedJobs.has(s.job.id) || (extendedView && !!s.features.moves_extended);
+  const ext = extendedJobs.has(s.job.id) || (extendedView);
   return { key: `job:${s.job.id}${ext ? ':extended' : ''}`, url: s.api.movesUrl(s.job.id) + (ext ? '?extended=1' : ''), shellLayers: wholePartLayers(s.job.status?.record) };
 }
 

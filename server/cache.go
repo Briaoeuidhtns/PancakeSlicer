@@ -24,9 +24,6 @@ import (
 	"github.com/andybalholm/brotli"
 )
 
-//go:embed options.json
-var optionData []byte
-
 type cachedResponse struct {
 	plain, zipped []byte
 	etag          string

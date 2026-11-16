@@ -6,7 +6,7 @@ import { plateForm } from './operations';
 import { postJob } from '../api/blobs';
 
 function wanted(s: State): boolean {
-  if (!s.features.wipe_tower || !s.api || s.api.mock || s.project || !s.objects.length) return false;
+  if (!s.api || s.api.mock || s.project || !s.objects.length) return false;
   const c = effectiveConfig(s, 'process');
   const on = (v: unknown) => v === true || v === 1 || v === '1' || v === 'true';
   if (!on(c.enable_prime_tower) || on(effectiveConfig(s, 'machine').belt_printer)) return false;
@@ -74,7 +74,7 @@ export function startWipeTower() {
     const s = getState();
     if (last && s.objects === last.objects && s.filamentSlots === last.filamentSlots && s.dirty === last.dirty && s.printer === last.printer &&
       s.process === last.process && s.wipeTowerPos === last.wipeTowerPos && s.filamentEdits === last.filamentEdits && s.plateIndex === last.plateIndex &&
-      s.features === last.features && s.project === last.project) return;
+      s.project === last.project) return;
     last = s;
     schedule();
   });

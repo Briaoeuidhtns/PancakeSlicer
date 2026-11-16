@@ -739,23 +739,12 @@ func (m *JobManager) toolArgs(j *Job) []string {
 		}
 		return append(args, filepath.Join(in, r.Files[0]))
 	}
-	if m.cfg.Features.MovesOut {
-		if m.cfg.Features.MovesExtended {
-			args = append(args, "--moves-out", j.ExtendedMovesPath(), "--moves-extended")
-		} else {
-			args = append(args, "--moves-out", j.MovesPath())
-		}
-	}
-	if m.cfg.Features.Progress {
-		args = append(args, "--progress")
-	}
+	args = append(args, "--moves-out", j.ExtendedMovesPath(), "--moves-extended", "--progress")
 	if r.Output == "3mf" {
 		args = append(args, "--save-3mf", j.OutputPath("3mf"))
 	} else {
 		args = append(args, "--json", j.OutputPath("json"), "-o", j.OutputPath("gcode"))
-		if m.cfg.Features.SurfaceGrid {
-			args = append(args, "--surface-grid")
-		}
+		args = append(args, "--surface-grid")
 	}
 	if r.Output == "gcode.3mf" {
 		args = append(args, "--gcode-3mf", j.OutputPath("gcode.3mf"))
@@ -821,26 +810,20 @@ func (m *JobManager) run(ctx context.Context, j *Job) {
 		return
 	}
 	cmd.Dir = j.Dir
-	cmd.Env = append(os.Environ(), "TMPDIR="+filepath.Join(j.Dir, "tmp"), "TMP="+filepath.Join(j.Dir, "tmp"), "TEMP="+filepath.Join(j.Dir, "tmp"))
+	cmd.Env = engineEnv(filepath.Join(j.Dir, "tmp"))
 	if err := limitJobMemory(cmd); err != nil {
 		j.setState(StateFailed, err.Error())
 		return
 	}
 	configureJobProcess(cmd)
 	cmd.WaitDelay = 5 * time.Second
-	stdout, stdoutWriter := io.Pipe()
-	stderr, stderrWriter := io.Pipe()
+	stdout, stderr := newSpool(), newSpool()
 	defer stdout.Close()
 	defer stderr.Close()
-	defer stdoutWriter.Close()
-	defer stderrWriter.Close()
-	cmd.Stdout = stdoutWriter
-	cmd.Stderr = stderrWriter
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 	if !j.setState(StateSlicing, "") {
 		return
-	}
-	if !m.cfg.Features.Progress {
-		j.log("server", "progress slicing 0")
 	}
 	if err := cmd.Start(); err != nil {
 		switch {
@@ -911,8 +894,8 @@ func (m *JobManager) run(ctx context.Context, j *Job) {
 	if cmd.Cancel != nil {
 		cmd.Cancel()
 	}
-	stdoutWriter.Close()
-	stderrWriter.Close()
+	stdout.Close()
+	stderr.Close()
 	readers.Wait()
 	published.Wait()
 
@@ -1013,9 +996,6 @@ func (m *JobManager) run(ctx context.Context, j *Job) {
 				return
 			}
 		}
-		if !m.cfg.Features.Progress {
-			j.log("server", "progress export 100")
-		}
 		if jobResultPut != nil && ctx.Err() == nil {
 			jobResultPut(m, j, args, raw)
 		}
@@ -1048,7 +1028,53 @@ func (m *JobManager) publishResult(j *Job) {
 		return
 	}
 	j.slice, j.resultReady = raw, true
-	j.appendLocked(Event{Type: "result", State: j.state})
+	j.appendLocked(Event{Type: "result", State: j.state.legacy(), LifecycleState: j.state})
+}
+
+type spool struct {
+	mu     sync.Mutex
+	ready  *sync.Cond
+	buf    []byte
+	closed bool
+}
+
+func newSpool() *spool {
+	s := &spool{}
+	s.ready = sync.NewCond(&s.mu)
+	return s
+}
+
+func (s *spool) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return 0, io.ErrClosedPipe
+	}
+	s.buf = append(s.buf, p...)
+	s.ready.Signal()
+	return len(p), nil
+}
+
+func (s *spool) Read(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for len(s.buf) == 0 && !s.closed {
+		s.ready.Wait()
+	}
+	if len(s.buf) == 0 {
+		return 0, io.EOF
+	}
+	n := copy(p, s.buf)
+	s.buf = s.buf[n:]
+	return n, nil
+}
+
+func (s *spool) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.closed = true
+	s.ready.Broadcast()
+	return nil
 }
 
 func scanLines(r io.Reader, fn func(string)) {

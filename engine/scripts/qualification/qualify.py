@@ -155,8 +155,11 @@ def main():
         out.mkdir(exist_ok=True)
         (out/'data').mkdir(exist_ok=True)
         model_name = 'benchy' if name == 'benchy_flat' else name
-        model = out/(model_name+'.stl')
-        model.write_bytes(gzip.decompress((ROOT/'models'/(model_name+'.stl.gz')).read_bytes()))
+        if model_name == 'benchy':
+            model = args.resources/'handy_models'/'3DBenchy.drc'
+        else:
+            model = out/(model_name+'.stl')
+            model.write_bytes(gzip.decompress((ROOT/'models'/(model_name+'.stl.gz')).read_bytes()))
         replacements = {'resources': str(args.resources), 'out': str(out), 'model': str(model)}
         argv = [str(args.tool)] + [arg.format(**replacements) for arg in case['argv']]
         env = {**os.environ, 'TZ': 'UTC', 'PYTHONUTF8': '1', 'NONPLANAR_RESOURCES_DIR': str(args.resources), 'NONPLANAR_HEADS_DIR': str(args.resources/'nonplanar/heads'), 'OMP_NUM_THREADS': '1', 'OPENBLAS_NUM_THREADS': '1'}
@@ -210,7 +213,12 @@ def main():
     result['ready'] = result['audits_passed'] and (result['equivalence_passed'] if result['cross_platform'] else result['identity_passed'])
     write(args.output/'qualification.json', result)
     if args.reference and not result['ready']:
-        raise RuntimeError('qualification refused; inspect recorded audits and identity differences')
+        reasons = [f'{name} audit' for name,value in result['audits'].items() if not value['ok']]
+        if result['cross_platform']:
+            reasons += [f'{name}: ' + ', '.join(geometry.failures(result['identity'][name]['geometry'])) for name in ['benchy_flat','benchy'] if not result['identity'][name]['geometry']['passed']]
+        elif not result['identity_passed']:
+            reasons.append('flat Benchy G-code differs from the reference')
+        raise RuntimeError('qualification refused (' + '; '.join(reasons) + '); inspect recorded audits and identity differences')
 
 
 if __name__ == '__main__':

@@ -294,16 +294,8 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 	switch op := r.FormValue("operation"); op {
 	case "", "orient":
 	case "orient-scores":
-		if !s.cfg.Features.OrientScores {
-			fail(w, 400, "Auto-orient requires a slicing engine with --orient-scores support.")
-			return
-		}
 		req.OrientScores = true
 	case "arrange":
-		if !s.cfg.Features.Arrange {
-			fail(w, 400, "Auto-arrange requires a slicing engine with --arrange-only support.")
-			return
-		}
 		req.Arrange, req.ArrangeNoRotation = true, r.FormValue("arrange_rotation") == "0"
 		if raw := r.FormValue("arrange_spacing"); raw != "" {
 			v, err := strconv.ParseFloat(raw, 64)
@@ -314,17 +306,13 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 			req.ArrangeSpacing = v
 		}
 		if raw := r.FormValue("arrange_multi_materials"); raw != "" {
-			if !s.cfg.Features.ArrangeMaterials || raw != "0" && raw != "1" {
-				fail(w, 400, "arrange_multi_materials must be 0 or 1 and requires a tool with --arrange-multi-materials")
+			if raw != "0" && raw != "1" {
+				fail(w, 400, "arrange_multi_materials_must")
 				return
 			}
 			req.ArrangeMaterials = raw
 		}
 	case "repair", "simplify":
-		if op := r.FormValue("operation"); op == "repair" && !s.cfg.Features.MeshRepair || op == "simplify" && !s.cfg.Features.MeshSimplify {
-			fail(w, 400, "Fix Model and Simplify Model require a slicing engine with mesh repair and simplification support.")
-			return
-		}
 		req.MeshOp = r.FormValue("operation")
 		if req.MeshOp == "simplify" {
 			ratio, triangles, maxErr := r.FormValue("simplify_ratio"), r.FormValue("simplify_triangles"), r.FormValue("simplify_max_error")
@@ -332,7 +320,7 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 			n, errT := strconv.Atoi(triangles)
 			e, errE := strconv.ParseFloat(maxErr, 64)
 			switch {
-			case maxErr != "" && ratio == "" && triangles == "" && s.cfg.Features.MeshSimplifyError && errE == nil && e > 0 && e <= 10:
+			case maxErr != "" && ratio == "" && triangles == "" && errE == nil && e > 0 && e <= 10:
 				req.SimplifyMaxError = e
 			case ratio != "" && triangles == "" && errR == nil && v > 0 && v <= 1:
 				req.SimplifyRatio = v
@@ -345,10 +333,6 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 		}
 	case "export":
 		format := r.FormValue("export_format")
-		if format == "drc" && !s.cfg.Features.ExportDRC || format == "generic3mf" && !s.cfg.Features.ExportGeneric3MF {
-			fail(w, 400, "This export format requires a slicing engine with --export-drc / --export-3mf-generic support.")
-			return
-		}
 		if format != "drc" && format != "generic3mf" {
 			fail(w, 400, "export_format must be generic3mf or drc")
 			return
@@ -364,20 +348,12 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 		}
 	case "boolean":
 		op := r.FormValue("boolean_op")
-		if !s.cfg.Features.MeshBoolean {
-			fail(w, 400, "Mesh Boolean requires a slicing engine with --mesh-boolean support.")
-			return
-		}
 		if op != "union" && op != "difference" && op != "intersection" {
 			fail(w, 400, "boolean_op must be union, difference or intersection")
 			return
 		}
 		req.MeshOp, req.BooleanOp = "boolean", op
 	case "svg":
-		if !s.cfg.Features.EmbossSVG {
-			fail(w, 400, "SVG embossing requires a slicing engine with --emboss-svg support.")
-			return
-		}
 		args := []string{}
 		for _, f := range []struct {
 			key, flag string
@@ -396,9 +372,7 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 		}
 		req.MeshOp, req.Text = "svg", args
 		if r.FormValue("use_surface") == "1" {
-			features := s.cfg.Features
-			features.EmbossSurface = features.EmbossSVGSurface
-			surface, err := surfaceArgs(r, features)
+			surface, err := surfaceArgs(r)
 			if err != nil {
 				fail(w, 400, err.Error())
 				return
@@ -406,10 +380,6 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 			req.TextSurface = surface
 		}
 	case "text":
-		if !s.cfg.Features.EmbossText {
-			fail(w, 400, "Text embossing requires a slicing engine with --emboss-text support.")
-			return
-		}
 		args, err := textArgs(r)
 		if err != nil {
 			fail(w, 400, err.Error())
@@ -423,22 +393,10 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	case "explode":
-		if !s.cfg.Features.Explode {
-			fail(w, 400, "Opening a 3MF project as editable objects requires a slicing engine with --explode-3mf support.")
-			return
-		}
 		req.Explode = true
 	case "wipe-tower":
-		if !s.cfg.Features.WipeTower {
-			fail(w, 400, "Estimating the prime tower requires a slicing engine with --wipe-tower-only support.")
-			return
-		}
 		req.WipeTower = true
 	case "cut":
-		if !s.cfg.Features.Cut {
-			fail(w, 400, "Cutting models requires a slicing engine with --cut-only support.")
-			return
-		}
 		req.Cut, req.CutKeep, req.CutPlaceLower = r.FormValue("cut"), r.FormValue("cut_keep"), r.FormValue("cut_place_lower") == "1"
 		if req.CutKeep == "" {
 			req.CutKeep = "both"
@@ -448,8 +406,8 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		req.CutConnectors, req.CutDovetail = r.FormValue("cut_connectors"), r.FormValue("cut_dovetail")
-		if msg := cutJoinError(req, s.cfg.Features.CutConnectors); msg != "" {
-			fail(w, 400, msg)
+		if msg := cutJoinError(req); msg != "" {
+			fail(w, 400, "http_invalid", msg)
 			return
 		}
 	default:
@@ -472,31 +430,15 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.FormValue("force_planar") != "" {
-		if !s.cfg.Features.ForcePlanar {
-			fail(w, 400, "Forcing flat layers requires a slicing engine with --force-planar support.")
-			return
-		}
 		req.ForcePlanar = true
 	}
 	if r.FormValue("floating") != "" {
-		if !s.cfg.Features.Floating {
-			fail(w, 400, "Floating overhang detection requires a slicing engine with --floating support.")
-			return
-		}
 		req.Floating = true
 	}
 	if r.FormValue("allow_mixed_temperatures") != "" {
-		if !s.cfg.Features.MixedTemperatures {
-			fail(w, 400, "Allowing mixed filament temperatures requires a slicing engine with --allow-mixed-temperatures support.")
-			return
-		}
 		req.AllowMixedTemperatures = true
 	}
 	if r.URL.Path == "/api/patch-preview" {
-		if !s.cfg.Features.PatchPreview {
-			fail(w, 501, "This slicing engine build doesn't support curved patch previews.")
-			return
-		}
 		budget, err := strconv.ParseFloat(cmp.Or(r.FormValue("budget"), "2"), 64)
 		if err != nil || !(budget >= 0.1 && budget <= 60) {
 			fail(w, 400, "budget must be 0.1 to 60 seconds")
@@ -504,10 +446,6 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 		}
 		req.Output, req.Priority, req.PreviewBudget = "patch-preview", "low", budget
 	} else if r.URL.Path == "/api/top-surfaces/plan" {
-		if !s.cfg.Features.PlanTops {
-			fail(w, 501, "This slicing engine build doesn't support curved-top previews.")
-			return
-		}
 		req.Output, req.Priority = "plan-tops", "low"
 	} else if req.Output != "gcode" && req.Output != "gcode.3mf" && req.Output != "3mf" {
 		fail(w, 400, "output must be gcode, gcode.3mf or 3mf")
@@ -570,8 +508,6 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 	if kind := r.FormValue("calib"); kind != "" {
 		params := r.FormValue("calib_params")
 		switch {
-		case !s.cfg.Features.Calib:
-			fail(w, 400, "Calibration generators require a slicing engine with --calib support.")
 		case !calibKinds[kind]:
 			fail(w, 400, "Unrecognized calibration test type.")
 		case !calibParams.MatchString(params):
@@ -603,7 +539,7 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 	for _, f := range files {
 		name := f.Name
 		ext := strings.ToLower(filepath.Ext(name))
-		other := s.cfg.Features.Step && (ext == ".step" || ext == ".stp") || ext == ".drc" || req.MeshOp == "svg" && ext == ".svg"
+		other := ext == ".step" || ext == ".stp" || ext == ".drc" || req.MeshOp == "svg" && ext == ".svg"
 		if name == "" || len(name) > 240 || strings.IndexFunc(name, unicode.IsControl) >= 0 || strings.ContainsAny(name, "/\\") || name != filepath.Base(name) || name == "." || name == ".." || (ext != ".stl" && ext != ".obj" && ext != ".3mf" && !other) || names[name] {
 			fail(w, 400, "Each uploaded STL, OBJ, STEP, DRC, SVG, or 3MF file needs a unique file name.")
 			return
@@ -742,10 +678,6 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 			fail(w, 400, "Multi-plate project: pick a plate using plate_index (requires a slicing engine with --plate-index support).")
 			return
 		}
-	}
-	if req.Output == "3mf" && !req.Plate && strings.EqualFold(filepath.Ext(req.Files[0]), ".3mf") && !s.cfg.Features.PlatePlacement {
-		fail(w, 400, "Saving edits to an imported 3MF project requires the updated R238 slicing engine.")
-		return
 	}
 	if raw := r.FormValue("project_instances"); raw != "" {
 		if req.Plate || len(req.Files) != 1 && !req.Edits || !strings.EqualFold(filepath.Ext(req.Files[0]), ".3mf") {
@@ -1135,15 +1067,13 @@ func spaFiles(dir, resources string) http.Handler {
 	})
 }
 
-func cutJoinError(req JobRequest, supported bool) string {
+func cutJoinError(req JobRequest) string {
 	if req.CutConnectors == "" && req.CutDovetail == "" {
 		return ""
 	}
 	var connectors []map[string]any
 	var dovetail map[string]any
 	switch {
-	case !supported:
-		return "connectors and dovetails require a tool with --cut-connectors"
 	case req.CutConnectors != "" && req.CutDovetail != "":
 		return "a dovetail cut takes no separate connectors"
 	case req.CutKeep != "both":
@@ -1238,10 +1168,7 @@ func textArgs(r *http.Request) ([]string, error) {
 
 var vector3 = regexp.MustCompile(`^-?[0-9.]+(e-?[0-9]+)?,-?[0-9.]+(e-?[0-9]+)?,-?[0-9.]+(e-?[0-9]+)?$`)
 
-func surfaceArgs(r *http.Request, f ToolFeatures) ([]string, error) {
-	if !f.EmbossSurface {
-		return nil, errors.New("Wrapping onto a curved surface requires a slicing engine with --use-surface support.")
-	}
+func surfaceArgs(r *http.Request) ([]string, error) {
 	args := []string{}
 	for _, k := range []string{"at", "normal", "up"} {
 		v := r.FormValue(k)
@@ -1261,23 +1188,17 @@ func surfaceArgs(r *http.Request, f ToolFeatures) ([]string, error) {
 		args = append(args, "--angle", strconv.FormatFloat(a, 'f', -1, 64))
 	}
 	if r.FormValue("outside") == "1" {
-		if !f.EmbossSurfaceOutside {
-			return nil, errors.New("Raised surface text requires a slicing engine with --surface-outside support.")
-		}
 		args = append(args, "--surface-outside")
 	}
 	return args, nil
 }
 
 func (s *Server) embossFonts(w http.ResponseWriter, r *http.Request) {
-	if !s.cfg.Features.EmbossText {
-		fail(w, 404, "Please enter some text to generate.")
-		return
-	}
 	s.fontsOnce.Do(func() {
 		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, s.cfg.Tool, "--emboss-fonts", "--profiles", filepath.Join(s.cfg.Resources, "profiles"))
+		cmd.Env = engineEnv(os.TempDir())
 		configureKill(cmd)
 		cmd.WaitDelay = 5 * time.Second
 		out, err := cmd.Output()
@@ -1428,7 +1349,6 @@ type engineHealth struct {
 	reason        string
 	manifest      map[string]any
 	tool          os.FileInfo
-	features      map[string]any
 	outputs       map[string]bool
 }
 
@@ -1532,26 +1452,7 @@ func bundleResourceHash(root string) (string, error) {
 }
 
 func newEngineHealth(c Config) *engineHealth {
-	h := &engineHealth{state: HealthUnknown, artifactState: HealthUnknown, features: map[string]any{}}
-	b, _ := json.Marshal(c.Features)
-	json.Unmarshal(b, &h.features)
-	if c.Features.DumpOptions && c.Options != nil {
-		var options map[string]struct {
-			Values []string `json:"enum_values"`
-		}
-		if json.Unmarshal(c.Options.plain, &options) == nil {
-			for _, v := range options["nonplanar_mode"].Values {
-				if v == "curved_tops" {
-					h.features["curved_tops"] = true
-				}
-			}
-			for _, v := range options["nonplanar_wave"].Values {
-				if v == "whole" {
-					h.features["nonplanar_wave"] = true
-				}
-			}
-		}
-	}
+	h := &engineHealth{state: HealthUnknown, artifactState: HealthUnknown}
 	st, err := os.Stat(c.Tool)
 	if err != nil || !st.Mode().IsRegular() {
 		h.reason = "engine executable unavailable"
@@ -1560,76 +1461,34 @@ func newEngineHealth(c Config) *engineHealth {
 	}
 	h.tool = st
 	h.setEngine(HealthHealthy)
-	manifestPath := c.SurfaceManifest
-	if manifestPath == "" {
-		manifestPath = os.Getenv("ORCA_WEB_SURFACE_MANIFEST")
-	}
-	if manifestPath == "" {
-		manifestPath = os.Getenv("ORCA_WEB_ARTIFACT_MANIFEST")
-	}
-	if manifestPath == "" {
+	raw, binary, resources := c.Engine.Manifest, c.Engine.Binary, c.Engine.Resources
+	if raw == nil {
 		return h
 	}
 	h.setArtifact(HealthUnqualified)
-	raw, err := os.ReadFile(manifestPath)
 	var manifest struct {
-		Schema          int               `json:"schema"`
 		PublicationMain string            `json:"publication_main_sha"`
 		Platform        *artifactPlatform `json:"platform"`
 		Backend         string            `json:"backend"`
 		Source          string            `json:"source_sha"`
 		Available       bool              `json:"available"`
 		Preview         bool              `json:"preview_ready"`
-		PrintQualified  bool              `json:"print_qualified"`
-		Binary          string            `json:"binary_sha256"`
-		Resources       string            `json:"resources_sha256"`
 		Curved          bool              `json:"validated_curved_benchy_clearance"`
 		Wave            bool              `json:"validated_wave_export"`
 		Features        map[string]bool   `json:"features"`
 	}
-	if err != nil || json.Unmarshal(raw, &manifest) != nil {
-		h.reason = "artifact manifest unreadable"
+	if json.Unmarshal(raw, &manifest) != nil || !manifest.Available {
+		h.reason = "artifact manifest says the engine is unavailable"
 		h.setEngine(HealthDegraded)
 		return h
 	}
-	digest := c.BundleDigest()
-	binary, resources := digest.binary, digest.resources
-	if digest.binaryErr != nil || digest.resourcesErr != nil || manifest.Binary != binary || manifest.Resources != resources || !manifest.Available {
-		h.reason = "artifact identity mismatch"
-		h.setEngine(HealthDegraded)
-		return h
-	}
-	var proof struct {
-		Ready           bool              `json:"ready"`
-		PublicationMain string            `json:"publication_main_sha"`
-		Platform        *artifactPlatform `json:"platform"`
-		Source          string            `json:"source_sha"`
-		Binary          string            `json:"binary_sha256"`
-		Resources       string            `json:"resources_sha256"`
-		Manifest        string            `json:"manifest_sha256"`
-	}
-	proofPath := c.ArtifactQualification
-	if proofPath == "" {
-		proofPath = os.Getenv("ORCA_WEB_ARTIFACT_QUALIFICATION")
-	}
-	proofRaw, proofErr := os.ReadFile(proofPath)
-	manifestHash := sha256.Sum256(raw)
-	qualified := proofErr == nil && json.Unmarshal(proofRaw, &proof) == nil && proof.Ready &&
-		manifest.Source != "" && proof.Source == manifest.Source &&
-		proof.Binary == binary && proof.Resources == resources && proof.Manifest == hex.EncodeToString(manifestHash[:]) && manifest.PrintQualified
-	if qualified && manifest.Schema >= 3 && (manifest.Platform == nil || *manifest.Platform != runningPlatform() ||
-		proof.Platform == nil || *proof.Platform != *manifest.Platform || manifest.PublicationMain == "" || proof.PublicationMain != manifest.PublicationMain) {
-		qualified = false
-		h.reason = "platform mismatch"
-	}
-	outputs, failed := nativeOutputHashes(raw)
-	if qualified && failed > 0 {
-		qualified = false
-		h.reason = "a reference output is missing, failed its audit or has clearance hits"
-	}
+	qualified := c.Engine.Qualified
 	if qualified {
-		h.outputs = outputs
+		h.outputs = c.Engine.Outputs
 		h.setArtifact(HealthQualified)
+	} else {
+		h.reason = c.Engine.Unqualified
+		log.Printf("engine not qualified: %s", h.reason)
 	}
 	wave := qualified && manifest.Preview && manifest.Wave && manifest.Features["nonplanar_wave"]
 	modes := []string{}
@@ -1662,10 +1521,10 @@ func (h *engineHealth) snapshot(tool string) map[string]any {
 	defer h.mu.Unlock()
 	st, err := os.Stat(tool)
 	if h.state != HealthDegraded && (err != nil || h.tool == nil || !os.SameFile(st, h.tool) || st.Size() != h.tool.Size() || !st.ModTime().Equal(h.tool.ModTime())) {
-		h.reason = "engine executable changed; restart to reprobe"
+		h.reason = "engine executable changed since the service started; restart the service"
 		h.manifest = nil
 		h.setEngine(HealthDegraded)
 	}
 	return map[string]any{"engine_state": h.wireState(), "artifact_state": h.artifactState, "reason": h.reason,
-		"artifact_manifest": h.manifest, "tool_features": h.features}
+		"artifact_manifest": h.manifest}
 }

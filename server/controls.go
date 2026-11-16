@@ -233,17 +233,6 @@ func (s *Server) metrics(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "orca_slice_duration_seconds_bucket{le=%q} %d\n", strconv.FormatFloat(bound, 'f', -1, 64), m.durations[i])
 	}
 	fmt.Fprintf(w, "orca_slice_duration_seconds_bucket{le=\"+Inf\"} %d\norca_slice_duration_seconds_sum %g\norca_slice_duration_seconds_count %d\n", m.durationCount, m.durationSum, m.durationCount)
-	fmt.Fprintln(w, "# HELP orca_tool_feature Enabled native tool hooks.\n# TYPE orca_tool_feature gauge")
-	b, _ := json.Marshal(s.cfg.Features)
-	var features map[string]bool
-	json.Unmarshal(b, &features)
-	for _, name := range []string{"dump_options", "dump_presets", "progress", "moves_out", "object_settings"} {
-		value := 0
-		if features[name] {
-			value = 1
-		}
-		fmt.Fprintf(w, "orca_tool_feature{feature=%q} %d\n", name, value)
-	}
 }
 
 func (s *Server) trusted(ip netip.Addr) bool {

@@ -6,7 +6,6 @@ import { OPTIONS, jobValue } from './options';
 import { filamentColor } from './plater/filamentColor';
 import { meshSignature, plateDescription } from './plater/geometry';
 import { projectEdits, projectInstances } from './plater/projectTransforms';
-import { canEditProject } from './api/client';
 import { effectiveLayerHeight } from './profiles/context';
 import { effectiveConfig, getState, presetEdits, printerPreset, resolvePreset, type LayerEvent, type Mix, type State } from './state/store';
 import { slotFilaments, slotIds, slotMixes } from './profiles/slots';
@@ -114,11 +113,11 @@ export function jobFields(s: State, saving = false) {
     library: jobLibrary(s),
     ...(s.project && s.projectPlates.length > 1 ? { plate_index: s.plateIndex } : {}),
     ...(s.project ? { project_instances: projectInstances(s) } : {}),
-    ...(s.project && canEditProject() && projectEdits(s).edits.length ? { project_edits: projectEdits(s).edits } : {}),
-    overrides: overrides(saving ? { ...s, projectPlates: [] } : s),
+    ...(s.project && projectEdits(s).edits.length ? { project_edits: projectEdits(s).edits } : {}),
+    project: projectValues(saving ? { ...s, projectPlates: [] } : s),
     events: s.events.map(eventArg),
     output: outputKind(s),
-    ...(s.mixedTemperatures && s.features.mixed_temperatures ? { allow_mixed_temperatures: true } : {}),
+    ...(s.mixedTemperatures ? { allow_mixed_temperatures: true } : {}),
   };
 }
 

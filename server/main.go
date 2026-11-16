@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 )
@@ -48,9 +47,8 @@ type Config struct {
 	ReleaseFeed           string
 	ReleaseToken          string
 	PrinterStore          *printerStore
-	Features              ToolFeatures
 	Options               *cachedResponse
-	BundleDigest          func() bundleDigest
+	Engine                EngineBuild
 }
 
 func env(key, def string) string {
@@ -157,9 +155,6 @@ func main() {
 			file.Close()
 		}
 	}
-	if st, err := os.Stat(cfg.Tool); err != nil || st.IsDir() {
-		log.Printf("warning: tool %s not found; jobs will fail until it is built", cfg.Tool)
-	}
 	if st, err := os.Stat(filepath.Join(cfg.Resources, "profiles")); err != nil || !st.IsDir() {
 		log.Fatalf("no profiles directory under %s", cfg.Resources)
 	}
@@ -176,38 +171,17 @@ func main() {
 			log.Printf("WARNING: printer connections are on without a bearer token; anyone who can reach this service can add printers and start prints")
 		}
 	}
-	cfg.BundleDigest = newBundleDigest(cfg.Tool, cfg.Resources)
-	if cfg.SurfaceManifest != "" {
-		go cfg.BundleDigest()
+	if err := checkEngineBuild(&cfg); err != nil {
+		log.Fatal(err)
 	}
-	presets := NewPresetIndex(filepath.Join(cfg.Resources, "profiles"))
-	var placementErr, plateIndexErr, presetErr error
-	var colour map[string]bool
-	var features ToolFeatures
-	var options *cachedResponse
-	probe := cfg
-	var wg sync.WaitGroup
-	for _, run := range []func(){
-		func() {
-			options = probeTool(probe, &features)
-			if features.DumpPresets {
-				tool := probe
-				tool.Options = options
-				presets.tool = &tool
-			}
-			presetErr = warmPresets(presets)
-		},
-		func() { placementErr = probePlatePlacement(probe) },
-		func() { plateIndexErr = probePlateIndex(probe) },
-		func() { colour = probeColourChange(probe) },
-		func() { probeUsage(probe, &features) },
-	} {
-		wg.Add(1)
-		go func() { defer wg.Done(); run() }()
+	if cfg.Options, err = loadOptions(cfg); err != nil {
+		log.Fatal(err)
 	}
-	wg.Wait()
-	if presetErr != nil {
-		log.Fatal(presetErr)
+	if err := checkMethodModes(cfg.Options); err != nil {
+		log.Fatal(err)
+	}
+	if err := configureResolve(cfg.Options.plain); err != nil {
+		log.Fatal(err)
 	}
 	cfg.Features, cfg.Options = features, options
 	if placementErr != nil {
@@ -215,10 +189,8 @@ func main() {
 	} else {
 		cfg.Features.PlatePlacement = true
 	}
-	if plateIndexErr != nil {
-		log.Printf("selected project plates unavailable: %v", plateIndexErr)
-	} else {
-		cfg.Features.PlateIndex = true
+	if err := checkStarters(catalog); err != nil {
+		log.Fatal(err)
 	}
 	cfg.Features.ColourChange = colour
 	log.Printf("tool operations: step %v, edit %v, force_planar %v, cut %v, volumes %v, patch_preview %v, surface_grid %v, calib %v", cfg.Features.Step, cfg.Features.Edit, cfg.Features.ForcePlanar, cfg.Features.Cut, cfg.Features.Volumes, cfg.Features.PatchPreview, cfg.Features.SurfaceGrid, cfg.Features.Calib)

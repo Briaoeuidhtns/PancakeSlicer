@@ -1,6 +1,5 @@
 import { useSyncExternalStore } from 'react';
 import { jobRequest } from './actions';
-import { canForcePlanar } from './api/client';
 import type { JobStatus } from './api/types';
 import type { PreviewData } from './preview/data';
 import { jobValue } from './options';
@@ -103,10 +102,10 @@ async function standardRequest() {
     overrides: { ...req.overrides, ...flat },
     plate: req.plate && { objects: req.plate.objects.map((o) => {
       const { nonplanar_mode: _, ...rest } = o.settings ?? {};
-      return { ...o, settings: canForcePlanar() ? { ...rest, zaa_enabled: '0' } : { ...rest, nonplanar_mode: 'off', zaa_enabled: '0' } };
+      return { ...o, settings: { ...rest, zaa_enabled: '0' } };
     }) },
-    project_settings: req.plate ? undefined : canForcePlanar() ? { zaa_enabled: false } : flat,
-    force_planar: canForcePlanar() || undefined,
+    project_settings: req.plate ? undefined : { zaa_enabled: false },
+    force_planar: true,
     output: 'gcode' as const,
     priority: 'low' as const,
   };

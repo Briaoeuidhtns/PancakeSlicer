@@ -40,7 +40,6 @@ function Preferences() {
   const camera = useSyncExternalStore(subscribeCamera, cameraPrefsSnapshot);
   const developerMode = useStore((s) => s.developerMode);
   const mixed = useStore((s) => s.mixedTemperatures);
-  const canMix = useStore((s) => !!s.features.mixed_temperatures);
   return (
     <Modal size="m" label="Preferences" onClose={close}>
       <ModalTitle title="Preferences" onClose={close} />
@@ -58,7 +57,7 @@ function Preferences() {
         <label className="modal-check"><Check checked={camera.reverseZoom} onCheckedChange={(next) => setCameraPrefs({ reverseZoom: next })} />Reverse zoom direction</label>
         <h3 className="modal-group">Advanced</h3>
         <label className="modal-check"><Check checked={developerMode} onCheckedChange={(next) => setDeveloperMode(next)} />Developer mode</label>
-        {canMix && <label className="modal-check"><Check checked={mixed} onCheckedChange={(next) => setMixedTemperatures(next)} />Allow mixed filament temperatures</label>}
+        {<label className="modal-check"><Check checked={mixed} onCheckedChange={(next) => setMixedTemperatures(next)} />Allow mixed filament temperatures</label>}
       </ModalBody>
       <ModalFooter><button type="button" className="btn-primary" onClick={close}>Close</button></ModalFooter>
     </Modal>

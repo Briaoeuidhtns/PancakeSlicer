@@ -359,9 +359,6 @@ func presetCacheDir(m *JobManager) string {
 }
 
 func stageCacheDir(m *JobManager) string {
-	if !m.cfg.Features.StageCache {
-		return ""
-	}
 	state, err := cacheForManager(m)
 	if err != nil || state == nil {
 		return ""

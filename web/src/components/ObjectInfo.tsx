@@ -28,7 +28,6 @@ export default function ObjectInfo() {
   const objects = useStore((s) => s.objects);
   const sel = useStore((s) => s.selected);
   const gizmo = useStore((s) => s.gizmo);
-  const fix = useStore((s) => !!s.features.mesh_repair);
   useEffect(() => {
     let stop = false;
     const queue = objects.filter((o) => !o.project?.placeholder && !o.native);
@@ -55,7 +54,7 @@ export default function ObjectInfo() {
       {o.sourceUrl && <a className="notif-link" href={o.sourceUrl} target="_blank" rel="noopener noreferrer" title={o.sourceUrl}>Source URL</a>}
       {st.openEdges > 0 && <span className="object-info-error">
         {st.openEdges} non-manifold edge{st.openEdges === 1 ? '' : 's'}
-        {fix && <button type="button" className="notif-link" onClick={() => void import('../plater/meshOps').then((m) => m.fixModel(o.id))}>Fix Model</button>}
+        {<button type="button" className="notif-link" onClick={() => void import('../plater/meshOps').then((m) => m.fixModel(o.id))}>Fix Model</button>}
       </span>}
     </div>
   );

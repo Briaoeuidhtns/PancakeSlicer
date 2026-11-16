@@ -162,7 +162,7 @@ export default function App() {
       else if (ctrl && e.key.toLowerCase() === 'a' && !e.shiftKey && getState().cut?.editing) { const c = getState().cut!; setCut({ selectedConnectors: (c.connectors ?? []).map((_, i) => i) }); }
       else if (ctrl && e.key.toLowerCase() === 'a' && !e.shiftKey) selectAll();
       else if (ctrl && e.shiftKey && e.key === 'Enter') toggleViewOption('wireframe');
-      else if (ctrl && e.key.toLowerCase() === 'e' && getState().features.brim_ears && getState().tab === 'prepare') toggleViewOption('labels');
+      else if (ctrl && e.key.toLowerCase() === 'e' && getState().tab === 'prepare') toggleViewOption('labels');
       else if (ctrl && e.key.toLowerCase() === 'c' && !window.getSelection()?.toString()) copySelection();
       else if (ctrl && e.key.toLowerCase() === 'x' && !window.getSelection()?.toString() && prepare) cutSelection();
       else if (ctrl && e.key === '\\') toggleSidebar();
@@ -193,8 +193,7 @@ export default function App() {
       else if (e.key.toLowerCase() === 'n') togglePaint('color');
       else if (e.key.toLowerCase() === 'e' && getState().tab === 'prepare') {
         const s = getState(), o = s.objects.find((x) => x.id === s.selected?.object);
-        if (!s.features.brim_ears) toggleViewOption('labels');
-        else if (o && !o.native && !o.volumes?.length) setState({ gizmo: s.gizmo === 'brimears' ? 'none' : 'brimears' });
+        if (o && !o.native && !o.volumes?.length) setState({ gizmo: s.gizmo === 'brimears' ? 'none' : 'brimears' });
       }
       else if (e.key.toLowerCase() === 'b' && !e.ctrlKey && !e.metaKey) toggleBoolean();
       else if (e.key.toLowerCase() === 't' && !e.ctrlKey && !e.metaKey) toggleText();

@@ -66,7 +66,7 @@ async function score(o: PlateObject, printer: string) {
 
 function check() {
   const s = getState();
-  if (!s.features.orient_scores || !s.api || s.api.mock || s.project) return;
+  if (!s.api || s.api.mock || s.project) return;
   for (const o of s.objects) {
     const key = `${s.printer}|${pose(o)}`;
     if (o.project?.placeholder || fromProject(o) || s.orientDismissed.includes(o.id) || scored.get(o.id) === key) continue;
@@ -101,8 +101,7 @@ async function sliceAlone(o: PlateObject): Promise<OrientSlice> {
   alone.instances = [{ ...inst, x: inst.x + (Math.min(...xs) + Math.max(...xs)) / 2 - (box.min.x + box.max.x) / 2,
     y: inst.y + (Math.min(...ys) + Math.max(...ys)) / 2 - (box.min.y + box.max.y) / 2 }];
   const { plate, files } = await plateJson([alone], firstLayer(s));
-  await flushReady();
-  const id = await s.api!.submit({ ...jobFields(s), plate, files, output: 'gcode', priority: 'low', ...(s.features.floating ? { floating: true } : {}) });
+  const id = await s.api!.submit({ ...jobFields(s), plate, files, output: 'gcode', priority: 'low', floating: true });
   try {
     const status = await new Promise<{ record?: Record<string, unknown> }>((resolve, reject) => {
       const stop = s.api!.events(id, { progress() {}, done(st) { stop(); resolve(st); }, error(m) { stop(); reject(new Error(m)); } });

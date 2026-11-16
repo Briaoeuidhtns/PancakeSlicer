@@ -39,18 +39,12 @@ export async function orientJob(o: PlateObject, operation: 'orient' | 'orient-sc
 }
 
 async function orient(o: PlateObject): Promise<PlateObject> {
-  if (getState().features.orient_scores) {
-    const scores = (await orientJob(o, 'orient-scores'))?.scores;
-    if (!Array.isArray(scores)) throw new Error('Oops! We couldn\'t calculate orientation options for this model.');
-    const best = (scores as Record<string, unknown>[]).find((x) => (x.object ?? 0) === 0 && x.best === true);
-    const axis = best?.axis as number[], angle = Number(best?.angle_deg);
-    if (!best || best.original === true || !Array.isArray(axis) || axis.length !== 3 || !Number.isFinite(angle) || Math.abs(angle) < 0.01) return o;
-    return withRotation(o, axisAngle(axis, angle));
-  }
-  const rotation = (await orientJob(o, 'orient'))?.rotation as number[];
-  if (!Array.isArray(rotation) || rotation.length !== 9 || !rotation.every(Number.isFinite))
-    throw new Error('Oops! We couldn\'t find a better orientation for this model.');
-  return withRotation(o, rotation);
+  const scores = (await orientJob(o, 'orient-scores'))?.scores;
+  if (!Array.isArray(scores)) throw new Error('Oops! We couldn\'t calculate orientation options for this model.');
+  const best = (scores as Record<string, unknown>[]).find((x) => (x.object ?? 0) === 0 && x.best === true);
+  const axis = best?.axis as number[], angle = Number(best?.angle_deg);
+  if (!best || best.original === true || !Array.isArray(axis) || axis.length !== 3 || !Number.isFinite(angle) || Math.abs(angle) < 0.01) return o;
+  return withRotation(o, axisAngle(axis, angle));
 }
 
 async function splitObject(o: PlateObject): Promise<PlateObject[]> {
@@ -161,7 +155,7 @@ export async function arrangeNative() {
     const { distance, rotation, multiMaterials } = arrangeSettings();
     if (distance > 0) fd.append('arrange_spacing', String(distance));
     fd.append('arrange_rotation', rotation ? '1' : '0');
-    if (s.features.arrange_materials) fd.append('arrange_multi_materials', multiMaterials ? '1' : '0');
+    fd.append('arrange_multi_materials', multiMaterials ? '1' : '0');
     const response = await postJob(fd);
     if (!response.ok) throw await responseError(response);
     const { id } = await response.json() as { id: string };

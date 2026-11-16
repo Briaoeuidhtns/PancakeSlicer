@@ -3,7 +3,6 @@ import { T3 } from './three-runtime';
 import { bedArea } from './actions';
 import { bedBounds, instanceBox, nearestFreeSpot } from './plater/geometry';
 import { undoable } from './state/history';
-import { canEditProject } from './api/client';
 import { getState, isSelected, markStale, newId, removeSelected, setState, toast, updateObject, type Instance, type PlateObject, type State } from './state/store';
 
 export function selectionTargets(s: State = getState()): { o: PlateObject; inst: Instance }[] {
@@ -69,7 +68,7 @@ export async function mirrorSelection(axis: 0 | 1 | 2) {
   })));
 }
 
-export const canPaste = (s: State = getState()) => s.clipboard.length > 0 && (!s.project || canEditProject());
+export const canPaste = (s: State = getState()) => s.clipboard.length > 0;
 
 export function copySelection() {
   const targets = selectionTargets();

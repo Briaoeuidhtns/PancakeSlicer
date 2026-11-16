@@ -1,4 +1,7 @@
-import { FilamentNozzleAssignment, VariantSelector } from '../multinozzle/NozzleControls';
+import { currentPlate } from '../settings/common';
+import { useEngineHealth } from '../flow/engine-health';
+import { ExtruderSwitch, perExtruderKeys, useExtruderSelection } from '../multinozzle/NozzleControls';
+import { SettingsSkeleton } from './SettingsSkeleton';
 import { ExtruderRows } from '../profiles/ExtruderRows';
 import { optionIndex, selectedOptionValues, type ExtruderSelection } from '../multinozzle/config';
 import { PresetBar } from '../profiles/PresetBar';
@@ -58,7 +61,7 @@ export function SettingsTab({ type, slot = 0, compact, hidePreset, editor, overr
   const aux = auxIdx !== null ? auxes[auxIdx] : undefined, auxiliaryOn = !!aux;
   const machineConfig = useStore((s) => effectiveConfig(s, 'machine'));
   const processConfig = useStore((s) => effectiveConfig(s, 'process'));
-  const features = useStore((s) => s.features);
+  const engine = useEngineHealth();
   const printer = useStore((s) => s.printer);
   const bedType = useStore((s) => s.bedType);
   const projectMode = useStore(effectiveMode);
@@ -89,12 +92,13 @@ export function SettingsTab({ type, slot = 0, compact, hidePreset, editor, overr
         settings_scope: 'global', native_support_capable: context.native_support_capable,
       }, uiMode);
     }
-    const machine = type === 'machine' ? config : machineConfig;
-    const base = resolvePreset(state, type, editor.name).base;
-    return environment([machine, processConfig, selectedOptionValues(config, type, extruderSelection)], {printer_vendor: type === 'machine' ? base?.vendor : resolvePreset(state, 'machine', state.printer).base?.vendor,
-      extruders_count: Array.isArray(machine.nozzle_diameter) ? machine.nozzle_diameter.length : 1, curr_bed_type: state.bedType, settings_scope: 'global', native_support_capable: type === 'machine' ? !!state.features.native_support && !!base?.native_support_capable : nativeSupportCapable(state)}, uiMode);
-  }, [config, machineConfig, processConfig, features, printer, bedType, uiMode, editor?.name, !!overrides, type, slot, machines, processes, filaments, extruderSelection]);
-  const availability = useMemo(() => methodAvailability(getState(), type === 'machine' && editor ? config : machineConfig), [machineConfig,config,type,!!editor,features,machines,userPresets]);
+    const machine = type === 'machine' ? config : sideMachine?.state === 'ready' ? sideMachine.values : machineConfig;
+    const printerId = type === 'machine' ? editor.name : editor.printer ?? state.printer;
+    return environment([machine, processConfig, selectedOptionValues(config, type, extruderSelection)], {printer_vendor: profileInfo(state, 'machine', printerId).vendor,
+      extruders_count: nozzleCount(state, printerId), curr_bed_type: currentPlate(state), settings_scope: 'global',
+      native_support_capable: type === 'machine' ? !!variantOf(state, printerId).variant?.source.native_support_capable : nativeSupportCapable(state)}, uiMode);
+  }, [config, machineConfig, processConfig, printer, bedType, uiMode, editor?.name, editor?.printer, sideMachine, !!overrides, type, slot, records, catalogReads, extruderSelection]);
+  const availability = useMemo(() => methodAvailability(getState(), type === 'machine' && editor ? config : machineConfig), [machineConfig,config,type,!!editor,engine,records]);
   const states = useMemo(() => desc ? optionState(desc, env) : {}, [desc, env]);
   const fieldVisible = (k: string, line: TabLine) => {
     const key = splitKey(k)[0], rank = lineMode(line, k);

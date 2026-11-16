@@ -2,7 +2,6 @@ import { observePreference, preferenceText, savePreferences } from './saved-pref
 import { useSyncExternalStore } from 'react';
 import type * as THREE from 'three';
 import { jobRequest } from './actions';
-import { toolFeatures } from './api/client';
 import { instanceMatrix } from './plater/geometry';
 import { effectiveConfig, getState, subscribeStore, type PlateObject, type State } from './state/store';
 import { plateSignature } from './slice-input';
@@ -130,7 +129,6 @@ observePreference('orca.web.nonplanar_view', () => { shown = preferenceText('orc
 
 export const overlayFits = (ov: InstanceOverlay, o: PlateObject) => ov.shape === shapeKey(o);
 
-const toolHasPreview = () => toolFeatures.patch_preview === true;
 
 function wanted(s: State) {
   return !!s.api && !s.api.mock && s.tab === 'prepare' && s.objects.length > 0 && !s.project && styleOf(effectiveConfig(s, 'process')) === 'smooth';
@@ -153,7 +151,7 @@ function stopRunning() {
 
 async function request(key: string, budget: number) {
   const s = getState();
-  if (!s.api || !toolHasPreview()) return;
+  if (!s.api) return;
   stopRunning();
   const mine = { key, abort: new AbortController() } as NonNullable<typeof running>;
   running = mine;

@@ -11,7 +11,6 @@ import type { PlateObject, Selected } from '../state/store';
 import type { PlateResult } from '../recommend';
 import { volumeIcon } from '../plater/volumes';
 import { renameObject, setFilament, startRename } from '../edit';
-import { canEditProject } from '../api/client';
 import { undoable } from '../state/history';
 import { instanceBox } from '../plater/geometry';
 import { Icon } from './Icon';
@@ -87,10 +86,10 @@ const settingsCell = (n: number, name: string, pick: () => void) => (
   </span>
 );
 
-const ObjectRows = memo(function ObjectRows({ o, selected, linkedInstance, expanded, onToggle, renaming, result, meshError, canFix, meshPlates, global, plateStyle, rowIndex, onFocus }: {
-  onFocus(object: number | null): void; rowIndex: number; o: PlateObject; selected: Selected | null; linkedInstance: number | null | undefined; expanded: boolean;
+const ObjectRows = memo(function ObjectRows({ o, label, selected, linkedInstance, expanded, onToggle, renaming, result, meshError, meshPlates, global, plateStyle, rowIndex, onFocus }: {
+  onFocus(object: number | null): void; rowIndex: number; o: PlateObject; label: string; selected: Selected | null; linkedInstance: number | null | undefined; expanded: boolean;
   onToggle(object: number, expanded: boolean): void; renaming: number | null; result?: PlateResult;
-  meshError: number; canFix: boolean; meshPlates: boolean; global: Config; plateStyle: ReturnType<typeof styleOf>;
+  meshError: number; meshPlates: boolean; global: Config; plateStyle: ReturnType<typeof styleOf>;
 }) {
   const linked = (instance?: number) => linkedInstance !== undefined && (instance === undefined || linkedInstance === null || linkedInstance === instance) ? ' linked' : '';
   const objSelected = selected?.volume === undefined && o.instances.some((i) => isSelected(selected, o.id, i.id));
@@ -158,14 +157,14 @@ const ObjectRows = memo(function ObjectRows({ o, selected, linkedInstance, expan
           )}
         </span>
         {printableButton(o.id, o.instances.some((i) => i.printable !== false))}
-        {o.project ? <span role="gridcell" className="ol-set" /> : settingsCell(nSettings, o.name, pickSettings)}
-        <span role="gridcell" className="ol-fila"><SlotPicker label="Filament" value={o.extruder || 1} disabled={!!o.project && !canEditProject()}
+        {o.project ? <span role="gridcell" className="ol-set" /> : settingsCell(nSettings, label, pickSettings)}
+        <span role="gridcell" className="ol-fila"><SlotPicker label="Filament" value={o.extruder || 1} painted={paintedSlots(o)} disabled={false}
           onChange={(next) => setFilament(o.id, next)} /></span>
         <span role="gridcell" className="ol-status">{sinking && <button className="ol-sinking" aria-label="Drop to bed"
           onClick={(e) => { e.stopPropagation(); undoable('Drop to bed', () => o.instances.forEach((i) => updateInstance(o.id, i.id, { z: 0 }))); }} disabled={!!o.project?.placeholder}>
           <Icon name="objlist_sinking" size={16} />
         </button>}
-        {meshError > 0 && <button className="ol-sinking" disabled={!canFix || !!o.project || !!o.volumes?.length}
+        {meshError > 0 && <button className="ol-sinking" disabled={!!o.project || !!o.volumes?.length}
           aria-label="Repair model"
           onClick={(e) => { e.stopPropagation(); void import('../plater/meshOps').then((m) => m.fixModel(o.id)); }}>
           <Icon name="obj_warning" size={16} />
@@ -256,7 +255,6 @@ export const ObjectList = memo(function ObjectList() {
   const record = useStore((s) => (s.job.state === 'done' && !s.job.stale ? (s.job.status?.record as SliceRecord | undefined) : undefined));
   const renaming = useStore((s) => s.renaming);
   const meshErrors = useStore((s) => s.meshErrors);
-  const canFix = useStore((s) => !!s.features.mesh_repair);
   const meshPlates = useStore((s) => canAddPlate(s) && s.projectPlates.length > 1);
   const link = useHoverLink('canvas');
   const [query, setQuery] = useState('');
@@ -343,7 +341,7 @@ export const ObjectList = memo(function ObjectList() {
           expanded={expanded} onToggle={toggleOpen}
           renaming={renaming === o.id || o.volumes?.some(v => v.id === renaming) ? renaming : null}
           result={results.length > 1 ? results.find(r => r.objectId === o.id) : undefined}
-          meshError={meshErrors[o.id] ?? 0} canFix={canFix} meshPlates={meshPlates} global={global} plateStyle={plateStyle}/></Fragment>)}
+          meshError={meshErrors[o.id] ?? 0} meshPlates={meshPlates} global={global} plateStyle={plateStyle}/></Fragment>)}
         <div aria-hidden="true" style={{height: totalHeight - (bottom ? bottom.top + bottom.height : 0), flexShrink: 0}}/>
         {project && record?.objects && (
           <div className="ol-record">

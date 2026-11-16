@@ -26,7 +26,6 @@ import { openGcode } from '../preview/jump';
 import { subscribeVisibleToolpaths, visibleToolpaths } from '../preview/visible';
 import { toggleViewOption, useViewOptions } from '../plater/viewOptions';
 import { toggleNonplanarView, useNonplanarView } from '../patch-preview';
-import { canCalibrate, canLoadStep } from '../api/client';
 import { toggleSidebar, useSidebarHidden } from '../sidebar';
 import { printerReady, showSettings } from '../workspace-sheet';
 import { useTier } from '../breakpoints';
@@ -64,7 +63,6 @@ export function TopBar() {
   const hasProjectObjects = useStore((s) => s.objects.length > 0 || s.projectPlates.some((p) => p.objects.length > 0));
   const hasSel = useStore((s) => !!s.selected);
   const hasProject = useStore((s) => !!s.project);
-  const brimEarsKeys = useStore((s) => !!s.features.brim_ears);
   const hasMeshes = useStore((s) => s.objects.some((o) => !o.project?.placeholder));
   const pasteEnabled = useStore(canPaste);
   const mock = useStore((s) => s.api?.mock);
@@ -83,7 +81,7 @@ export function TopBar() {
           { label: 'Open project…', shortcut: `${MOD}+O`, action: openProjectDialog, tip: 'Open a project file' },
           { label: 'Recent projects', action: showProjects },
           'sep',
-          { label: canLoadStep() ? 'Import 3MF/STL/STEP/OBJ…' : 'Import 3MF/STL/OBJ…', shortcut: `${MOD}+I`, action: openFileDialog, tip: 'Load a model' },
+          { label: 'Import 3MF/STL/STEP/OBJ…', shortcut: `${MOD}+I`, action: openFileDialog, tip: 'Load a model' },
           { label: 'Import from URL…', action: () => openUrlImport() },
           { label: 'Import ZIP archive…', action: () => void import('./ArchiveDialog').then((m) => m.importZipArchive(setArchive)), tip: 'Load models contained within a ZIP archive' },
           { label: 'Open G-code…', action: () => openGcode(), tip: 'Open a G-code file' },
@@ -147,7 +145,7 @@ export function TopBar() {
           { label: 'Show 3D Navigator', role: 'menuitemcheckbox', checked: view.navigator, action: () => toggleViewOption('navigator'), tip: 'Show the 3D orientation cube in Prepare and Preview' },
           { label: 'Show gridlines', role: 'menuitemcheckbox', checked: view.gridlines, action: () => toggleViewOption('gridlines'), tip: 'Show gridlines on the build plate' },
           'sep',
-          { label: 'Show labels', shortcut: brimEarsKeys ? `${MOD}+E` : 'E', role: 'menuitemcheckbox', checked: view.labels, action: () => toggleViewOption('labels'), tip: 'Show object name labels in the 3D view' },
+          { label: 'Show labels', shortcut: `${MOD}+E`, role: 'menuitemcheckbox', checked: view.labels, action: () => toggleViewOption('labels'), tip: 'Show object name labels in the 3D view' },
           { label: 'Show overhang', role: 'menuitemcheckbox', checked: view.overhang, action: () => toggleViewOption('overhang'), tip: 'Highlight steep overhangs on models in the 3D view' },
           { label: 'Show non-planar surfaces', role: 'menuitemcheckbox', checked: nonplanarView, action: toggleNonplanarView, tip: "Preview which top surfaces will print curved and check their slope angles against your print head's clearance." },
           { label: 'Show edges', role: 'menuitemcheckbox', checked: view.edges, action: () => toggleViewOption('edges'), tip: "Highlight sharp model edges so contours are easier to see." },
@@ -156,7 +154,7 @@ export function TopBar() {
           { label: 'Show center of mass', role: 'menuitemcheckbox', checked: view.com, action: () => toggleViewOption('com'), tip: 'Show each object\'s center of mass in the 3D view' },
           { label: 'Show axes', role: 'menuitemcheckbox', checked: view.axes, action: () => toggleViewOption('axes'), tip: 'Show the X, Y, and Z axes at the bed origin' },
           { label: 'Show wireframe', shortcut: `${MOD}+Shift+Enter`, role: 'menuitemcheckbox', checked: view.wireframe, action: () => toggleViewOption('wireframe'), tip: 'Show mesh wireframes in the 3D view' },
-        ]}, ...(canCalibrate() ? [{label: 'Calibration', sub: [
+        ]}, ...(true ? [{label: 'Calibration', sub: [
           { label: 'Temperature', action: () => setState({ calibDialog: 'temperature' }), tip: 'Temperature Calibration' },
           { label: 'Max flowrate', action: () => setState({ calibDialog: 'max-flowrate' }), tip: 'Max flowrate' },
           { label: 'Pressure advance', action: () => setState({ calibDialog: 'pressure-advance' }), tip: 'Pressure advance' },

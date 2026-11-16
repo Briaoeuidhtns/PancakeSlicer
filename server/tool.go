@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bytes"
+	"errors"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -85,6 +85,7 @@ func toolDump(c Config, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, c.Tool, args...)
+	cmd.Env = engineEnv(dir)
 	configureKill(cmd)
 	cmd.WaitDelay = 5 * time.Second
 	if output, err := cmd.CombinedOutput(); err != nil {
@@ -93,93 +94,25 @@ func toolDump(c Config, args ...string) ([]byte, error) {
 	return os.ReadFile(path)
 }
 
-func probeUsage(c Config, f *ToolFeatures) {
-	presets := make(chan []byte, 1)
-	go func() {
-		dump, _ := toolDump(c, "--dump-presets", "Prusa")
-		presets <- dump
-	}()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, c.Tool, "--help")
-	configureKill(cmd)
-	cmd.WaitDelay = 5 * time.Second
-	out, _ := cmd.CombinedOutput()
-	usage := string(out)
-	f.Step = strings.Contains(usage, "--step-linear-deflection")
-	f.Edit = strings.Contains(usage, "--edit EDITS.json")
-	f.ForcePlanar = strings.Contains(usage, "--force-planar")
-	f.Cut = strings.Contains(usage, "--cut-only")
-	f.PatchPreview = strings.Contains(usage, "--patch-preview FILE")
-	f.PlanTops = strings.Contains(usage, "--plan-tops OUT.json")
-	f.SurfaceGrid = strings.Contains(usage, "--surface-grid")
-	f.Calib = strings.Contains(usage, "--calib-params")
-	f.PresetCache = strings.Contains(usage, "--preset-cache DIR")
-	f.StageCache = strings.Contains(usage, "--stage-cache DIR")
-	f.Volumes = f.Cut
-	f.MeshPlates = strings.Contains(usage, `plate JSON objects take "plate"`)
-	f.PlateLocks = strings.Contains(usage, `plates take "settings" and "locked"`)
-	f.Paint = strings.Contains(usage, `plate JSON objects and volumes take "paint"`)
-	f.LayerProfile = strings.Contains(usage, `plate JSON objects take "layer_height_profile"`)
-	f.Arrange = strings.Contains(usage, "--arrange-only")
-	f.ProjectVolumes = strings.Contains(usage, `--edit takes "add_volume"`)
-	f.ProjectPaint = strings.Contains(usage, `--edit takes "set_paint"`)
-	f.OrientScores = strings.Contains(usage, "--orient-scores")
-	f.Floating = strings.Contains(usage, "[--floating]")
-	f.Ranges = strings.Contains(usage, `plate JSON objects take "ranges"`)
-	f.MovesExtended = strings.Contains(usage, "--moves-extended")
-	f.MixedTemperatures = strings.Contains(usage, "--allow-mixed-temperatures")
-	f.ArrangeMaterials = strings.Contains(usage, "--arrange-multi-materials")
-	f.WipeTower = strings.Contains(usage, "--wipe-tower-only")
-	f.Explode = strings.Contains(usage, "--explode-3mf IN.3mf OUTDIR")
-	f.SeamParts = strings.Contains(usage, `plate JSON volumes take "type": "seam"`)
-	f.BrimEars = strings.Contains(usage, `plate JSON objects take "brim_ears"`)
-	f.MeshRepair = strings.Contains(usage, "--repair-mesh IN OUT.stl")
-	f.MeshSimplify = strings.Contains(usage, "--simplify-mesh IN OUT.stl")
-	f.MeshSimplifyError = f.MeshSimplify && strings.Contains(usage, "[--max-error E]")
-	f.MeshBoolean = strings.Contains(usage, "--mesh-boolean union|difference|intersection --a A --b B")
-	f.EmbossText = strings.Contains(usage, "--emboss-text OUT.stl") && strings.Contains(usage, "--emboss-fonts")
-	f.EmbossSurface = f.EmbossText && strings.Contains(usage, "--use-surface --surface TARGET --at X,Y,Z --normal NX,NY,NZ")
-	f.EmbossSVG = strings.Contains(usage, "--emboss-svg IN.svg OUT.stl")
-	f.EmbossSVGSurface = f.EmbossSVG && strings.Contains(usage, "SVG --size scales the larger side; optional --use-surface")
-	f.EmbossSurfaceOutside = f.EmbossSurface && strings.Contains(usage, "--surface-outside")
-	f.ExportGeneric3MF = strings.Contains(usage, "--export-3mf-generic IN.3mf OUT.3mf")
-	f.ExportDRC = strings.Contains(usage, "--export-drc IN OUT.drc")
-	f.CutConnectors = strings.Contains(usage, "--cut-connectors") && strings.Contains(usage, "--cut-mode planar|dovetail")
-	f.PresetCompat = bytes.Contains(<-presets, []byte(`"compatible_printers_evaluated"`))
-}
-
-func probeTool(c Config, f *ToolFeatures) *cachedResponse {
-	fallback := cacheResponse(optionData)
+func loadOptions(c Config) (*cachedResponse, error) {
 	b, err := toolDump(c, "--dump-options")
 	if err != nil {
-		log.Printf("using legacy tool contract: %v", err)
-		return fallback
+		return nil, fmt.Errorf("the engine cannot dump its options: %w", err)
 	}
 	var dump struct {
 		Schema  string            `json:"schema"`
 		Options []json.RawMessage `json:"options"`
 	}
 	if err := json.Unmarshal(b, &dump); err != nil || dump.Schema != "orca.options.v1" || len(dump.Options) == 0 {
-		log.Print("using legacy tool contract: invalid options dump")
-		return fallback
+		return nil, errors.New("the engine's options dump is not orca.options.v1")
 	}
-	nativeSupport := false
 	options := map[string]map[string]any{}
 	kinds := map[string]string{}
 	for _, raw := range dump.Options {
 		var option toolOption
 		var value map[string]any
 		if json.Unmarshal(raw, &option) != nil || json.Unmarshal(raw, &value) != nil || option.Key == "" || option.Type == "" {
-			log.Print("using legacy tool contract: invalid option entry")
-			return fallback
-		}
-		if option.Key == "support_style" {
-			if values, ok := value["enum_values"].([]any); ok {
-				for _, v := range values {
-					nativeSupport = nativeSupport || v == "native"
-				}
-			}
+			return nil, errors.New("the engine's options dump has an invalid entry")
 		}
 		if hiddenSetting.MatchString(option.Key) {
 			continue
@@ -283,70 +216,6 @@ func (p *PresetIndex) dumpVendor(vendor string) (*VendorPresets, error) {
 	if err != nil {
 		return nil, err
 	}
-	type entry struct {
-		Name                 string                     `json:"name"`
-		Inherits             []string                   `json:"inherits"`
-		Values               map[string]json.RawMessage `json:"values"`
-		Printers             *[]string                  `json:"compatible_printers_evaluated"`
-		Prints               *[]string                  `json:"compatible_prints_evaluated"`
-		FilamentID           string                     `json:"filament_id"`
-		NativeSupportCapable bool                       `json:"native_support_capable"`
-	}
-	var dump struct {
-		Schema   string      `json:"schema"`
-		Machine  []entry     `json:"machine"`
-		Process  []entry     `json:"process"`
-		Filament []entry     `json:"filament"`
-		Models   []rawPreset `json:"printer_models"`
-	}
-	if err := json.Unmarshal(b, &dump); err != nil {
-		return nil, err
-	}
-	if dump.Schema != "orca.presets.v1" {
-		return nil, fmt.Errorf("Unsupported profile schema version: %q", dump.Schema)
-	}
-	list := func(entries []entry) []Preset {
-		out := make([]Preset, 0, len(entries))
-		for _, e := range entries {
-			config := map[string]json.RawMessage{}
-			for key, value := range e.Values {
-				if configKey(key) {
-					if configKinds[key] == "strings" {
-						value, _ = json.Marshal(nativeStrings(stringValue(value)))
-					}
-					config[key] = value
-				}
-			}
-			preset := Preset{Name: e.Name, Vendor: vendor, Inherits: e.Inherits, Config: config, CompatiblePrinters: stringList(config["compatible_printers"]), FilamentID: e.FilamentID,
-				NativeSupportCapable: e.NativeSupportCapable}
-			if preset.FilamentID == "" {
-				preset.FilamentID = stringValue(e.Values["filament_id"])
-			}
-			if e.Printers != nil {
-				preset.Evaluated, preset.CompatiblePrinters = true, *e.Printers
-				if e.Prints != nil && (len(stringList(config["compatible_prints"])) > 0 || stringValue(config["compatible_prints_condition"]) != "") {
-					preset.CompatiblePrints = *e.Prints
-				}
-			}
-			out = append(out, preset)
-		}
-		return out
-	}
-	v := &VendorPresets{Vendor: vendor, Machines: list(dump.Machine), Processes: list(dump.Process), Filaments: list(dump.Filament)}
-	models := map[string]rawPreset{}
-	for _, model := range dump.Models {
-		models[stringValue(model["name"])] = model
-	}
-	for i := range v.Machines {
-		m := &v.Machines[i]
-		m.Model = stringValue(m.Config["printer_model"])
-		m.Variant = stringValue(m.Config["printer_variant"])
-		model := models[m.Model]
-		m.BedModel = stringValue(model["bed_model"])
-		m.BedTexture = stringValue(model["bed_texture"])
-		m.DefaultBedType = stringValue(model["default_bed_type"])
-		m.NotSupportBedType = stringList(model["not_support_bed_type"])
-		m.DefaultMaterials = stringList(model["default_materials"])
-	}
-	return v, nil
+	log.Printf("engine option dictionary: %d options", len(options))
+	return response, nil
 }

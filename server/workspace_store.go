@@ -531,8 +531,9 @@ func (st *workspaceStore) register(mux *http.ServeMux) {
 	})
 	mux.HandleFunc("PUT /api/drafts/{id}", st.putDraft)
 	mux.HandleFunc("DELETE /api/drafts/{id}", st.deleteDraft)
-	for _, kind := range []string{"session", "preferences"} {
-		mux.HandleFunc("GET /api/"+kind, func(w http.ResponseWriter, r *http.Request) {
+	for _, value := range []struct{ kind, method string }{{"session", "PATCH"}, {"preferences", "PUT"}} {
+		kind := value.kind
+		mux.HandleFunc("GET /api/"+value.kind, func(w http.ResponseWriter, r *http.Request) {
 			st.view(w, func(d *workspaceData) {
 				v := d.Values[kind]
 				if v.Document == nil {
@@ -541,11 +542,7 @@ func (st *workspaceStore) register(mux *http.ServeMux) {
 				writeJSON(w, 200, v)
 			})
 		})
-		method := "PUT"
-		if kind == "session" {
-			method = "PATCH"
-		}
-		mux.HandleFunc(method+" /api/"+kind, func(w http.ResponseWriter, r *http.Request) { st.putValue(w, r, kind) })
+		mux.HandleFunc(value.method+" /api/"+value.kind, func(w http.ResponseWriter, r *http.Request) { st.putValue(w, r, kind) })
 	}
 	mux.HandleFunc("PUT /api/assets/{key}", st.putAsset)
 	mux.HandleFunc("GET /api/assets/{key}", st.getAsset)

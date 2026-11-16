@@ -1,7 +1,7 @@
 import { submissionHeaders } from '../flow/submission';
 import { bootstrapAccessToken, mutation, responseError } from './access';
 import { attachFiles, postJob } from './blobs';
-import { noteCapabilities, readHealth } from './health';
+import { readHealth } from './health';
 import { followJobStream, type JobStreamEvent } from './job-stream';
 import { expandCatalog } from './compact-catalog';
 import { catalogWorker, onWorkerFailure, workerId } from './worker';
@@ -179,7 +179,6 @@ const realApi: Api = {
 };
 
 
-export let toolFeatures: Record<string, unknown> = {};
 export interface SurfaceArtifactManifest {
   validated: boolean;
   preview_ready?: boolean;
@@ -192,14 +191,10 @@ export interface SurfaceArtifactManifest {
   wave_modes?: string[];
 }
 export let toolArtifactManifest: SurfaceArtifactManifest | undefined;
-export function applyHealth(health: { tool_features?: Record<string, unknown>; artifact_manifest?: SurfaceArtifactManifest }) {
-  if (!health.tool_features) return;
-  toolFeatures = health.tool_features;
-  noteCapabilities(health.tool_features);
+export function applyHealth(health: { artifact_manifest?: SurfaceArtifactManifest }) {
   toolArtifactManifest = health.artifact_manifest;
 }
-const validatedSurface = (feature: 'curved_tops' | 'nonplanar_wave') => toolFeatures[feature] === true
-  && (toolArtifactManifest?.preview_ready ?? toolArtifactManifest?.validated) === true
+const validatedSurface = (feature: 'curved_tops' | 'nonplanar_wave') => (toolArtifactManifest?.preview_ready ?? toolArtifactManifest?.validated) === true
   && /^[a-f0-9]{64}$/i.test(toolArtifactManifest?.binary_sha256 ?? '')
   && /^[a-f0-9]{64}$/i.test(toolArtifactManifest?.resources_sha256 ?? '')
   && toolArtifactManifest?.features?.[feature] === true;
@@ -207,9 +202,9 @@ export const canCurvedTops = () => validatedSurface('curved_tops');
 export const canSurfaceWaves = (mode = 'whole') => validatedSurface('nonplanar_wave') && toolArtifactManifest?.wave_modes?.includes(mode) === true;
 
 export function surfaceConfigBlocker(config: Config): string | undefined {
-  if (String(config.nonplanar_mode) === 'nonplanar_top' && !canCurvedTops()) return 'Curved layers require a newer version of the slicing engine.';
+  if (String(config.nonplanar_mode) === 'nonplanar_top' && !canCurvedTops()) return 'Curved layers aren\'t validated in this engine build.';
   const wave = String(config.nonplanar_wave ?? 'off');
-  if (wave !== 'off' && !canSurfaceWaves(wave)) return 'Rippled top surfaces require a newer version of the slicing engine.';
+  if (wave !== 'off' && !canSurfaceWaves(wave)) return 'Rippled top surfaces aren\'t validated in this engine build.';
 }
 
 function guardedApi(api: Api): Api {
@@ -228,10 +223,6 @@ function guardedApi(api: Api): Api {
     return api.submit(request, signal, onUpload);
   } };
 }
-export const canLoadStep = () => toolFeatures.step === true;
-export const canEditProject = () => toolFeatures.edit === true;
-export const canForcePlanar = () => toolFeatures.force_planar === true;
-export const canCalibrate = () => toolFeatures.calib === true;
 
 export async function connect(timeoutMs = 1500): Promise<Api> {
   bootstrapAccessToken();
@@ -239,7 +230,7 @@ export async function connect(timeoutMs = 1500): Promise<Api> {
     const r = await readHealth(timeoutMs);
     const type = r.headers.get('content-type') ?? '';
     if (r.ok && type.includes('json')) {
-      applyHealth(await r.json() as { tool_features?: Record<string, unknown>; artifact_manifest?: SurfaceArtifactManifest });
+      applyHealth(await r.json() as { artifact_manifest?: SurfaceArtifactManifest });
       return guardedApi(realApi);
     }
   } catch {
