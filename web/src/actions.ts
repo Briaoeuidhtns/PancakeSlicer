@@ -126,6 +126,13 @@ export function bedArea() {
   return parsePoints(printerPreset(getState())?.config.printable_area);
 }
 
+export async function printerBed(): Promise<THREE.Vector2[]> {
+  const answer = await (await import('./flow/resolved')).selectionAnswer();
+  const area = parsePoints(answer.printer.values.printable_area);
+  if (area.length < 3) throw new Error(`Hmm, ${printerPreset(getState())?.name ?? 'The printer'} doesn't have a bed shape (printable_area).`);
+  return area;
+}
+
 export async function importFiles(files: FileList | File[], opts: { sourceUrl?: string } = {}): Promise<number> {
   let list = [...files];
   if (!list.length) return 0;
@@ -170,13 +177,21 @@ export async function importFiles(files: FileList | File[], opts: { sourceUrl?: 
   }
   if (!task.current()) { for (const o of added) o.geometry.dispose(); return imported; }
   if (!added.length) { task.done(); return imported; }
+  let area: THREE.Vector2[];
+  try { area = await printerBed(); }
+  catch (e) {
+    for (const o of added) o.geometry.dispose();
+    if (task.current()) { task.fail(e); toast('couldnt_place', { value: added.map((o) => o.name).join(', '), detail: e instanceof Error ? e.message : String(e) }); }
+    return imported;
+  }
+  if (!task.current()) { for (const o of added) o.geometry.dispose(); return imported; }
   const simplified = added.flatMap((o) => o.simplification ? [o.simplification] : []);
   if (simplified.length) void import('./simplify/ui').then((m) => m.noteSimplified(simplified));
   undoable(added.length > 1 ? 'Add objects' : 'Add object', () => setState((s) => {
     const objects = project ? added.reduce((list, o) => {
-      const spot = nextFreeSpot(list, o, bedArea()) ?? bedBounds(bedArea()).center;
+      const spot = nextFreeSpot(list, o, area) ?? bedBounds(area).center;
       return [...list, { ...o, instances: [{ ...o.instances[0], x: spot.x, y: spot.y }] }];
-    }, s.objects) : arrange([...s.objects, ...added], bedArea());
+    }, s.objects) : arrange([...s.objects, ...added], area);
     const last = added[added.length - 1];
     return { objects, selected: { object: last.id, instance: last.instances[0].id, allInstances: true }, job: s.job.state === 'done' ? { ...s.job, stale: true } : s.job };
   }));

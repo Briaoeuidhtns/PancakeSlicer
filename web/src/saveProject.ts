@@ -19,7 +19,13 @@ export async function projectBlob(s: State, task?: OperationTicket): Promise<Blo
   task?.progress(0, 'downloading');
   const response = await fetch(s.api!.downloadUrl(id), { signal: task?.signal });
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-  return stampProjectProfiles(await response.blob(), s);
+  return response.blob();
+}
+
+export function projectFileName(name: string): string {
+  // eslint-disable-next-line no-control-regex
+  const base = name.replace(/\.3mf$/i, '').replace(/[<>:/\\|?*"\u0000-\u001f]/g, '_').replace(/[. ]+$/, '').trim();
+  return `${base || 'project'}.3mf`;
 }
 
 export async function saveProject(as = false) {
@@ -32,9 +38,9 @@ export async function saveProject(as = false) {
     const proposed = await promptDialog('Save Project as', name, (v) => !v.replace(/\.3mf$/i, '').trim() ? 'Enter a name.'
       : new TextEncoder().encode(v.replace(/\.3mf$/i, '') + '.3mf').length > 240 ? 'Whoa, that name\'s a bit too long for a file — trim it down a little!' : null);
     if (!proposed) return;
-    name = proposed.replace(/\.3mf$/i, '') + '.3mf';
+    name = proposed;
   }
-  name = name.replace(/[<>:/\\|?*"]/g, '_');
+  name = projectFileName(name);
   const task = output.begin('preparing');
   try {
     const blob = await projectBlob(s, task);
@@ -50,6 +56,7 @@ export async function saveProject(as = false) {
   } catch (e) {
     if (!task.current()) return;
     task.fail(e);
-    toast(`Oops! Couldn't save: ${e instanceof Error ? e.message : e}`);
+    const { code, status } = (e ?? {}) as { code?: string; status?: number };
+    toast(code || status && status < 500 ? 'couldnt_save_refused' : 'couldnt_save', { detail: e instanceof Error ? e.message : e });
   }
 }

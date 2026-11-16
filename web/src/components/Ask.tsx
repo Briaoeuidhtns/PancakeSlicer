@@ -26,10 +26,16 @@ export const numberDialog = (title: string, prompt: string, value: number, min: 
 export const choiceDialog = (title: string, message: string, choices: string[]) =>
   ask({ title, message, value: '0', choices }).then((v) => (v === null ? null : Number(v)));
 
-export const importObjectsDialog = (file: string, count: number, skipped: string[], allowNew: boolean) =>
-  ask({ title: 'Import 3MF', message: `${file}\n${count} ${count === 1 ? 'object' : 'objects'}${skipped.length ? `\nSkipped: ${skipped.join(', ')}.` : ''}`,
-    buttons: ['Import objects', 'Cancel'], ...(allowNew ? { alternative: 'New project from objects' } : {}) })
-    .then((v) => v === null ? null : v === 'alternative' ? 'new' : 'import');
+const SKIPPED: Record<string, string> = {
+  settings: "the project's print settings",
+  thumbnails: 'its preview images',
+  painting: 'painted colours, seams and supports',
+  'objects without meshes': 'objects that have no mesh',
+};
+export const importObjectsDialog = (file: string, count: number, skipped: string[], allowNew: boolean, settings = false) =>
+  ask({ title: 'Import 3MF', message: `${file}\n${count} ${count === 1 ? 'object' : 'objects'}${skipped.length ? `\nNot imported: ${skipped.map((s) => SKIPPED[s] ?? s).join('; ')}.` : ''}`,
+    buttons: [settings ? 'Import objects and settings' : 'Import objects', 'Cancel'], ...(settings ? { alternative: 'Import objects only' } : allowNew ? { alternative: 'New project from objects' } : {}) })
+    .then((v) => v === null ? null : settings ? (v === 'alternative' ? 'import' : 'settings') : v === 'alternative' ? 'new' : 'import');
 
 function AskDialog({ a }: { a: Ask }) {
   const [text, setText] = useState(a.value ?? '');

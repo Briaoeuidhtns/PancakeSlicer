@@ -256,7 +256,8 @@ export function TabBar() {
             {tier === 'phone' ? 'Slice' : 'Slice plate'}
           </button>
         )}
-        {!folded && <SideOptions className={ready ? 'btn' : 'btn-primary'} options={wide && plates ? ['Slice all', 'Slice plate'] : []} value={sliceMode} onChange={setSliceMode}
+        {!folded && <SideOptions className={ready ? 'btn' : 'btn-primary'} options={wide && plates ? ['Slice all', 'Slice plate'] : []} value={sliceMode}
+          onChange={(v) => { setSliceMode(v); if (v === 'Slice all') void sliceAll(); else void slice(); }}
           actions={[sliceMethods]} disabled={!printer || busy || (!plates && !hasObjects)} />}
         {!allSlice && !folded && changed && <button className="btn slant" disabled={!printer || busy || !!outside} onClick={compareSlice}>Slice and compare</button>}
         {!folded && <span className="export-actions" data-output>{allExport ? (
@@ -267,7 +268,7 @@ export function TabBar() {
           </button>
         )}
         {wide && plates && <SideOptions options={[exportLabel, 'Export all sliced plates']} value={allExport ? 'Export all sliced plates' : exportLabel}
-          onChange={(v) => setExportMode(v === 'Export all sliced plates' ? 'all' : 'plate')} />}
+          onChange={(v) => { const all = v === 'Export all sliced plates'; setExportMode(all ? 'all' : 'plate'); if (all) void exportAll(); else download(); }} />}
         {wide && hasPrinters && (
           <button className="btn slant" disabled={!exportEnabled || undecided} onClick={() => setState({ appDialog: 'send' })}>
             Send

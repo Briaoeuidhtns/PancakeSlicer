@@ -5,6 +5,7 @@ import { getState, useStore } from '../state/store';
 import { Dropdown } from '../components/Dropdown';
 import { Glyph } from '../components/Glyph';
 import { addPrintMaster, createPrintProfile, freeName, isAdded, layerRange, usePrintMasters, type PrintMaster } from './print-catalog';
+import { newProfileNameError } from './save-to-profile';
 import '../components/menu.css';
 import './add-print-menu.css';
 
@@ -78,6 +79,7 @@ function NewProfileForm({ masters, users, back, onCreated }: { masters: PrintMas
   const baseName = bases.find((b) => b.value === base)?.label ?? '';
   const [name, setName] = useState(() => copyName(baseName)), [edited, setEdited] = useState(false);
   const [busy, setBusy] = useState(false), [failed, setFailed] = useState<string | null>(null);
+  const nameError = useStore((st) => newProfileNameError(st, 'process', name)), errorId = useId();
   const create = async () => {
     if (busy || nameError || !base) return;
     const profile = owned.find((p) => p.id === base), master = masters.find((m) => m.id === base);
@@ -90,8 +92,9 @@ function NewProfileForm({ masters, users, back, onCreated }: { masters: PrintMas
     <label className="add-print-field"><span>Based on</span>
       <Dropdown aria-label="Based on" value={base} options={bases} onValueChange={(v) => { setBase(v); if (!edited) setName(copyName(bases.find((b) => b.value === v)?.label ?? '')); }}/></label>
     <label className="add-print-field"><span>Name</span>
-      <input className="text" data-autofocus autoFocus value={name} onChange={(e) => { setName(e.target.value); setEdited(true); }} onFocus={(e) => e.currentTarget.select()}/></label>
+      <input className="text" data-autofocus autoFocus value={name} aria-invalid={!!nameError} aria-describedby={nameError ? errorId : undefined} onChange={(e) => { setName(e.target.value); setEdited(true); }} onFocus={(e) => e.currentTarget.select()}/></label>
+    {nameError && name.trim() && <p className="control-error" id={errorId} role="status">{nameError}</p>}
     {failed && <div className="add-print-error" role="alert">{failed}</div>}
-    <div className="add-print-actions"><button type="button" className="btn" onClick={back}>Cancel</button><button type="submit" className="btn primary" disabled={busy || !name.trim() || !base}>{busy ? 'Creating…' : 'Create'}</button></div>
+    <div className="add-print-actions"><button type="button" className="btn" onClick={back}>Cancel</button><button type="submit" className="btn primary" disabled={busy || !!nameError || !base}>{busy ? 'Creating…' : 'Create'}</button></div>
   </form>;
 }

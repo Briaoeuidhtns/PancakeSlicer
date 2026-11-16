@@ -1,3 +1,4 @@
+import { newProfileNameError } from './save-to-profile';
 import { useEffect, useState } from 'react';
 import type { ProcessRecord } from './records';
 import { getState, type State } from '../state/store';

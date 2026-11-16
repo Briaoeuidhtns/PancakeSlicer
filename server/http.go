@@ -136,6 +136,7 @@ func NewServer(c Config, jobs *JobManager, catalog *resolve.Catalog) http.Handle
 	s.catalogRoutes(mux)
 	s.updateRoutes(mux)
 	s.libraryRoutes(mux)
+	s.libraryIORoutes(mux)
 	mux.HandleFunc("POST /api/resolve", s.postResolve)
 	registerOptions(mux, c.Options, s.catalog, devResetEnabled())
 	if devResetEnabled() {
@@ -186,23 +187,23 @@ func jobUsedSlots(r *http.Request, slots int, sent []int) ([]int, error) {
 	return []int{1}, nil
 }
 
-func (s *Server) listPresets(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query()
-	vendor, names := q.Get("vendor"), q["name"]
-	if vendor == "" || len(names) == 0 {
-		fail(w, 400, "presets are read by vendor and name=…")
-		return
+func (s *Server) jobPlateSettings(r *http.Request) []byte {
+	if plate := r.FormValue("plate"); plate != "" {
+		return []byte(plate)
 	}
-	v, err := s.presets.namesResponse(vendor, names)
-	if errors.Is(err, os.ErrNotExist) {
-		fail(w, 404, "Unrecognized printer brand.")
-		return
+	var files []struct {
+		Name   string `json:"name"`
+		SHA256 string `json:"sha256"`
 	}
+	json.Unmarshal([]byte(r.FormValue("files")), &files)
+	if len(files) == 0 || !strings.EqualFold(filepath.Ext(files[0].Name), ".3mf") || !blobDigest.MatchString(files[0].SHA256) {
+		return nil
+	}
+	data, err := os.ReadFile(s.blobs.path(files[0].SHA256))
 	if err != nil {
-		fail(w, 500, err.Error())
-		return
+		return nil
 	}
-	v.serve(w, r, "presets.json", "application/json", catalogCache, time.Time{})
+	return archivePlate(data)
 }
 
 func presetDisplayName(name string) string {
@@ -323,7 +324,15 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 			err = json.Unmarshal([]byte(raw), &in)
 		}
 		if err == nil {
-			resolved, err = s.resolveProfiles(profiles, in)
+			in.UsedSlots, err = jobUsedSlots(r, len(in.Filaments), in.UsedSlots)
+			in.Saving = r.FormValue("output") == "3mf" && r.FormValue("operation") == ""
+			in.PlateNonplanar = resolve.PlateNonplanar(s.jobPlateSettings(r))
+		}
+		meshing := len(in.Filaments) == 0 && r.FormValue("output") == "3mf" && r.FormValue("plate") == "" && r.FormValue("operation") == ""
+		if err == nil && meshing {
+			resolved, err = s.catalog.Meshing(lib, in)
+		} else if err == nil {
+			resolved, err = s.catalog.Job(lib, in)
 		}
 		if err != nil {
 			code := "resolve_failed"
@@ -1425,7 +1434,11 @@ func bundleResourceHash(root string) (string, error) {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(h, "%s\x00%s\n", filepath.ToSlash(relative), digests[i])
+		fmt.Fprintf(h, "%s\x00%s\n", filepath.ToSlash(relative), digest)
+		return nil
+	})
+	if err != nil {
+		return "", err
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
