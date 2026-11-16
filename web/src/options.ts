@@ -7,9 +7,8 @@ import filamentUrl from './tabs/filament.json?url&no-inline';
 import printerUrl from './tabs/printer.json?url&no-inline';
 import { setOptionTypes } from './config-values';
 import { normalizeOptions } from './option-inventory';
-import { catalogWorker, onWorkerFailure, workerId } from './api/worker';
-import type { CatalogIn, CatalogOut } from './api/catalog.worker';
-import { engineCapabilities } from './api/health';
+import { settingsWorker, onWorkerFailure, workerId } from './api/worker';
+import type { SettingsIn, SettingsOut } from './api/settings.worker';
 
 export type OptionMode = 'simple' | 'advanced' | 'develop' | 'developer';
 
@@ -106,7 +105,7 @@ export function loadTab(tab: TabDesc['tab']): Promise<void> {
       unsubscribe();
     };
     const fail = (error: Error) => { cleanup(); reject(error); };
-    const on = (e: MessageEvent<CatalogOut>) => {
+    const on = (e: MessageEvent<SettingsOut>) => {
       if (e.data.id !== id) return;
       if (e.data.type === 'settings') {
         if (Object.keys(e.data.options).length) {

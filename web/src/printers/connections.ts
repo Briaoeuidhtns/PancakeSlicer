@@ -72,7 +72,7 @@ export interface ConnectionEdit {
 export interface ConnectionTest { ok: boolean; stage: string; message: string; model?: string }
 export interface Discovered {
   kind: ConnectionKind; host?: string; url?: string; serial?: string; name?: string; model?: string;
-  preset?: string; connection?: string; source: string; assigned?: string;
+  preset?: string; catalogModel?: string; connection?: string; source: string; assigned?: string;
 }
 
 export const saveConnection = (printer: string, edit: ConnectionEdit) => call<PrinterConnection>(path(printer), json('PUT', edit));

@@ -19,26 +19,7 @@ export async function nozzleModel(base: string): Promise<NozzleModel | undefined
 }
 
 const PRINTER_OWNED = /_gcode$|^printable_|^bed_|^curr_bed_type$|host|^thumbnails|^printer_notes$/;
-const nozzleDependent = (key: string, from: Config, to: Config) => key === 'nozzle_diameter' || !PRINTER_OWNED.test(key) && !sameValue(key, from[key], to[key]);
-const report = (key: string, dropped: string[]) => { if (key !== 'nozzle_diameter') dropped.push(key); };
-
-export interface NozzlePlan { record: UserPreset; dropped: string[] }
-export function planNozzle(record: UserPreset, from: SystemPreset, to: SystemPreset, oldDefaults: Config, newDefaults: Config): NozzlePlan {
-  const dropped: string[] = [], overlay: Config = {}, baseline: Record<string, Config[string] | null> = {};
-  for (const [key, value] of Object.entries(record.overlay ?? record.overrides ?? {})) {
-    if (nozzleDependent(key, from.config, to.config)) { report(key, dropped); continue; }
-    overlay[key] = value; baseline[key] = to.config[key] ?? null;
-  }
-  const prior = (record as { printOverrides?: Config }).printOverrides ?? {}, printOverrides: Config = { ...newDefaults };
-  for (const [key, value] of Object.entries(prior)) {
-    if (sameValue(key, value, oldDefaults[key])) continue;
-    if (!sameValue(key, oldDefaults[key], newDefaults[key])) { dropped.push(key); continue; }
-    printOverrides[key] = value;
-  }
-  const { snapshot: _snapshot, ...rest } = record;
-  return { dropped, record: { ...rest, inherits: to.name, base: { name: to.name, engineName: to.engine_base ?? to.name, version: '', vendor: to.vendor },
-    overlay, overrides: overlay, baseline, ...(Object.keys(printOverrides).length ? { printOverrides } : {}) } as UserPreset };
-}
+const nozzleDependent = (key: string, from: Config, to: Config) => !PRINTER_OWNED.test(key) && (key in from || key in to) && !sameValue(key, from[key], to[key]);
 
 const label = (key: string) => key.replace(/_/g, ' ');
 export async function switchNozzle(printerKey: string, nozzle: string): Promise<string[]> {

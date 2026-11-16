@@ -50,6 +50,6 @@ export function profileColour(config:Config):string {
   return DEFAULT_FILAMENT_COLOUR;
 }
 export function printerCover(vendor:string,config:Config,model?:string):string|undefined {
-  const actual=first(config.printer_model) || model;
+  const actual=model || first(config.printer_model);
   return vendor && actual ? `/profiles/${encodeURIComponent(vendor)}/${encodeURIComponent(actual)}_cover.png` : undefined;
 }

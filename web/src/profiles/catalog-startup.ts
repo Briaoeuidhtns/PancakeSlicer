@@ -6,7 +6,7 @@ import type { ProfileBaseAnchor, ProfileLibraryDocument, ProjectProfileSnapshot 
 import { app } from '../flow/app';
 import { importing } from '../flow/import';
 import { loadTab } from '../options';
-import { getState, setState, toast } from '../state/store';
+import { getState, setState } from '../state/store';
 import { documentGeneration } from '../state/history';
 import { initialiseSavedPreferences, preferenceText } from '../saved-preferences';
 import { findProfile } from './identity';

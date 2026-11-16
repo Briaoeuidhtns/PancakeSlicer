@@ -4,18 +4,17 @@ import type { Config, SystemPreset } from '../api/types';
 import { effectiveConfig, getState, printerPreset, resolvePreset, setState, toast, useStore, type State } from '../state/store';
 import { catalogKey, findCatalogBase, saveProfile } from '../profiles/model';
 import { useCatalog } from '../profiles/catalog-add';
-import { commitProfileRecords } from '../profiles/transactions';
-import { profileKey } from '../profiles/identity';
+import type { CatalogModel } from '../profiles/catalog-reads';
+import { catalogLine } from '../catalog/read';
+import type { CatalogVariant } from '../catalog/types';
+import { commitRecords } from '../profiles/transactions';
 import { switchPreset } from '../actions';
 import { Modal, ModalBody, ModalFooter, ModalTitle } from './Modal';
 import { More } from './kit';
 
-const NOZZLES = ['0.2', '0.25', '0.4', '0.5', '0.6', '0.8', '1.0'];
-const first = (v: unknown) => String([v].flat()[0] ?? '');
-function rect(area: string) {
-  const pts = area.split(',').map((p) => p.split('x').map(Number));
-  const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
-  return { w: Math.max(...xs) - Math.min(...xs), d: Math.max(...ys) - Math.min(...ys), ox: -Math.min(...xs), oy: -Math.min(...ys) };
+async function variantFor(model: CatalogModel, nozzle: number): Promise<CatalogVariant | undefined> {
+  const near = (v: CatalogVariant) => Math.abs(Number(v.nozzle) - nozzle);
+  return (await catalogLine('printers', model.id)).variants.filter((v) => v.default).sort((a, b) => near(a) - near(b))[0];
 }
 
 export default function CreatePrinter({ close }: { close(): void }) {

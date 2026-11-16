@@ -69,7 +69,7 @@ function filamentGroups(slot: number | null): PickerGroup[] {
   const item = (e: PickerEntry): PickerItem => {
     const brand = first(e.config.filament_vendor) || e.vendor || 'Generic', b = brandName(e.name, e.config);
     const label = e.mine ? e.name : b.name;
-    return { id: e.key, label, sub: rowDetail(label, [vendorField(brand)]) || undefined, facet: brand, swatch: profileColour(e.config), disabled: e.reason ?? false, search: `${brand} ${first(e.config.filament_type)} ${e.name}`, slots: others.get(e.key) };
+    return { id: e.key, label, sub: rowDetail(label, [vendorField(brand)]) || undefined, facet: brand, disabled: e.reason ?? false, search: `${brand} ${e.material} ${e.name}`, slots: others.get(e.key) };
   };
   const seen = new Map<string, number>();
   for (const e of entries) { const k = item(e).label + first(e.config.filament_vendor); seen.set(k, (seen.get(k) ?? 0) + 1); }

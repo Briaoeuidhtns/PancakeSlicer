@@ -22,16 +22,17 @@ import (
 )
 
 type DiscoveredPrinter struct {
-	Kind       string `json:"kind"`
-	Host       string `json:"host,omitempty"`
-	URL        string `json:"url,omitempty"`
-	Serial     string `json:"serial,omitempty"`
-	Name       string `json:"name,omitempty"`
-	Model      string `json:"model,omitempty"`
-	Preset     string `json:"preset,omitempty"`
-	Connection string `json:"connection,omitempty"`
-	Source     string `json:"source"`
-	Assigned   string `json:"assigned,omitempty"`
+	Kind         string `json:"kind"`
+	Host         string `json:"host,omitempty"`
+	URL          string `json:"url,omitempty"`
+	Serial       string `json:"serial,omitempty"`
+	Name         string `json:"name,omitempty"`
+	Model        string `json:"model,omitempty"`
+	Preset       string `json:"preset,omitempty"`
+	CatalogModel string `json:"catalogModel,omitempty"`
+	Connection   string `json:"connection,omitempty"`
+	Source       string `json:"source"`
+	Assigned     string `json:"assigned,omitempty"`
 }
 
 const discoveryWindow = 4 * time.Second
@@ -89,7 +90,9 @@ func discover(ctx context.Context, policy *hostPolicy, resources string) ([]Disc
 	for _, d := range found {
 		list = append(list, d)
 	}
-	sort.Slice(list, func(i, j int) bool { return list[i].Kind+list[i].Host+list[i].URL < list[j].Kind+list[j].Host+list[j].URL })
+	sort.Slice(list, func(i, j int) bool {
+		return list[i].Kind+list[i].Host+list[i].URL < list[j].Kind+list[j].Host+list[j].URL
+	})
 	return list, notes
 }
 
@@ -145,7 +148,7 @@ func discoverBambu(ctx context.Context, add func(DiscoveredPrinter, netip.Addr),
 		code := headers["devmodel.bambu.com"]
 		model := models[code]
 		d := DiscoveredPrinter{Kind: "bambu-lan", Host: ip.String(), Serial: strings.ToUpper(serial), Name: headers["devname.bambu.com"],
-			Model: strings.TrimPrefix(cmpOr(model[0], bambuModel("", code)), "Bambu Lab "), Preset: model[1], Connection: headers["devconnect.bambu.com"], Source: "ssdp"}
+			Model: strings.TrimPrefix(cmpOr(model[0], bambuModel("", code)), "Bambu Lab "), Preset: model[1], CatalogModel: model[0], Connection: headers["devconnect.bambu.com"], Source: "ssdp"}
 		add(d, ip)
 	}
 	listen := func(address string) net.PacketConn {
@@ -429,7 +432,7 @@ func probeBambu(ctx context.Context, ip netip.Addr, roots *x509.CertPool, models
 	d := DiscoveredPrinter{Kind: "bambu-lan", Host: ip.String(), Serial: serial, Model: bambuModel("", serial[:3]), Source: "probe"}
 	for _, m := range models {
 		if m[0] == "Bambu Lab "+d.Model {
-			d.Preset = m[1]
+			d.Preset, d.CatalogModel = m[1], m[0]
 		}
 	}
 	add(d, ip)

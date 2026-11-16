@@ -64,7 +64,7 @@ export function ConnectionEditor({ printer, name, onSaved }: { printer: string; 
   const modelOf = (preset?: string) => preset ? machines.find((m) => m.name === preset)?.model : undefined;
   const setupModel = useStore((s) => String(resolvePreset(s, 'machine', printer).config?.printer_model ?? '')) || undefined;
   const use = async (d: Discovered) => {
-    const found = modelOf(d.preset);
+    const found = modelOf(d);
     if (found && setupModel && found !== setupModel && !await confirmDialog('Printer model mismatch',
       `Heads up! ${d.model ?? found} at ${d.host ?? d.url} doesn't match your ${setupModel} profile. Sending ${name} G-code to a different printer model could crash the toolhead or ruin the print. Send it anyway?`,
       ['Use anyway', 'Cancel'], true)) return;
@@ -141,9 +141,9 @@ export function ConnectionEditor({ printer, name, onSaved }: { printer: string; 
         ? <div className="hint-text">Hmm, we didn't find any printers on your network.{found.notes.length ? ` ${found.notes.join(' ')}` : ''}</div>
         : <table className="found-table" aria-label="Printers found"><tbody>
           {found.printers.map((d) => {
-            const usedBy = d.assigned && d.assigned !== printer ? resolvePreset(getState(), 'machine', d.assigned).user?.name ?? 'another printer' : '';
-            const preset = d.preset && machines.some((m) => m.name === d.preset);
-            const other = modelOf(d.preset), mismatch = !!other && !!setupModel && other !== setupModel;
+            const usedBy = d.assigned && d.assigned !== printer ? printerOf(getState(), d.assigned)?.name ?? 'another printer' : '';
+            const preset = !!foundModel(d);
+            const other = modelOf(d), mismatch = !!other && !!setupModel && other !== setupModel;
             const label = d.model ?? d.name ?? KIND_LABEL[d.kind];
             return (
               <tr key={`${d.kind}${d.serial ?? ''}${d.host ?? ''}${d.url ?? ''}`}>

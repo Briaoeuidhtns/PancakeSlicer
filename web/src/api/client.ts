@@ -3,10 +3,8 @@ import { bootstrapAccessToken, mutation, responseError } from './access';
 import { attachFiles, postJob } from './blobs';
 import { readHealth } from './health';
 import { followJobStream, type JobStreamEvent } from './job-stream';
-import { expandCatalog } from './compact-catalog';
-import { catalogWorker, onWorkerFailure, workerId } from './worker';
-import type { CatalogIn, CatalogOut } from './catalog.worker';
-import type { Config, JobRequest, JobStatus, PresetCatalog, ProgressEvent } from './types';
+import type { Config, JobRequest, JobStatus, ProgressEvent } from './types';
+import { DEMO, NO_ENGINE } from '../demo/config';
 
 export interface Api {
   mock: boolean;

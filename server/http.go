@@ -1046,7 +1046,7 @@ func spaFiles(dir, resources string) http.Handler {
 			st, err = os.Stat(file)
 		}
 		if err != nil && resources != "" && strings.HasPrefix(clean, "/profiles/") {
-			if ext := strings.ToLower(path.Ext(clean)); ext == ".png" || ext == ".stl" {
+			if ext := strings.ToLower(path.Ext(clean)); ext == ".png" || ext == ".stl" || ext == ".svg" {
 				file = filepath.Join(resources, relative)
 				st, err = os.Stat(file)
 			}
