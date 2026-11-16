@@ -143,7 +143,9 @@ export function ProfileEditor({type, name, draft, update, onBack, onSavingChange
   const editor: ProfileFields = useMemo(() => ({name, readOnlyKeys: dynamic ? SPEED_KEYS : undefined, config: shown, baseline, changes, set: type === 'process' ? setOrUnlink : set, reset, mode: type === 'process' ? 'develop' : mode, sources, sourceText, resetToBase: type === 'process' ? relink : resetToBase}), [name, shown, baseline, changes, set, setOrUnlink, reset, mode, type, sources, sourceText, resetToBase, relink, dynamic]);
   const dirty = Object.keys(changes).length > 0 || applicabilityDirty || scalesDirty || speedDirty || overridesDirty || !!draft?.staged;
   const revert = () => {update(key, null); setError(null);};
-  const save = async () => {
+  const discarded = (e: unknown) => {if ((e as {code?: string}).code === 'discarded') update(key, null);};
+  const conflicted = useMachine(libraryWrites, (w) => w.value === 'conflicted' && !!source && w.context.conflicts.includes(recordKey(recordKind(type), source.id)));
+  const save = async (asNew?: string) => {
     if (!m.can({type: 'SAVE'}) || !dirty) return;
     const s = getState(), currentSource=findProfile(s,type,name);
     const submitted={...latest.current,values:structuredClone(latest.current.values),applicability:structuredClone(latest.current.applicability)};

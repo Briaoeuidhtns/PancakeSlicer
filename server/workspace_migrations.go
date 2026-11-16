@@ -160,16 +160,22 @@ func retireUnreachableDrafts(d *workspaceData) {
 			retire(key, fmt.Sprintf("a snapshot of project %s, which nothing offers", x.ProjectID))
 			continue
 		}
-		if raw, ok := slantMorphRecord(p.Record); ok {
-			p.Record = raw
-			d.Projects[id] = p
+		if saved := projectDocument(d, x.ProjectID); saved != nil && x.Doc != nil && sameDocument(x.Doc, saved) {
+			retire(key, fmt.Sprintf("its document is project %s's saved one", x.ProjectID))
+			continue
 		}
+		dirty = append(dirty, draft{key, x.ProjectID, x.Base, max(x.EditedAt, x.UpdatedAt), x.Doc})
 	}
-	for id, dr := range d.Drafts {
-		if raw, ok := slantMorphRecord(dr.Document); ok {
-			dr.Document = raw
-			d.Drafts[id] = dr
+	sort.SliceStable(dirty, func(i, j int) bool { return dirty[i].edited > dirty[j].edited })
+	var kept []draft
+	for _, x := range dirty {
+		if i := slices.IndexFunc(kept, func(k draft) bool {
+			return k.project == x.project && k.base == x.base && x.document != nil && k.document != nil && sameDocument(k.document, x.document)
+		}); i >= 0 {
+			retire(x.key, fmt.Sprintf("a copy of draft %s of project %s", kept[i].key, x.project))
+			continue
 		}
+		kept = append(kept, x)
 	}
 	log.Printf("workspace migration: %d drafts kept, each offered when its project opens", len(d.Drafts))
 }

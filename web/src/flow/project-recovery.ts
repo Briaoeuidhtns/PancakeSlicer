@@ -20,6 +20,10 @@ export const conflictFailure = (projectId: string, expectedRevision: number): Pr
   kind: 'conflict', name: 'ProjectConflictError', projectId, expectedRevision,
   message: 'Heads up: this project was edited in another window. Load the latest version or choose Keep mine to save your draft.',
 });
+export const DRAFT_CONFLICT_MESSAGE = 'Good news — we rescued some unsaved changes from before this project was last saved! Hit Reload latest for the saved version, or Keep mine to save these changes over it.';
+export const draftConflictFailure = (projectId: string, expectedRevision: number): ProjectFailure => ({
+  kind: 'conflict', name: 'ProjectDraftConflictError', projectId, expectedRevision, message: DRAFT_CONFLICT_MESSAGE,
+});
 export function failureError(failure: ProjectFailure): Error & { failure: ProjectFailure } {
   return Object.assign(new Error(failure.message), { name: failure.name, failure });
 }

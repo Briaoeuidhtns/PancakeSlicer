@@ -31,9 +31,12 @@ const idOf = (v: object) => ids.get(v) ?? (ids.set(v, ++lastId), lastId);
 const objects = (list: PlateObject[]) => list.map((o) => ({ ...o, geometry: `#${idOf(o.geometry)}`,
   volumes: o.volumes?.map((v) => ({ ...v, geometry: `#${idOf(v.geometry)}` })),
 }));
+const BOOKKEEPING = new Set(['revision', 'edited']);
+const record = (v: object) => Object.fromEntries(Object.keys(v).filter((k) => !BOOKKEEPING.has(k)).sort().map((k) => [k, (v as Record<string, unknown>)[k]]));
 const contents = (key: (typeof DOC_KEYS)[number], value: unknown) => JSON.stringify(
   key === 'objects' ? objects(value as PlateObject[]) : key === 'projectPlates' ? (value as Doc['projectPlates']).map((p) => ({ ...p, objects: objects(p.objects) })) : value,
-  (_, v: unknown) => v && typeof v === 'object' && (v instanceof Blob || v instanceof Map) ? `#${idOf(v)}` : v);
+  (_, v: unknown) => v && typeof v === 'object' && (v instanceof Blob || v instanceof Map) ? `#${idOf(v)}`
+    : key === 'profileSnapshots' && v && typeof v === 'object' && !Array.isArray(v) ? record(v) : v);
 export const sameContents = (a: Doc, b: Doc) => DOC_KEYS.every((k) => k === 'selected' || a[k] === b[k] || contents(k, a[k]) === contents(k, b[k]));
 
 const listeners = new Set<() => void>();

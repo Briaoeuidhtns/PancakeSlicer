@@ -8,7 +8,8 @@ export interface ProjectFailure {
 }
 export interface ProjectDraftMeta {
   id: string; owner: string; projectId: string; sequence: number; baseRevision: number;
-  name: string; objects: number; updatedAt: number; kind: 'dirty' | 'snapshot'; failure: ProjectFailure | null;
+  name: string; objects: number; updatedAt: number; kind: 'dirty'; failure: ProjectFailure | null;
+  editedAt?: number;
 }
 export interface ProjectDraft extends ProjectDraftMeta { doc: StoredDocBase; blobs: Record<string, Blob> }
 export interface ProjectDraftStore {
@@ -16,9 +17,10 @@ export interface ProjectDraftStore {
   listMetadata(projectId?: string): Promise<ProjectDraftMeta[]>;
   load(id: string): Promise<ProjectDraft | null>;
   asset(key: string): Promise<Blob | null>;
-  put(draft: ProjectDraft): Promise<void>;
+  put(draft: ProjectDraft, supersedes?: readonly DraftRef[]): Promise<void>;
   remove(id: string, throughSequence: number): Promise<void>;
 }
+export interface DraftRef { id: string; sequence: number }
 export interface ProjectDraftMutationSnapshot {
   readonly pending: number; readonly error: string | null;
 }
@@ -45,8 +47,8 @@ interface ServiceDraft { id: string; sequence: number; document: Omit<ProjectDra
 function validMetadata(meta: ProjectDraftMeta | undefined): meta is ProjectDraftMeta {
   return !!meta && typeof meta.id === 'string' && typeof meta.projectId === 'string' && typeof meta.owner === 'string' &&
     typeof meta.name === 'string' && Number.isSafeInteger(meta.sequence) && meta.sequence >= 0 &&
-    Number.isSafeInteger(meta.baseRevision) && meta.baseRevision >= 0 && Number.isFinite(meta.updatedAt) &&
-    Number.isSafeInteger(meta.objects) && meta.objects >= 0 && (meta.kind === 'dirty' || meta.kind === 'snapshot') &&
+    Number.isSafeInteger(meta.baseRevision) && meta.baseRevision >= 0 && Number.isFinite(meta.updatedAt) && (meta.editedAt === undefined || Number.isFinite(meta.editedAt)) &&
+    Number.isSafeInteger(meta.objects) && meta.objects >= 0 && meta.kind === 'dirty' &&
     (meta.failure === null || !!meta.failure && ['conflict', 'deleted', 'quota', 'unavailable', 'interrupted', 'decode'].includes(meta.failure.kind) &&
       typeof meta.failure.name === 'string' && typeof meta.failure.message === 'string' && meta.failure.projectId === meta.projectId && Number.isSafeInteger(meta.failure.expectedRevision));
 }
@@ -82,9 +84,9 @@ const serviceDraftStore: ProjectDraftStore = {
     if (!blob) throw new Error(`Oops! A 3D model file needed for recovery is missing: ${key}`);
     return blob;
   },
-  put: (draft) => mutate(draft.id, async () => {
+  put: (draft, supersedes = []) => mutate(draft.id, async () => {
     const { blobs: _blobs, ...document } = draft;
-    const payload = { sequence: draft.sequence, document, metadata: draftMetadata(draft) };
+    const payload = { sequence: draft.sequence, document, metadata: draftMetadata(draft), supersedes };
     const capture = await captureProjectWire(payload);
     const key = `${draft.id}/${draft.sequence}/${capture.digest}`;
     const preparation = prepareOnce(pendingDrafts, key, async () => projectWrite(await capture.draft(projectId())));

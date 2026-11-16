@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -872,8 +873,8 @@ func (st *workspaceStore) putDraft(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.PathValue("id")
-	if !workspaceID(id) || len(in.Document) == 0 {
-		workspaceFailure(w, 400, "draft_invalid", "A stable draft ID and document are required.", "keep_draft", 0)
+	if !workspaceID(id) || len(in.Document) == 0 || slices.ContainsFunc(in.Supersedes, func(s draftRef) bool { return s.ID == id || !workspaceID(s.ID) }) {
+		workspaceFailure(w, 400, "draft_invalid", "We need a stable draft ID and document here.", "keep_draft", 0)
 		return
 	}
 	if err := st.checkAssets(in.Document); err != nil {

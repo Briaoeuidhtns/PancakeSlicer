@@ -1,4 +1,4 @@
-import type { ConfigValue, PresetType } from '../api/types';
+import type { Config, ConfigValue, PresetType } from '../api/types';
 import { sameValue } from './value-equality';
 export { sameValue } from './value-equality';
 import { isHidden, profileHolds } from '../options';
@@ -34,6 +34,25 @@ export function settingValue(s: State, type: PresetType, key: string, slot = 0, 
   value = volume?.settings[key] ?? value;
   const range = object.ranges?.find((r) => r.id === target.range);
   return range ? key === 'layer_height' ? range.layer_height : range.settings[key] ?? value : value;
+}
+
+const plateOwns = (edits: Config, plate: { settings: Config } | undefined, key: string) => edits[key] === undefined && plate?.settings[key] !== undefined;
+
+export function authoredChanges(s: State, type: PresetType, slot = 0): Config {
+  const edits = presetEdits(s, type, slot);
+  const project = (type === 'filament' ? s.projectPresets?.filaments[slot] : s.projectPresets?.[type]) ?? {};
+  const plate = type === 'process' ? s.projectPlates.find((p) => p.index === s.plateIndex) : undefined;
+  const out: Config = {};
+  for (const key of new Set([...Object.keys(project), ...Object.keys(edits)])) {
+    const value = edits[key] ?? project[key];
+    if (value === undefined || plateOwns(edits, plate, key) || isHidden(key) || PRESET_META.test(key) || !profileHolds(type, key)) continue;
+    out[key] = value;
+  }
+  return out;
+}
+
+export function unsavedRule(edited: Record<string, unknown>, values: Config, below: Config, sources?: Record<string, string | undefined>): (key: string) => boolean {
+  return (key) => key in edited && (!sameValue(key, values[key], below[key]) || sources?.[key] === 'set');
 }
 
 export function selectChanges(s: State, type: PresetType, slot = 0): SettingChange[] {

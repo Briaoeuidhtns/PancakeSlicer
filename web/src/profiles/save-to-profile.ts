@@ -1,7 +1,7 @@
 import { newSpeedModel, speedModelOf, SPEED_FEATURES, type SpeedModel } from './speed-rules';
 import type { Config, ConfigValue, PresetType } from '../api/types';
 import { switchPreset } from '../actions';
-import { selectChanges } from '../state/changes';
+import { authoredChanges } from '../state/changes';
 import { getState, presetEdits, resolvePreset, setState, toast, type State } from '../state/store';
 import type { UserPreset } from '../api/types';
 import { clampHeight, scaleValues, type ScaleRow } from './auto-rules';
@@ -29,6 +29,11 @@ export const scaleContext = (s: State) => {
   return { nozzle, layerHeight: effectiveLayerHeight(s) };
 };
 export function valueSources(s: State, type: PresetType, slot: number): Record<string, ValueSource> {
+  if (type === 'filament') {
+    const printer = recordOf(s, 'machine', s.printer)?.name ?? 'this printer', filament = recordOf(s, 'filament', selectedKey(s, type, slot))?.name ?? 'filament';
+    return Object.fromEntries(Object.keys(authoredChanges(s, type, slot)).map((key) =>
+      [key, { source: CALIBRATION_KEYS.has(key) ? 'calibration' as const : 'filament' as const, printer, filament }]));
+  }
   if (type !== 'process') return {};
   const p = findProfile(s, type, selectedKey(s, type, slot)), own = p?.overlay ?? {}, printer = findProfile(s, 'machine', s.printer)?.name ?? 'printer';
   const out: Record<string, ValueSource> = Object.fromEntries(scalesOf(p).map((row) => [row.key, { source: 'formula' as const, row }]));
@@ -88,18 +93,15 @@ function restoreChanges(type: PresetType, slot: number, key: string, c: ReturnTy
 export async function saveToProfile(type: PresetType, slot = 0, choices: Record<string, ValueChoice> = {}): Promise<void> {
   const s = getState();
   if (!s.api) throw new Error('Offline right now—your changes are safely kept in this tab.');
-  const stage = captureProjectProfileChanges(type, slot), source = findProfile(s, type, stage.key), resolved = resolvePreset(s, type, stage.key);
-  if (!source || !resolved.base || resolved.error) throw new Error(resolved.error ?? 'That profile isn\'t available right now, but your edits are safely kept here.');
-  const before = changesOf(s, type, slot), prior = structuredClone(source), printerBefore = structuredClone(findProfile(s, 'machine', s.printer));
-  const scales = scalesOf(source), { rows, own, toPrinter, kept } = applyChoices(scales, stage.deltas, valueSources(s, type, slot), choices, scaleContext(s));
-  if (Object.keys(kept).length === Object.keys(stage.deltas).length) throw new Error('Your edits apply to this project by default. Choose where you\'d like to save them permanently.');
-  const values = { ...resolved.config, ...own };
-  if (speedModelOf(source)) for (const f of SPEED_FEATURES) for (const key of [f.key, f.acceleration]) if (!(key in own)) {
-    const value = source.overlay?.[key] ?? resolved.base.config[key];
-    if (value === undefined) delete values[key]; else values[key] = value;
-  }
+  if (!profileSaves.can({ type: 'START', capture: '' })) throw new Error('A save is already in progress; your changes are kept.');
+  const save = captureProfileSave(type, slot), source = recordOf(s, type, save.key);
+  if (!source || source.archived) throw new Error('That profile isn\'t available right now, but your edits are safely kept here.');
+  const before = changesOf(s, type, slot), printerBefore = recordOf(s, 'machine', s.printer);
+  const scales = scalesOfRecord(source), { rows, own, toPrinter, kept, toCalibration } = applyChoices(scales, save.edits, valueSources(s, type, slot), choices, scaleContext(s));
+  if (Object.keys(kept).length === Object.keys(save.edits).length) throw new Error('Your edits apply to this project by default. Choose where you\'d like to save them permanently.');
+  const values: Config = { ...ownValues(type, source), ...own };
   for (const r of rows) delete values[r.key];
-  const saved = { ...values, ...stage.deltas };
+  const saved = { ...save.edits };
   for (const k of Object.keys(kept)) delete saved[k];
   const record = { ...saveProfile(s, type, source.name, profileKey(source), values), id: profileKey(source), applicability: source.applicability,
     ...(type === 'process' ? autoOf(source, rows) : {}) } as UserPreset;

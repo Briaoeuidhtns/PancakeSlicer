@@ -499,6 +499,8 @@ export function runJob(api: Api, request: JobRequest, signature: string, sink: J
 }
 
 export async function plateJob(s = getState(), ask = true): Promise<JobRequest | string | null> {
+  const offers = await import('./flow/project-slots');
+  if (offers.offerUndecided()) return offers.OFFER_UNDECIDED;
   const outside = outsideVolumeWarning(s);
   if (outside) return outside;
   const slots = await import('./printers/slot-check'), issues = slots.slotIssues(s);

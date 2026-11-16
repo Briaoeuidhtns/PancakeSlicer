@@ -68,7 +68,7 @@ const activeWrite = (id: string, gen: number, version: number) =>
   id === project.get().context.id && gen === documentGeneration() && version === epoch;
 
 const draftStorage = async () => (await import('../persist/drafts')).projectDraftStore();
-const session = { owner: sessionId, previousOwners: [] as readonly string[], tab: [sessionId] as readonly string[] };
+const session = { owner: newKey() };
 let leaseFor: string | null = null;
 async function leaseForSave(): Promise<boolean> {
   const { id, revision } = project.get().context;
@@ -79,6 +79,7 @@ async function leaseForSave(): Promise<boolean> {
 const journalTools = () => import('./project-journal');
 let draftActivity: typeof import('../persist/drafts') | null = null;
 let journal: ReturnType<typeof createDraftJournal<Doc>>;
+let editedAt = 0, restoredEdit: number | null = null;
 let captured: { id: string; document: Doc; revision: number; failure: ProjectFailure | null; receipt: ReturnType<typeof journal.capture> } | null = null;
 let restoredDraft: ProjectDraftMeta | null = null;
 export type ProjectDraftInventory = { status: 'loading' | 'ready' | 'error'; drafts: readonly ProjectDraftMeta[]; error: string | null };
@@ -104,7 +105,12 @@ export function refreshProjectDrafts(): Promise<ProjectDraftInventory> {
 function checkpointProject(document = snapshot(), id = project.get().context.id, revision = project.get().context.revision,
   failure = project.get().context.failure) {
   if (project.get().context.draft.state !== 'failed' && captured?.id === id && captured.revision === revision && captured.failure === failure && sameDoc(captured.document, document)) return captured.receipt;
-  const gen = documentGeneration(), version = epoch, receipt = journal.capture(id, revision, document, failure);
+  if (restoredEdit !== null) { editedAt = restoredEdit; restoredEdit = null; }
+  else if (!captured || !sameDoc(captured.document, document)) editedAt = Date.now();
+  const adopted = restoredDraft?.projectId === id && restoredDraft.id !== `${session.owner}.${id}` ? restoredDraft : null;
+  const gen = documentGeneration(), version = epoch,
+    receipt = journal.capture(id, revision, document, failure, editedAt, adopted ? [{ id: adopted.id, sequence: adopted.sequence }] : []);
+  if (adopted) void receipt.durable.then(() => { if (restoredDraft === adopted) restoredDraft = null; }, () => {});
   captured = { id, document, revision, failure, receipt };
   project.send({ type: 'DRAFT', id, durability: { state: 'pending', checkpoint: receipt.checkpoint } });
   void receipt.durable.then((draft) => {
@@ -143,13 +149,6 @@ function hasUnsavedProject() {
   const { value, context } = project.get();
   return value === 'editing' || value === 'saving' || value === 'conflict' || value === 'failed' && !context.loadError;
 }
-async function preserveProjectSnapshot() {
-  if (!hasUnsavedProject()) return;
-  const record = await checkpointProject().durable;
-  await (await draftStorage()).put({ ...record, id: newKey(), kind: 'snapshot' });
-  await refreshProjectDrafts();
-}
-
 function writeRefusal(c: ProjectContext, doc: Doc): ProjectFailure | null {
   if (!c.loaded || c.loaded.revision !== c.revision) return { kind: 'interrupted', name: 'ProjectNotLoadedError', projectId: c.id, expectedRevision: c.revision,
     message: "Oops! This project didn't finish loading, so we paused auto-save to protect your file. Click Retry to load it again." };
@@ -268,6 +267,7 @@ function adopt(f: () => void) {
   generation = documentGeneration();
   observed = snapshot();
 }
+export const openingStep = (f: () => void) => project.get().value === 'saved' ? adopt(f) : f();
 
 const sender = newKey();
 let channel: BroadcastChannel | null = null;
@@ -326,15 +326,10 @@ export function startProjects(ready: Promise<unknown> = Promise.resolve()): Prom
 async function start(ready: Promise<unknown>) {
   const modules = Promise.all([import('./project-recovery'), import('../persist/drafts'), journalTools()]);
   const listed = projectStore();
-  const lineage = modules.then(([, , tools]) => tools.draftSession(session.owner));
-  lineage.catch(() => {});
   await ready.catch(() => {});
   const [recovery, drafts, { createDraftJournal }] = await modules;
   recoveryCore = recovery; draftActivity = drafts;
   store = await listed ?? await projectStore(true);
-  session.tab = [sessionId, ...await predecessorSessions()];
-  try { if (store) Object.assign(session, await lineage.catch(() => journalTools().then((tools) => tools.draftSession(session.owner)))); }
-  catch (error) { toast(errorText(error)); }
   journal = createDraftJournal<Doc>(session.owner, draftStorage, codec, (id) => draftActivity!.beginProjectDraftMutation(id));
   void (async () => {
     const [{ watchBlankSetup, forgetBlankSetup }, { loadServiceSession }] = await Promise.all([import('../persist/blank-setup'), import('../persist/service-session')]);
@@ -423,7 +418,7 @@ async function start(ready: Promise<unknown>) {
   if (currentRoute().kind === 'blank' && observed && (observed.objects.length || observed.project)) {
     checkpointProject(observed);
     project.send({ type: 'EDIT' }); writeProjectRoute(true);
-  } else if (!(typeof unsaved === 'string' && await resumeUnsaved(unsaved))) await route();
+  } else if (!(typeof unsaved === 'string' && await resumeUnsaved(unsaved)) && !(currentRoute().kind === 'blank' && await resumeOrphaned())) await route();
   if (!store) project.send({ type: 'ERROR', error: projectStorageError() });
   (await import('./boot')).startFlows();
 }
@@ -488,7 +483,13 @@ async function resumeUnsaved(id: string) {
     if (!resumed) history.replaceState({ ...history.state, [UNSAVED]: undefined }, '');
     return resumed;
   }
-  catch (e) { toast(errorText(e)); return false; }
+  catch (e) { toast('project_failed_3', { detail: errorText(e) }); return false; }
+  finally { routing = false; routeSavedProject(); }
+}
+async function resumeOrphaned() {
+  routing = true;
+  try { return await (await recoveryActions()).resumeOrphanedProject(recoveryRuntime); }
+  catch (e) { toast('resume_orphaned_failed', { detail: errorText(e) }); return false; }
   finally { routing = false; routeSavedProject(); }
 }
 export const leaveProjectVersion = (id: string) => openProject(id, { reload: true });
@@ -503,18 +504,15 @@ export async function restoreProjectVersion() {
 
 const recoveryActions = () => import('./project-recovery-actions');
 const recoveryRuntime: import('./project-recovery-actions').RecoveryRuntime = {
-  ensureCatalogs: async (doc,current) => (await import('../profiles/catalog-startup')).ensureProjectCatalogs(doc,current),
-  storage: () => store, removed, checkpoint: () => checkpointProject(), preserveSnapshot: preserveProjectSnapshot,
+  storage: () => store, removed, checkpoint: () => checkpointProject(),
   hasUnsaved: hasUnsavedProject, waitForWrites: () => queue, beginOpen: () => ++opening,
   invalidateWrites: () => { epoch++; }, isCurrent: (mine) => mine === opening, adopt,
   previous: (id) => { previous = id; }, restored: () => restoredDraft, setRestored: (draft) => { restoredDraft = draft; },
-  resetCaptured: () => { captured = null; }, checkpointRecovered: (id, revision, failure) => checkpointProject(snapshot(), id, revision, failure),
+  resetCaptured: () => { captured = null; }, restoreEditedAt: (at: number) => { restoredEdit = at; }, checkpointRecovered: (id, revision, failure) => checkpointProject(snapshot(), id, revision, failure),
   drafts: draftStorage, refreshDrafts: refreshProjectDrafts, known, session, publish, refreshList, activeWrite,
 };
 export const keepProjectVersion = async () => { if (await leaseForSave()) await (await recoveryActions()).keepProjectVersion(recoveryRuntime); };
 export const reloadProject = async () => (await recoveryActions()).reloadProject(recoveryRuntime);
-export const recoverProjectDraft = async (id: string, options: { asCopy?: boolean } = {}) => (await recoveryActions()).recoverProjectDraft(recoveryRuntime, id, options);
-export const discardProjectDraft = async (id: string) => (await recoveryActions()).discardProjectDraft(recoveryRuntime, id);
 
 export const renameProject = async (id: string, name: string) => (await recoveryActions()).renameProject(recoveryRuntime, id, name);
 export const duplicateProject = async (id: string): Promise<ProjectMeta | null> => (await recoveryActions()).duplicateProject(recoveryRuntime, id);

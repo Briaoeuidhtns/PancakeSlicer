@@ -34,6 +34,8 @@ import { PrintingChip } from '../printers/PrintingChip';
 import { sliceAndCompare } from '../compare';
 import { sliceAllMethods, useMethods } from '../methods';
 import { settingsChangedSinceSlice } from '../compare-settings';
+import { useMachine } from '../flow/fsm';
+import { choicePending, OFFER_UNDECIDED, projectSlots } from '../flow/project-slots';
 
 type MenuItem = MenuEntry;
 function Menu({title, items}: {title: string; items: MenuItem[]}) { return <MenuButton label={title} items={items} className="menu-title" />; }
@@ -52,8 +54,7 @@ export function TopBar() {
   const [archive, setArchive] = useState<File[] | null>(null);
   useSyncExternalStore(subscribeHistory, historyVersion);
   const undoLabel = undoName(), redoLabel = redoName();
-  const exportDrc = useStore((st) => !!st.features.export_drc);
-  const generic3mf = useStore((st) => !!st.features.export_generic_3mf);
+  const undecided = useMachine(projectSlots, (m) => choicePending(m.value, m.context.offer));
   const exportEnabled = useStore(canExport);
   const plates = useStore((s) => s.projectPlates.length > 1);
   const plateTools = useStore(canAddPlate);
@@ -200,7 +201,8 @@ export function TabBar() {
   const busy = job.state === 'running' || job.state === 'submitting';
   const exportEnabled = useStore(canExport);
   const exportLabel = useStore(outputKind) === 'gcode.3mf' ? 'Export sliced file' : 'Export G-code';
-  const printer = useStore(printerReady);
+  const undecided = useMachine(projectSlots, (m) => choicePending(m.value, m.context.offer));
+  const printer = useStore(printerReady) && !undecided;
   const hasPrinters = useStore((s) => s.printerConnections.enabled);
   const plates = useStore((s) => s.projectPlates.length > 1);
   const saved = useProject((p) => p.value === 'editing' || p.value === 'saved' || p.value === 'saving');
@@ -220,7 +222,7 @@ export function TabBar() {
     ...(folded ? [sliceMethods] : []),
     ...(folded && changed ? [{label: 'Slice and compare', action: compareSlice, disabled: !printer || busy || !!outside, tip: 'Slice with your updated settings and compare side by side with the previous slice'}] : []),
     ...(folded ? [{label: exportLabel, action: download, disabled: !exportEnabled, tip: job.stale ? STALE_RESULT_TIP : 'Slice the plate first'}] : []),
-    ...(!wide && hasPrinters ? [{label: 'Send to printer', action: () => setState({appDialog: 'send'}), disabled: !exportEnabled}] : []),
+    ...(!wide && hasPrinters ? [{label: 'Send to printer', action: () => setState({appDialog: 'send'}), disabled: !exportEnabled || undecided}] : []),
     ...(tier === 'phone' && saved ? [{label: 'Version history', action: toggleHistory} satisfies MenuEntry] : []),
     ...(!wide && plates ? [{label: 'Slice all plates', action: () => void sliceAll(), disabled: !printer || busy}, {label: 'Export all plates', action: () => void exportAll(), disabled: !exportAllEnabled}] : []),
   ];
@@ -263,7 +265,7 @@ export function TabBar() {
         {wide && plates && <SideOptions options={[exportLabel, 'Export all sliced plates']} value={allExport ? 'Export all sliced plates' : exportLabel}
           onChange={(v) => setExportMode(v === 'Export all sliced plates' ? 'all' : 'plate')} />}
         {wide && hasPrinters && (
-          <button className="btn slant" disabled={!exportEnabled} onClick={() => setState({ appDialog: 'send' })}>
+          <button className="btn slant" disabled={!exportEnabled || undecided} onClick={() => setState({ appDialog: 'send' })}>
             Send
           </button>
         )}

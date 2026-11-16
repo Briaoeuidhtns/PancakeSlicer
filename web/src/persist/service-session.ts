@@ -1,7 +1,6 @@
 import { createServiceDocument, type KeyMerge } from './service-document';
 import { mergeSetups, type BlankSetup } from './blank-setup';
 import { requireWorkspaceService } from './service';
-const owners = (remote: unknown, local: unknown) => [...new Set([...(local as string[] ?? []), ...(remote as string[] ?? [])])].slice(0, 32);
 const latest = (_remote: unknown, local: unknown) => local;
 const setups = (remote: unknown, local: unknown) => mergeSetups(remote as BlankSetup | null, local as BlankSetup | null);
 type Notices = Record<string, { at?: number; dismissed?: boolean }>;
