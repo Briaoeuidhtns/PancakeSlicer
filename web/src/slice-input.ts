@@ -9,6 +9,8 @@ import { projectEdits, projectInstances } from './plater/projectTransforms';
 import { canEditProject } from './api/client';
 import { effectiveLayerHeight } from './profiles/context';
 import { effectiveConfig, getState, presetEdits, printerPreset, resolvePreset, type LayerEvent, type Mix, type State } from './state/store';
+import { slotFilaments, slotIds, slotMixes } from './profiles/slots';
+import { plateSlots } from './printers/slot-check';
 
 function eventArg(e: LayerEvent): string {
   const z = String(Math.round(e.z * 1e4) / 1e4);
@@ -95,8 +97,8 @@ export function calibOverrides(s = getState(), kind = ''): Config {
 }
 
 export function jobLibrary(s: State): JobLibrary {
-  const id = (type: 'machine' | 'process' | 'filament', key: string) => resolvePreset(s, type, key).source?.id ?? '';
-  return { printer: id('machine', s.printer), print: id('process', s.process), filaments: s.filamentSlots.map((f) => id('filament', f)), layerHeight: effectiveLayerHeight(s) };
+  const id = (type: 'machine' | 'process' | 'filament', key: string) => resolvePreset(s, type, key).record?.id ?? '';
+  return { printer: id('machine', s.printer), print: id('process', s.process), filaments: slotFilaments(s).map((f) => id('filament', f)), slots: slotIds(s).map((slot) => slot ?? ''), usedSlots: plateSlots(s), layerHeight: effectiveLayerHeight(s) };
 }
 
 export function appendLibrary(fd: FormData, s: State, settings: Config = {}) {

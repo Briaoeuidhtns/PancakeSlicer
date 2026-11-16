@@ -28,7 +28,6 @@
 #include <cmath>
 #include <atomic>
 #include <cstdint>
-#include <cstdlib>
 #include <cstring>
 #include <exception>
 #include <mutex>
@@ -348,7 +347,6 @@ class BeadGrid
 {
 public:
     BeadGrid(const GCodeProcessorResult &result, bool rotary) : m_result(result), m_rotary(rotary) {}
-    void set_exact_depth(bool exact) { m_exact_depth = exact; }
     size_t size() const { return m_upright.size(); }
     void reserve(size_t beads) { m_upright.reserve(beads); }
     void deposit_upright(size_t move, size_t last, size_t run, int piece = 0, int pieces = 1)
@@ -480,7 +478,7 @@ public:
                 }
                 if (!swept_bead_contact(bead.corners, bead.axes, a, b, box))
                     gap = 0.;
-                else if (m_exact_depth)
+                else
                     gap = std::max(gap, -swept_bead_lift(bead.corners, bead.axes, a, b, box, std::max(0., bh.z() - q.lo.z())));
             }
             if (ring && gap < -ContactTolerance && gap >= -SameLayerTolerance && m_result.moves[m_upright[id].move].layer_id == layer) {
@@ -590,7 +588,6 @@ private:
     }
     const GCodeProcessorResult                                      &m_result;
     bool                                                             m_rotary;
-    bool                                                             m_exact_depth = false;
     std::vector<UprightBead>                                         m_upright;
     std::vector<std::pair<Vec3d, Vec3d>>                             m_bounds;
     struct Cell { uint32_t begin, end; double top; };
@@ -1495,7 +1492,6 @@ ClearanceReport verify_clearance(const GCodeProcessorResult &result, const Clear
     const size_t explain_move = explain_env != nullptr ? size_t(std::strtoull(explain_env, nullptr, 10)) : size_t(-1);
     const bool measure_planar = bar && std::getenv("NP_VERIFY_UPRIGHT_PLANAR") != nullptr && std::string(std::getenv("NP_VERIFY_UPRIGHT_PLANAR")) == "1";
     BeadGrid beads(result, rotary);
-    beads.set_exact_depth(bar);
     struct Hits { std::vector<ClearanceHit> hits; double min_clearance = Inf, max_contact = 0.; size_t tolerated = 0, land_strict = 0, cone_grazes = 0; };
     const double tolerance = params.head.contact_tolerance;
     std::set<std::string> duct_boxes;
@@ -1652,9 +1648,17 @@ ClearanceReport verify_clearance(const GCodeProcessorResult &result, const Clear
                         if (index < 0) continue;
                         hint = index;
                         component = (strict ? contact_strict : contact_allowed).boxes[contact_boxes.boxes[size_t(index)].index].name;
-                        if (nozzle_gap < -ContactTolerance && nozzle_gap >= -params.pitch)
+                        if (nozzle_gap < -ContactTolerance)
                             nozzle_gap = std::max(nozzle_gap, bead_grid.clearance(p0, p1, strict ? strict_prisms : allowed_prisms, c.run, extruding,
                                                                                   component, bead_limit, move.layer_id, tolerated));
+                        if (nozzle_gap < -ContactTolerance &&
+                            std::any_of(cone_head.boxes.begin(), cone_head.boxes.end(), [&](const Nonplanar::HeadBox &b) { return b.name == component; })) {
+                            std::string  fine_component;
+                            bool         fine_tolerated = false;
+                            const double fine = bead_grid.clearance(p0, p1, fine_prisms, c.run, extruding, fine_component, bead_limit, move.layer_id, fine_tolerated);
+                            if (fine > nozzle_gap)
+                                nozzle_gap = fine, component = fine_component;
+                        }
                         record(nozzle_gap, component, p1, ClearanceHitClass::Cone);
                         continue;
                     }

@@ -111,7 +111,7 @@ const realApi: Api = {
       try {
         const s = await realApi.status(id);
         if (disposed) return;
-        if (!['done', 'failed', 'cancelled', 'interrupted', 'stale'].includes(s.state)) {
+        if (s.state === 'queued' || s.state === 'running') {
           retry = setTimeout(reconnect ? follow : () => void finish(), 1000);
           return;
         }

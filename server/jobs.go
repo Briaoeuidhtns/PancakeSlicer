@@ -119,6 +119,8 @@ type Job struct {
 	started       time.Time
 	finished      time.Time
 	errMsg        string
+	errCode       string
+	failCode      string
 	exitCode      *int
 	slice         json.RawMessage
 	events        []Event
@@ -130,7 +132,7 @@ type Job struct {
 	stage         string
 	progress      *float64
 	send          *Transfer
-	resultReady   bool
+	resultReady bool
 }
 
 type JobView struct {
@@ -138,6 +140,7 @@ type JobView struct {
 	Stage          string          `json:"stage,omitempty"`
 	Progress       *float64        `json:"progress,omitempty"`
 	State          JobState        `json:"state"`
+	LifecycleState JobState        `json:"lifecycle_state"`
 	Created        time.Time       `json:"created"`
 	Started        *time.Time      `json:"started,omitempty"`
 	Finished       *time.Time      `json:"finished,omitempty"`
@@ -151,8 +154,8 @@ type JobView struct {
 	RetryOf        string          `json:"retry_of,omitempty"`
 	QueuePosition  int             `json:"queue_position"`
 	ETA            *float64        `json:"eta_seconds,omitempty"`
-	ResultReady    bool            `json:"result_ready,omitempty"`
-	HasSurfaceGrid bool            `json:"has_surface_grid"`
+	ResultReady bool `json:"result_ready,omitempty"`
+	HasSurfaceGrid bool `json:"has_surface_grid"`
 }
 
 func (j *Job) View() JobView {
@@ -272,7 +275,7 @@ func (j *Job) EventsSince(after int) ([]Event, <-chan struct{}, bool) {
 		id := j.events[0].ID - 1
 		pos := j.queuePosition
 		out = append(out, Event{ID: id, Seq: uint64(id), Type: "reset", ReplayGap: true,
-			State: j.state, Stage: j.stage, Pct: j.progress,
+			State: j.state.legacy(), LifecycleState: j.state, Stage: j.stage, Pct: j.progress,
 			ETA: j.eta, QueuePosition: &pos})
 	}
 	for _, e := range j.events {

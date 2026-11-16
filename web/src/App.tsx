@@ -284,7 +284,6 @@ export default function App() {
   return (
     <div className="app">
       <TopBar />
-      <Suspense fallback={null}><SavedPreferencesNotice /></Suspense>
       <Suspense fallback={null}><LeaseBar /></Suspense>
       {!projects && <Suspense fallback={null}><ProjectBanner /></Suspense>}
       {setupOpen && <Suspense fallback={null}><Setup /></Suspense>}

@@ -30,7 +30,7 @@ var optionData []byte
 type cachedResponse struct {
 	plain, zipped []byte
 	etag          string
-	brotli atomic.Pointer[[]byte]
+	brotli        atomic.Pointer[[]byte]
 }
 
 var brotliSlot = make(chan struct{}, 1)
@@ -264,6 +264,7 @@ type staticEntry struct {
 	size     int64
 	response *cachedResponse
 	build    string
+	page     []byte
 }
 type staticCache struct {
 	mu    sync.Mutex

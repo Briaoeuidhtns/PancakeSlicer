@@ -1,29 +1,24 @@
 import type { Config, ConfigValue } from './api/types';
-import { toolValue } from './config-values';
+import type { IconId } from './components/icons';
 import { OPTIONS } from './options';
-import { STYLE_NAMES, type StyleId } from './style-names';
+import { STYLE_NAMES, styleOf, type StyleId } from './style-names';
+
+export { styleOf, type StyleId };
 import { undoable } from './state/history';
 import { effectiveConfig, getState, removeObjectOptions, resetOption, resolvePreset, setObjectOption, setOption } from './state/store';
 
-const STYLE_KEYS: Record<StyleId, Config> = {
-  standard: { nonplanar_mode: 'off', zaa_enabled: '0' },
-  smooth: { nonplanar_mode: 'nonplanar_top' },
-  morph: { nonplanar_mode: 'smooth_morph' },
-  zaa: { nonplanar_mode: 'off', zaa_enabled: '1' },
-  multiplanar: { nonplanar_mode: 'multiplanar' },
-  field: { nonplanar_mode: 'field' },
-};
+export const isRotary = (machine: Config) => String(machine.nonplanar_kinematics ?? 'none') !== 'none';
 
 const same = (key: string, a: ConfigValue | undefined, b: ConfigValue | undefined) =>
   toolValue(key, a ?? (OPTIONS[key]?.default as ConfigValue) ?? '') === toolValue(key, b ?? (OPTIONS[key]?.default as ConfigValue) ?? '');
 
 export function applyStyle(id: StyleId, objectId?: number) {
-  undoable(`Change print style to "${STYLE_NAMES[id]}"`, () => writeStyle(id, objectId));
+  undoable(`Change print style to "${styleById(id).name}"`, () => writeStyle(id, objectId));
 }
 
 function writeStyle(id: StyleId, objectId?: number) {
   const s = getState();
-  const keys = STYLE_KEYS[id];
+  const keys = styleById(id).keys;
   if (objectId === undefined) {
     const system = resolvePreset(s, 'process', s.process).config;
     for (const [k, v] of Object.entries(keys)) {
@@ -37,3 +32,5 @@ function writeStyle(id: StyleId, objectId?: number) {
   for (const [k, v] of Object.entries(keys)) if (!drop.includes(k)) setObjectOption(objectId, k, v);
   if (drop.length) removeObjectOptions(objectId, drop);
 }
+
+export const processShortName = (name: string) => name.replace(/\s*@.*$/, '');

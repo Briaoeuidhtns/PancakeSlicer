@@ -7,7 +7,6 @@ import { methodAvailability } from '../profiles/method-context';
 import { isMethodSettingSupported } from '../profiles/capabilities';
 import { NozzleField, PlateTypeField } from '../profiles/SetupRows';
 import { Tabs } from 'radix-ui';
-import { canonicalKeys } from '../renamed-keys';
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { preloadable } from '../preloadable';
 import type { Config, ConfigValue, PresetType } from '../api/types';

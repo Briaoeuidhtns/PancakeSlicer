@@ -104,8 +104,6 @@ struct ClearanceReport
 ClearanceReport verify_clearance(const GCodeProcessorResult &result, const ClearanceParams &params,
                                  const ToolKinematics &kinematics,
                                  const std::function<void()> &throw_if_canceled = {});
-// Answers a repeated verify_clearance() from the last sweep while the moves, joints and parameters are bit-identical.
-// Rotary kinematics always sweep afresh.
 class ClearanceMemo
 {
 public:

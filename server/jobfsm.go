@@ -23,6 +23,7 @@ const (
 	StateQueued      JobState = "queued"
 	StatePreparing   JobState = "preparing"
 	StateSlicing     JobState = "slicing"
+	StateRunning              = StateSlicing
 	StateStoring     JobState = "storing"
 	StateCanceling   JobState = "canceling"
 	StateDone        JobState = "done"
@@ -57,6 +58,7 @@ type JobTransition struct {
 	To       JobState  `json:"to"`
 	Accepted bool      `json:"accepted"`
 	Reason   string    `json:"reason,omitempty"`
+	Code     string    `json:"code,omitempty"`
 }
 
 const maxTransitions = 256

@@ -54,7 +54,7 @@ export default function TextPanel() {
       </div>
       {v && (
         <label className="prefs-row cut-joint-row"><span>Operation</span>
-          <Dropdown className="combo" value={v.type} aria-label="Operation" onValueChange={(next) => { changeVolumeType(objectId, v.id, next as typeof v.type); if (spec.surface) void updateText(spec);  }} options={[...OPERATIONS.map(([t, label]) => ({ value: t, label, disabled: t === 'part' && !!spec.surface && !raises }))]} />
+          <Dropdown className="combo" value={v.type} aria-label="Operation" onValueChange={(next) => { changeVolumeType(objectId, v.id, next as typeof v.type); if (spec.surface) void updateText(spec);  }} options={[...OPERATIONS.map(([t, label]) => ({ value: t, label, disabled: false }))]} />
         </label>
       )}
       <More id="text">

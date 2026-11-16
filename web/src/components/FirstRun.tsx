@@ -49,8 +49,6 @@ function warmPreview(url: string) {
 let warmed = false;
 function warmSamples() {
   if (warmed) return;
-  warmed = true;
-  for (const s of SAMPLES) warmPreview(s.variants[0].preview);
   const idle = window.requestIdleCallback ?? ((f: () => void) => setTimeout(f, 200));
   idle(() => { for (const s of SAMPLES) modelBlobUrl(s.variants[0].model).catch(() => {}); });
 }

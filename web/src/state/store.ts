@@ -364,7 +364,6 @@ export const getState = () => state;
 export function setState(patch: Partial<State> | ((s: State) => Partial<State>)) {
   const finishTiming = timeInteraction('store');
   let next = { ...state, ...(typeof patch === 'function' ? patch(state) : patch) };
-  if(next.profileLibraryLoad.state==='ready' && next.profileSnapshots===state.profileSnapshots && next.projectPresets===state.projectPresets && next.printerLibrary===state.printerLibrary && (next.printer!==state.printer || next.process!==state.process || next.filamentSlots!==state.filamentSlots || next.slotColours!==state.slotColours || next.filamentEdits!==state.filamentEdits || next.mixes!==state.mixes))next.printerLibrary=capturePrinterMaterials(next);
   const selected = next.selected;
   if (selected && !next.objects.some((o) => o.id === selected.object && o.instances.some((i) => i.id === selected.instance))) {
     next.selected = null;

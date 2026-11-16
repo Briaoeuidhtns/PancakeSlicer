@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,8 +32,8 @@ import (
 type Server struct {
 	cfg           Config
 	jobs          *JobManager
-	presets       *PresetIndex
-	libraryV4     *libraryStore
+	catalog       *resolve.Catalog
+	library       *libraryStore
 	workspace     *workspaceStore
 	sends         *SendManager
 	blobs         *blobStore
@@ -1452,7 +1453,7 @@ func (h *engineHealth) setEngine(next HealthState) {
 }
 
 func (h *engineHealth) setArtifact(next HealthState) {
-	moveHealth(artifactTransitions, &h.artifactState, next, "engine release check")
+	moveHealth(artifactTransitions, &h.artifactState, next, "artifact qualification")
 }
 
 func (h *engineHealth) wireState() HealthState {
@@ -1482,7 +1483,7 @@ func bundleFileHash(name string) (string, error) {
 }
 
 func bundleResourceHash(root string) (string, error) {
-	var names []string
+	h := sha256.New()
 	err := filepath.WalkDir(root, func(name string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -1523,28 +1524,11 @@ func bundleResourceHash(root string) (string, error) {
 		}
 		relative, err := filepath.Rel(root, name)
 		if err != nil {
-			return "", err
+			return err
 		}
 		fmt.Fprintf(h, "%s\x00%s\n", filepath.ToSlash(relative), digests[i])
 	}
 	return hex.EncodeToString(h.Sum(nil)), nil
-}
-
-type bundleDigest struct {
-	binary, resources       string
-	binaryErr, resourcesErr error
-}
-
-func newBundleDigest(tool, resources string) func() bundleDigest {
-	return sync.OnceValue(func() bundleDigest {
-		var d bundleDigest
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() { defer wg.Done(); d.binary, d.binaryErr = bundleFileHash(tool) }()
-		d.resources, d.resourcesErr = bundleResourceHash(resources)
-		wg.Wait()
-		return d
-	})
 }
 
 func newEngineHealth(c Config) *engineHealth {

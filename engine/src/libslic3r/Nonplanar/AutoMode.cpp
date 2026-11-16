@@ -625,9 +625,9 @@ std::string describe_top_patch(const PrintObject &object, const ConformalPatch &
     else if (d.requested)
         out += d.flexible ? _u8L("Skipped ironing: flexible filament.") : _u8L("Skipped ironing: area is too narrow for ironing passes.");
     else if (patch.automatic && d.region_irons)
-        out += _u8L("Skipped ironing: curve is too steep for the flat nozzle tip.");
+        out += _u8L("Skipped ironing — the curve is a bit too steep for the flat nozzle tip.");
     else
-        out += _u8L("Skipped ironing: turned off in print settings.");
+        out += _u8L("Skipped ironing (it's turned off in print settings).");
     return out;
 }
 

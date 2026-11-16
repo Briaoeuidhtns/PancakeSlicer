@@ -12,7 +12,6 @@ import { currentRoute, writeRoute } from './routes';
 import type { createDraftJournal } from './project-journal';
 import { importing } from './import';
 import { writesDiscarded } from '../api/access';
-import { predecessorSessions, sessionId } from '../api/session';
 import { versionShown, versionView, versionWanted } from './version-view';
 import { acquireLease, followProjectLease, leaseRefused, leaseSettled, leaseWritable } from './project-lease';
 
@@ -38,7 +37,7 @@ export type ProjectEvent =
   | { type: 'SAVED'; id: string; name: string; savedAt: number; revision: number; objects?: number; checkpoint?: DraftCheckpoint }
   | { type: 'ERROR'; error: string; failure?: ProjectFailure }
   | { type: 'DRAFT'; id: string; durability: Exclude<DraftDurability, { state: 'none' }> }
-  | { type: 'RECOVERED'; meta: ProjectMeta; draft: ProjectDraftMeta; failure: ProjectFailure | null; baseObjects: number }
+  | { type: 'RECOVERED'; meta: ProjectMeta; draft: ProjectDraftMeta; failure: ProjectFailure; baseObjects: number }
   | { type: 'OPENED'; meta: ProjectMeta } | { type: 'MISSING'; id: string } | { type: 'DELETED' }
   | { type: 'REBASE'; revision: number } | { type: 'REMOTE' } | { type: 'EMPTIED' };
 let recoveryCore: typeof import('./project-recovery');
@@ -186,13 +185,12 @@ const draftUpdate = { guard: (c: ProjectContext, e: Extract<ProjectEvent, { type
   (c.draft.state === 'none' || c.draft.checkpoint.sequence <= e.durability.checkpoint.sequence),
   action: (_: ProjectContext, e: Extract<ProjectEvent, { type: 'DRAFT' }>) => ({ draft: e.durability }) };
 const recoveredWith = (_: ProjectContext, e: Extract<ProjectEvent, { type: 'RECOVERED' }>): Partial<ProjectContext> => ({
-  ...e.meta, revision: e.draft.baseRevision, origin: 'loaded', error: e.failure?.message ?? null, failure: e.failure, dirty: true, loadError: false,
-  loaded: { revision: e.draft.baseRevision, objects: e.baseObjects }, allowEmpty: !e.failure,
+  ...e.meta, revision: e.draft.baseRevision, origin: 'loaded', error: e.failure.message, failure: e.failure, dirty: true, loadError: false,
+  loaded: { revision: e.draft.baseRevision, objects: e.baseObjects }, allowEmpty: false,
   draft: { state: 'durable', checkpoint: { id: e.draft.id, sequence: e.draft.sequence }, updatedAt: e.draft.updatedAt },
 });
 const recovered = [
-  { target: 'editing', guard: (_: ProjectContext, e: Extract<ProjectEvent, { type: 'RECOVERED' }>) => !e.failure, action: recoveredWith },
-  { target: 'conflict', guard: (_: ProjectContext, e: Extract<ProjectEvent, { type: 'RECOVERED' }>) => e.failure?.kind === 'conflict', action: recoveredWith },
+  { target: 'conflict', guard: (_: ProjectContext, e: Extract<ProjectEvent, { type: 'RECOVERED' }>) => e.failure.kind === 'conflict', action: recoveredWith },
   { target: 'failed', action: recoveredWith },
 ] as const;
 const leave = { ERROR: failed, DRAFT: draftUpdate, RECOVERED: recovered, BLANK: 'blank', OPEN: { target: 'opening', action: () => ({ loaded: null }) }, DELETED: 'deleted',

@@ -42,7 +42,7 @@ async function loadModel(m: PrinterModel, nozzles: string[]): Promise<SystemPres
   return mine();
 }
 
-const STEPS = ['printer', 'connect', 'filaments'] as const;
+const STEPS = ['printer', 'profiles', 'connect', 'filaments'] as const;
 function Frame({ step, children, foot, title }: { step: string; children: ReactNode; foot?: ReactNode; title?: string }) {
   const at = STEPS.indexOf(step as (typeof STEPS)[number]);
   return (
@@ -111,8 +111,7 @@ function Printer() {
   const [vendor, setVendor] = useState<string | null>(choices.model?.vendor ?? 'BBL');
   const [search, setSearch] = useState('');
   const [model, setModel] = useState<PrinterModel | null>(choices.model);
-  const [nozzles, setNozzles] = useState<string[]>(choices.nozzles);
-  const [busy, setBusy] = useState(false);
+  const [nozzles, setNozzles] = useState<number[]>(choices.nozzles);
   const q = search.trim().toLowerCase();
   const shown = (models ?? []).filter((m) => q ? `${m.vendorName} ${m.model}`.toLowerCase().includes(q) : m.vendor === vendor);
   const pick = (m: PrinterModel) => { setModel(m); setNozzles(m.nozzles.includes('0.4') ? ['0.4'] : m.nozzles.slice(0, 1)); };
@@ -160,7 +159,7 @@ function Connect() {
   const runTest = async () => { setTest('testing'); try { setTest(await testConnection('', edit)); } catch (e) { setTest({ ok: false, stage: 'error', message: e instanceof Error ? e.message : String(e) }); } };
   const filled = edit.kind === 'bambu-lan' ? !!(edit.host && edit.serial && edit.access_code) : edit.kind === 'flashforge' ? !!edit.host : !!edit.url;
   const next = () => { choices = { ...choices, connection: filled ? edit : null }; send({ type: 'NEXT' }); };
-  return <Frame step="connect" foot={<><Back /><span className="setup-grow" /><Next label={filled ? 'Next' : 'Skip'} onClick={next} /></>}>
+  return <Frame step="connect" foot={<><Back /><button type="button" className="btn-ghost" onClick={() => { choices = { ...choices, connection: null }; send({ type: 'SKIP' }); }}>Skip</button><span className="setup-grow" /><Next disabled={!filled} onClick={next} /></>}>
     <h2>Connect your printer</h2>
     <div className="setup-row">
       <button type="button" className="btn" disabled={found === 'looking'} onClick={() => void discover()}>{found === 'looking' ? 'Looking…' : 'Find printers'}</button>
@@ -265,7 +264,7 @@ async function applyChoices() {
     const added = choices.families.length ? await addCatalogFamilies(choices.families.map((family) => ({ family }))) : undefined;
     const first = added?.chosen[0];
     if (first) requestPreset('filament', 0, first);
-    savePreferences({ 'orca.setup': '1' }); setState({ tab: 'prepare' }); send({ type: 'APPLIED' });
+    send({ type: 'APPLIED' });
   } catch (e) { send({ type: 'FAILED', error: e instanceof Error ? e.message : String(e) }); }
 }
 
@@ -308,8 +307,10 @@ export default function Setup() {
     case 'welcome': return <Welcome />;
     case 'tour': return <Tour page={context.page} />;
     case 'printer': return <Printer />;
+    case 'profiles': return <Profiles />;
     case 'connect': return <Connect />;
     case 'filaments': return <Filaments error={context.error} />;
     case 'applying': return <Frame step="filaments" foot={<span className="setup-count">Setting up…</span>}><div className="setup-hero"><span className="setup-spin" /></div></Frame>;
+    case 'done': return <Done />;
   }
 }

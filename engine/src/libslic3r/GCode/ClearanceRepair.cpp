@@ -22,7 +22,6 @@
 #include "libslic3r/Nonplanar/CurvedTopsSurface.hpp"
 #include "libslic3r/Nonplanar/HeadBoxLabel.hpp"
 #include "libslic3r/Nonplanar/HeadEnvelope.hpp"
-#include "libslic3r/Nonplanar/PatchTools.hpp"
 #include "libslic3r/Nonplanar/MultiplanarConfirm.hpp"
 #include "libslic3r/Nonplanar/OneShotField.hpp"
 #include "libslic3r/Nonplanar/Rests.hpp"
@@ -297,7 +296,6 @@ private:
 };
 
 }
-
 ClearanceReport ClearanceRepair::verify(const Print &print, const GCodeProcessorResult &result, const ClearanceParams &params,
                                         const ToolKinematics &kinematics)
 {
@@ -1114,8 +1112,6 @@ size_t slant_step_hits(const ModelObject &object)
 
 bool ClearanceRepair::step_down_slant(const GCodeProcessorResult &result)
 {
-    if (m_print.config().nonplanar_collision_check.value != NonplanarCollisionCheck::Block)
-        return false;
     std::vector<PrintObject *> picked;
     for (PrintObject *object : m_print.m_objects)
         if (object->config().nonplanar_mode.value == NonplanarMode::Slant && object->slant_choice() && object->slant_choice()->angle_deg > 0. &&
@@ -1381,8 +1377,8 @@ bool ClearanceRepair::curved_tops_step(GCodeProcessorResult &result)
         for (const auto &key : m_curved_roads_last)
             if (surface_hits[key] > 0 && surface_hits[key] >= m_curved_hits_last[key])
                 m_curved_roads_stalled.insert(key);
-        std::set<std::pair<const PrintObject *, int>> ordered_now;
-        std::set<std::pair<const PrintObject *, int>> roads_now;
+        std::set<SurfaceKey> ordered_now;
+        std::set<SurfaceKey> roads_now;
         auto repair_hit = [&](const CurvedHit &hit) {
             PrintObject *owner       = hit.owner;
             const int    surface_id  = hit.surface_id;
@@ -1392,16 +1388,6 @@ bool ClearanceRepair::curved_tops_step(GCodeProcessorResult &result)
             if (curved_tops_mode(owner->config().nonplanar_mode.value)) {
                 if (!owner->m_nonplanar_repair) owner->m_nonplanar_repair = std::make_shared<RepairHints>();
                 RepairHints &hints = *owner->m_nonplanar_repair;
-                const double band = head_band_height(params.head) + params.head.contact_tolerance;
-                const auto   struck = std::find_if(owner->nonplanar_surfaces().begin(), owner->nonplanar_surfaces().end(),
-                                                   [surface_id](const NonplanarSurface &s) { return s.stable_id == surface_id; });
-                if (struck != owner->nonplanar_surfaces().end() && band > 0. && hints.banded_surfaces.count(surface_id) == 0 &&
-                    struck->stats.max.z - struck->stats.min.z > band + EPSILON) {
-                    hints.banded_surfaces.insert(surface_id);
-                    hints.band_height = band;
-                    if (std::find(m_repick.begin(), m_repick.end(), owner) == m_repick.end()) m_repick.push_back(owner);
-                    return;
-                }
                 if (hints.ordered_surfaces.count(surface_id) == 0 && m_curved_roads_stalled.count({ owner, surface_id }) == 0) {
                     if (roads_now.count({ owner, surface_id }) == 0 && ordered_now.count({ owner, surface_id }) == 0) {
                         if (hints.ordered_road_passes[surface_id] < 3) {

@@ -34,6 +34,7 @@ type workspaceProject struct {
 	Archived bool            `json:"archived,omitempty"`
 	Revision uint64          `json:"revision"`
 	Folder   string          `json:"folder,omitempty"`
+	Versions *versionIndex   `json:"versions,omitempty"`
 }
 type workspaceDraft struct {
 	ID        string          `json:"id"`
@@ -154,6 +155,7 @@ func durableWrite(path string, raw []byte) error {
 	}
 	return syncWorkspaceDirectory(filepath.Dir(path))
 }
+
 func syncWorkspaceDirectory(path string) error {
 	if runtime.GOOS == "windows" {
 		return nil
@@ -691,6 +693,7 @@ func (st *workspaceStore) putDraft(w http.ResponseWriter, r *http.Request) {
 		Sequence    uint64          `json:"sequence"`
 		Document    json.RawMessage `json:"document"`
 		Metadata    json.RawMessage `json:"metadata"`
+		Supersedes  []draftRef      `json:"supersedes"`
 	}
 	if !workspaceDecode(w, r, &in) {
 		return

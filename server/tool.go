@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-)
 
 type ToolFeatures struct {
 	ColourChange         map[string]bool `json:"colour_change"`

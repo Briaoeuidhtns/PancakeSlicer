@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strings"
 	"unicode"
-)
 
 //go:generate python3 generate_config_types.py ../web/src/options.generated.json
 //go:embed config_types.json

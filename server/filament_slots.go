@@ -91,8 +91,8 @@ func (st *filamentSlotStore) load() (*slotDoc, error) {
 		if doc.Chosen == nil {
 			doc.Chosen = map[string]map[string]slotChoice{}
 		}
-		if doc.Spools == nil {
-			doc.Spools = map[string]spoolChoice{}
+		if doc.Last == nil {
+			doc.Last = map[string]*printerSlots{}
 		}
 	}
 	st.doc = doc

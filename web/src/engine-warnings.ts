@@ -1,20 +1,6 @@
 export const bareName = (name: string) => name.replace(/\.(stl|obj|3mf|amf|step|stp|drc|ply|off)$/i, '');
 
-const n = (s: string) => Number(s).toLocaleString('en-US');
-const KNOWN: [RegExp, ((m: RegExpMatchArray) => string) | null][] = [
-  [/^Curved tops returned the head-strike neighbourhood to planar layers/i, () => 'Some curved areas were kept flat so the print head stays clear'],
-  [/^Curved tops printed planar: every curved surface was struck/i, () => 'Printed with flat layers because the print head would bump into every curved top'],
-  [/^curved top \d+ prints planar to keep firmware time within (\d+)%/i, (m) => `Some top surfaces stayed flat to keep print time within ${m[1]}%`],
-  [/^trying native curved roads before dropping a top/i, null],
-  [/^Conformal layers would bump the print head in (\d+) moves; sliced again with unrounded shells/i, () => 'Adjusted curved shells so the print head stays clear'],
-  [/^Conformal layers would bump the print head in (\d+) moves.*printed with flat layers/i, (m) => `Printed with flat layers so the print head doesn't bump the part (${n(m[1])} potential collisions avoided)`],
-  [/^no nonflat top surface meets/i, null],
-  [/^Smooth morph would make the print head bump the part in \d+ moves; printed flat/i, null],
-  [/^Experimental: cooling duct not checked\./i, null],
-  [/^mesh repaired on load/i, () => 'Auto-repaired mesh on import'],
-  [/^Clearance repair passes: \d+\..*Curved moves that still hit printed material: (\d+)/i, (m) => `${n(m[1])} curved moves still brush the printed part`],
-  [/^Looks like .* has floating regions/i, () => 'Floating overhangs detected—try rotating the model or turning on supports'],
-];
+export const bareName = (name: string) => name.replace(/\.(stl|obj|3mf|amf|step|stp|drc|ply|off)$/i, '');
 
 export interface PlainWarning {
   object?: string;

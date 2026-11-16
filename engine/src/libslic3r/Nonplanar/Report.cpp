@@ -24,6 +24,7 @@
 #include "libslic3r/GCode/GCodeProcessor.hpp"
 #include "libslic3r/GCode/ClearanceRepair.hpp"
 #include "libslic3r/I18N.hpp"
+#include "libslic3r/format.hpp"
 #include "libslic3r/Model.hpp"
 #include "libslic3r/Print.hpp"
 
@@ -31,7 +32,6 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
-#include <boost/format.hpp>
 #include <cmath>
 #include <iterator>
 #include <limits>
@@ -196,7 +196,7 @@ NonplanarReport make_report(const Print &print, const GCodeProcessorResult &resu
             out.mode            = "smooth_morph";
             out.morph_hit_moves = hits;
             out.planar_limit    = "hits";
-            out.planar_reason   = "Smooth morph would make the print head bump the part in " + std::to_string(hits) + " moves";
+            out.planar_reason   = "Watch out — Smooth morph would bump the print head into the part in " + std::to_string(hits) + " moves.";
         }
         if (conformal_requested(*object)) {
             out.mode           = "conformal_layers";
@@ -316,10 +316,12 @@ NonplanarReport make_report(const Print &print, const GCodeProcessorResult &resu
         out.curved_band  = object->curved_band();
         out.warnings     = object_warnings(*object, out);
         if (out.stepped_top > 0.1 * out.curved_top && out.stepped_top > 1.)
-            out.warnings.emplace_back((boost::format(_u8L("%1%: %2% mm² of the curved top steps between layers: its layers cannot thicken enough "
-                                                          "at this layer height to keep it on one layer. A lower layer height prints it as one surface.")) %
-                                       out.name % int(std::round(out.stepped_top)))
-                                          .str());
+            out.warnings.push_back({ { "conformal_stepped_top", warning_object(out.name), nlohmann::json{ { "area_mm2", std::round(out.stepped_top) } }.dump() },
+                                     Slic3r::format(_u8L("%1%: %2% mm² of the curved top steps between layers "
+                                                         "because they can't thicken enough at this layer height to "
+                                                         "stay on one layer. Try a smaller layer height to print it "
+                                                         "as one smooth surface!"),
+                                                    out.name, int(std::round(out.stepped_top))) });
         if (index == 0 && !head_warning.empty())
             out.warnings.insert(out.warnings.begin(), head_warning);
     }

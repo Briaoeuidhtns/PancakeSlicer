@@ -22,6 +22,7 @@ const css = (c: RGB) => `rgb(${c[0]},${c[1]},${c[2]})`;
 const SHOW_STATS = new URLSearchParams(location.search).has('stats');
 
 const spacedWeight = (g: number) => g >= 1000 ? `${(g / 1000).toFixed(2)} kg` : `${g.toFixed(1)} g`;
+
 function compactWeight(g: number): string {
   const a = Math.abs(g);
   const [v, unit] = a >= 1e6 ? [a / 1e6, 't'] : a >= 1e3 ? [a / 1e3, 'kg'] : [a, 'g'];

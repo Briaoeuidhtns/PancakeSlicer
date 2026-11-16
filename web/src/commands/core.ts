@@ -56,7 +56,7 @@ export const CORE: Command[] = [
   { id: 'file.import', title: 'Import models…', group: 'File', keys: 'Mod+I', keywords: 'add open stl 3mf obj step load', run: openFileDialog, boost: 60 },
   { id: 'file.gcode', title: 'Open G-code…', group: 'File', run: () => openGcode() },
   { id: 'file.configs', title: 'Import profiles…', group: 'File', keywords: 'presets bundle configs', run: () => setState({ presetUx: { kind: 'import' } }) },
-  { id: 'file.export', get title() { return exportTitle(); }, group: 'File', keys: 'Mod+G', keywords: 'download save sliced file gcode 3mf', enabled: exportable, run: download, boost: 80 },
+  { id: 'file.export', get title() { return exportTitle(); }, group: 'File', keys: 'Mod+E', keywords: 'download save sliced file gcode 3mf', enabled: exportable, run: download, boost: 80 },
   { id: 'file.send', title: 'Print — send to printer…', group: 'File', keywords: 'send upload printer bambu octoprint prusalink', enabled: () => printers() === true ? exportable() : printers(), run: app('send'), boost: 80 },
   { id: 'file.exportall', title: 'Export all plates', group: 'File', enabled: () => s().projectPlates.length > 1 ? !busy(s()) && exportablePlates(s()).length > 0 || 'Slice the plates first' : 'One plate only', run: () => void exportAll() },
   { id: 'file.stl', title: 'Export all objects as one STL…', group: 'File', keywords: 'mesh', enabled: objects, run: () => void import('../exportStl').then((m) => m.exportStl(false, false)) },

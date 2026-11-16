@@ -30,6 +30,14 @@ export function slantAngles(n: THREE.Vector3): { tilt: number; dir: number } {
   return { tilt, dir };
 }
 
+export function slantPoint(s: State, e: SlantEdit): THREE.Vector3 | null {
+  const t = slantTarget(s);
+  if (!t) return null;
+  const b = instanceBox(t.o, t.inst);
+  const rise = morphing(s, t.o) ? 0 : Math.tan(e.tilt * DEG) * span(b, e.dir) / 2;
+  return new T3.Vector3((b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2, b.min.z + e.z + rise);
+}
+
 function span(b: THREE.Box3, dirDeg: number): number {
   const d = dirDeg * DEG, u = [Math.cos(d), Math.sin(d)];
   let lo = Infinity, hi = -Infinity;
@@ -42,14 +50,6 @@ function span(b: THREE.Box3, dirDeg: number): number {
 }
 
 const morphing = (s: State, o: PlateObject) => num(objectValue(s, o, 'nonplanar_slant_morph_layers'), 0) > 0;
-
-export function slantPoint(s: State, e: SlantEdit): THREE.Vector3 | null {
-  const t = slantTarget(s);
-  if (!t) return null;
-  const b = instanceBox(t.o, t.inst);
-  const rise = morphing(s, t.o) ? 0 : Math.tan(e.tilt * DEG) * span(b, e.dir) / 2;
-  return new T3.Vector3((b.min.x + b.max.x) / 2, (b.min.y + b.max.y) / 2, b.min.z + e.z + rise);
-}
 
 function lowestStart(s: State, e: SlantEdit): number {
   const t = slantTarget(s);

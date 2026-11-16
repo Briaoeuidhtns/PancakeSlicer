@@ -1,5 +1,4 @@
 import type { StoredDocBase } from './backend';
-import { projectId } from './identity';
 import { putAsset, readAsset, requireWorkspaceService, routeKey, serviceRequest } from './service';
 import { createMachine, type Machine } from '../flow/fsm';
 import { captureProjectWire, prepareOnce, projectJson as serviceJson, projectWrite } from './project-wire';

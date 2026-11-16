@@ -1018,7 +1018,6 @@ void write_gcode_3mf(const Args &args, Model &model, Print &print, DynamicPrintC
 
     if (auto *printers = config.option<ConfigOptionStrings>("print_compatible_printers", true); printers->values.empty())
         printers->values = { config.opt_string("printer_settings_id") };
-
     model.get_backup_path();
     StoreParams params;
     params.path                    = args.gcode_3mf;
@@ -3055,7 +3054,6 @@ void cut_only(PresetBundle &bundle, const Args &args, Model &model, DynamicPrint
 
 #include "nonplanar_slice_json.ipp"
 #include "nonplanar_slice_moves.ipp"
-#include "nonplanar_slice_catalog.ipp"
 #include "nonplanar_model_context.ipp"
 #include "nonplanar_patch_preview.ipp"
 #include "nonplanar_project_edit.ipp"

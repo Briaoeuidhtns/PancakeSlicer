@@ -124,7 +124,7 @@ export function DynamicTab({ speedModel, speeds = {}, onSpeedModel, onUseMultipl
           {d.limit ? <td className="n" data-capped data-truncated="true" data-full-text={`Capped from ${Math.round(d.requested)} by ${d.limit.toLowerCase()}`}>↓ {Math.round(d.speed)}</td> : <td className="n">{Math.round(d.speed)}</td>}<td><span>{d.limit || 'None'}</span>{d.override && <span className="dyn-speed-override">Absolute override ({Math.round(d.requested)} mm/s){!readOnly && onUseMultiplier && <button type="button" className="btn-ghost" onClick={() => onUseMultiplier(f.key)}>Use multiplier</button>}</span>}</td>
           <td className="n">{mm(d.acceleration)}</td>
         </tr>;})}</tbody>
-      </table></div>
+      </table></div>}
     </section>}
 
     <div className="dyn-rows"><ul className="dyn-formulas">
