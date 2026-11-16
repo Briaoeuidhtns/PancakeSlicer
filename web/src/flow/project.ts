@@ -291,6 +291,7 @@ function remote(message: { type?: string; id?: string; sender?: string }) {
 }
 
 let routeVersion = 0;
+const notFound = () => toast('project_not_found', undefined, { action: { label: 'Projects', run: () => showProjects() } });
 async function route() {
   const mine = ++routeVersion;
   const r = currentRoute();
@@ -310,8 +311,8 @@ async function route() {
       epoch++; opening++;
       adopt(() => { leaveDocument(); clearPlateJobs(); clearPlate(); newDocument(true); });
       project.send({ type: 'BLANK' }); setState({ tab: 'prepare' });
-    } else { versionView.send({ type: 'LATEST' }); opening++; epoch++; await flushProject(); project.send({ type: 'MISSING', id: '' }); setState({ tab: 'prepare' }); }
-  } catch (e) { toast(errorText(e)); }
+    } else { writeRoute('/', true); await route(); }
+  } catch (e) { toast('project_failed', { detail: errorText(e) }); }
   finally { if (mine === routeVersion) routing = false; }
 }
 let started: Promise<void> | null = null;

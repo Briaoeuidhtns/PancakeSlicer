@@ -13,6 +13,7 @@ export interface JobStatus {
   progress?: number;
   stage?: string;
   error?: string;
+  error_code?: string;
   record?: Record<string, unknown>;
   has_surface_grid?: boolean;
   output?: 'gcode' | 'gcode.3mf' | '3mf';

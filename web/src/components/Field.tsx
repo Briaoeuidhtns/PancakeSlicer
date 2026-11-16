@@ -290,7 +290,7 @@ function TextBox(props: { value: string; label?: string; multiline?: boolean; nu
     const next = Math.min(props.def.max ?? Infinity, Math.max(props.def.min ?? -Infinity, requested));
     if (next !== requested) {
       const issue = fieldIssue(`${requested}${pct ? '%' : ''}`, props.def);
-      toast(`${label}: ${fieldNumber(`${requested}${pct ? '%' : ''}`, props.def)} ${issue?.detail}—using ${fieldNumber(`${next}${pct ? '%' : ''}`, props.def)}.`, null, undefined, 'warning');
+      toast('using', { label, value: fieldNumber(`${requested}${pct ? '%' : ''}`, props.def), detail: issue?.detail, value2: fieldNumber(`${next}${pct ? '%' : ''}`, props.def) });
     }
     const value = `${next}${pct ? '%' : ''}`;
     if (rejectField(value, props.value, props.def, label)) return;

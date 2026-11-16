@@ -177,13 +177,13 @@ func serveGzipped(w http.ResponseWriter, r *http.Request, path string, st os.Fil
 			return
 		}
 		if err != nil {
-			failUncached(w, "Couldn't compress the output file: " + err.Error())
+			failUncached(w, "couldnt_compress_output_file", err.Error())
 			return
 		}
 	}
 	f, err := os.Open(cached)
 	if err != nil {
-		failUncached(w, "Oops! Couldn't open the output file on the server.")
+		failUncached(w, "couldnt_open_output_file")
 		return
 	}
 	defer f.Close()
@@ -198,7 +198,7 @@ func serveGzipped(w http.ResponseWriter, r *http.Request, path string, st os.Fil
 	}
 	z, err := gzip.NewReader(f)
 	if err != nil {
-		failUncached(w, "Oops! Couldn't open the output file on the server.")
+		failUncached(w, "couldnt_open_output_file")
 		return
 	}
 	if r.Method != http.MethodHead {
@@ -212,11 +212,11 @@ func copyOrAbort(w io.Writer, src io.Reader) {
 	}
 }
 
-func failUncached(w http.ResponseWriter, msg string) {
+func failUncached(w http.ResponseWriter, code string, args ...any) {
 	for _, h := range []string{"Cache-Control", "ETag", "Content-Encoding", "Content-Disposition"} {
 		w.Header().Del(h)
 	}
-	fail(w, 500, msg)
+	fail(w, 500, code, args...)
 }
 
 func writeGzipped(w http.ResponseWriter, r *http.Request, path, cached string, encode func(io.Reader, io.Writer, func() error) error) (streamed bool, err error) {

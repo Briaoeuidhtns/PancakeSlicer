@@ -42,7 +42,8 @@ const SessionNotice = preloadable(() => import('./components/SessionNotice'));
 const LeaseBar = preloadable(() => import('./components/LeaseBar'));
 const Setup = preloadable(() => import('./onboarding/Setup'));
 const ProjectStatus = preloadable(() => import('./projects/ProjectStatus').then((m) => ({ default: m.ProjectStatus })));
-const ProjectBanner = preloadable(() => import('./projects/ProjectStatus').then((m) => ({ default: m.ProjectBanner })));
+const HeldProjectBanner = preloadable(() => import('./projects/ProjectBanner').then((m) => ({ default: m.HeldProjectBanner })));
+const ProjectBanner = preloadable(() => import('./projects/ProjectBanner').then((m) => ({ default: m.ProjectBanner })));
 const Plater3D = preloadable(() => Promise.all([import('./plater/Plater3D'), threeReady])
   .then(([m]) => graphicsCapability().webgl2 ? m : { default: NoGraphics }));
 import { deleteAll, getState, isSelected, removeSelected, setState, subscribeStore, togglePrintable, updateInstance, useStore } from './state/store';
@@ -296,7 +297,9 @@ export default function App() {
     <div className="app">
       <TopBar />
       <Suspense fallback={null}><LeaseBar /></Suspense>
-      {!projects && <Suspense fallback={null}><ProjectBanner /></Suspense>}
+      <Suspense fallback={null}><SavedPreferencesNotice /></Suspense>
+      <Suspense fallback={null}><SessionNotice /></Suspense>
+      {!projects && <Suspense fallback={null}><HeldProjectBanner/><ProjectBanner /></Suspense>}
       {setupOpen && <Suspense fallback={null}><Setup /></Suspense>}
       {projects && <Suspense fallback={null}><ProjectsView /></Suspense>}
       {tab === 'device' && <Suspense fallback={<div role="status">Loading devices…</div>}><DeviceView /></Suspense>}

@@ -167,8 +167,8 @@ function SendView({ close, printer, head, edit }: { close: () => void; printer: 
   const handOff = async () => {
     if (!jobId) return;
     setWorking('connect');
-    try { await window.orcaDesktop!.bambuConnect!(jobId, exportFilename()); toast('Opened in Bambu Connect'); }
-    catch (e) { toast(errorText(e)); } finally { setWorking(''); }
+    try { await window.orcaDesktop!.bambuConnect!(jobId, exportFilename()); toast('opened_bambu_connect'); }
+    catch (e) { toast('senddialog_failed', { detail: errorText(e) }); } finally { setWorking(''); }
   };
 
   const mine = transfer && transfer.printer === printer && transfer.job === jobId ? transfer : null;

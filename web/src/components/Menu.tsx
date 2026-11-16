@@ -10,7 +10,8 @@ export const MenuSurface = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElem
 });
 export function MenuGroup({ children }: { children: ReactNode; level?: 1 | 2 }) { return <Menu.Label className="orca-menu-group">{children}</Menu.Label>; }
 export function MenuSeparator() { return <Menu.Separator className="menu-sep" />; }
-export type MenuEntry = 'sep' | { label: string; shortcut?: string; action?(): void; disabled?: boolean; checked?: boolean; role?: 'menuitem' | 'menuitemcheckbox' | 'menuitemradio'; tip?: string; sub?: MenuEntry[]; header?: boolean; level?: 1 | 2; keepOpen?: boolean; icon?: ReactNode };
+export type MenuEntry = 'sep' | { label: string; shortcut?: string; action?(): void; disabled?: boolean; reason?: string; checked?: boolean; role?: 'menuitem' | 'menuitemcheckbox' | 'menuitemradio'; tip?: string; sub?: MenuEntry[]; header?: boolean; level?: 1 | 2; keepOpen?: boolean; icon?: ReactNode;
+  output?: boolean };
 const keyLabel = (k?: string) => k === 'Delete' ? 'Del' : k;
 function MenuRows({ items }: { items: MenuEntry[] }) {
   const checks = items.some((it) => it !== 'sep' && it.checked !== undefined);

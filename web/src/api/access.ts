@@ -1,3 +1,4 @@
+import { noticeText } from '../notice-codes';
 import { sessionId } from './session';
 let token = '';
 export type AccessNotice = { status: number; message: string };
@@ -61,12 +62,13 @@ export function serviceAnswered() {
 
 const showNotice = (value: AccessNotice | null) => accessNotice(value);
 
+export type NoticeOwner = 'project' | 'preferences' | 'session';
 let discarding = false;
 export const discardPendingWrites = (on = true) => { discarding = on; };
 export const writesDiscarded = () => discarding;
-export async function mutation(path: string, init: RequestInit, retry = false, signal?: AbortSignal, onUpload?: (fraction: number) => void, quiet = false): Promise<Response> {
+export async function mutation(path: string, init: RequestInit, retry = false, signal?: AbortSignal, onUpload?: (fraction: number) => void, quiet = false, owner?: NoticeOwner): Promise<Response> {
   if (discarding) throw new Error('Starting fresh—unsaved changes on this page were discarded.');
-  const accessNotice = quiet ? () => undefined : showNotice;
+  const accessNotice = quiet || owner ? () => undefined : showNotice;
   init = await gzipBody(init);
   const send = () => {
     const headers = new Headers(init.headers);
@@ -79,7 +81,7 @@ export async function mutation(path: string, init: RequestInit, retry = false, s
   if ((response.status === 429 || response.status === 503) && retry) {
     const raw = response.headers.get('Retry-After') ?? '1';
     const seconds = /^\d+$/.test(raw) ? Math.min(86400, Number(raw)) : 1;
-    const current = { status: response.status, message: `The slicer is busy right now—automatically retrying in ${seconds}s…` };
+    const current = { status: response.status, message: noticeText('slicer_busy_retrying', { seconds }) };
     accessNotice(current);
     try {
       await new Promise<void>((resolve, reject) => {
@@ -101,23 +103,25 @@ export async function mutation(path: string, init: RequestInit, retry = false, s
     response = await send();
   }
   if (response.status === 401) {
-    accessNotice({ status: 401, message: 'Access token needed' });
-    throw new Error('Access token needed');
+    const message = noticeText('access_token_needed', undefined);
+    (owner ? showNotice : accessNotice)({ status: 401, message });
+    throw Object.assign(new Error(message), { status: 401, code: 'access_token_needed' });
   }
   if (response.status === 507) {
-    accessNotice({ status: 507, message: 'Oops! Server storage is full' });
-    throw new Error('Oops! Server storage is full');
+    const message = noticeText('server_storage_full', undefined);
+    accessNotice({ status: 507, message });
+    throw Object.assign(new Error(message), { status: 507, code: 'server_storage_full' });
   }
   if (response.status === 429 || response.status === 503) {
     const raw = response.headers.get('Retry-After') ?? '1';
     const seconds = /^\d+$/.test(raw) ? Math.min(86400, Number(raw)) : 1;
-    const message = `The slicer is busy right now. Please try again in ${seconds} seconds.`;
+    const message = noticeText('slicer_busy', { seconds });
     accessNotice({ status: response.status, message });
-    throw Object.assign(new Error(message), { status: response.status });
+    throw Object.assign(new Error(message), { status: response.status, retryAfter: seconds, code: 'slicer_busy' });
   }
   if (!response.ok) {
     const error = await responseError(response);
-    if (error.code !== 'revision_conflict' && error.code !== 'draft_conflict' && error.code !== 'blob_missing' && error.code !== 'project_not_archived' && error.code !== 'could_not_curve') accessNotice({ status: response.status, message: error.message });
+    if (error.code !== 'revision_conflict' && error.code !== 'draft_conflict' && error.code !== 'blob_missing' && error.code !== 'project_not_archived' && error.code !== 'could_not_curve' && !error.code?.startsWith('tray_')) accessNotice({ status: response.status, message: error.message });
     throw error;
   }
   return response;
@@ -131,6 +135,10 @@ export function failureText(what: string, error: unknown): string {
 }
 
 export interface ApiError extends Error { status:number; code?:string; recovery?:string; profile?:{kind:string;name:string;vendor:string;slot?:number}; revision?:number; missing?:string[]; document?:Record<string,unknown> }
+export const ACCESS_FAILURES = new Set(['access_token_needed', 'server_storage_full', 'slicer_busy']);
+
+export const failureCode = (error: unknown) => (error as ApiError)?.code ?? (error instanceof TypeError ? 'connection_lost' : 'slice_failed');
+
 export async function responseError(response: Response): Promise<ApiError> {
   const text = await response.text();
   let message = `${response.status} ${response.statusText}: ${text.slice(0, 300)}`;

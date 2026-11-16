@@ -1,4 +1,5 @@
-import { responseError, type ApiError } from './api/access';
+import { ownValues } from './profiles/view';
+import { failureCode, responseError, type ApiError } from './api/access';
 import { savePreferences } from './saved-preferences';
 import { beginBusy, startupBusy, withBusy, type BusyToken } from './state/busy';
 import { findProfile } from './profiles/identity';
@@ -19,13 +20,12 @@ import { connect, surfaceConfigBlocker, type Api } from './api/client';
 import { validateProfileSubmission } from './profiles/submission';
 import { normalizeUserPreset } from './profiles/model';
 import { shortTime } from './preview/format';
-import { flushReady } from './flush-state';
-import { calibOverrides, firstLayer, jobFields, outputKind, overrides, plateSignature } from './slice-input';
-import { arrange, bakeStl, bedBounds, loadMesh, loadProject, nextFreeSpot, parsePoints, plateJson, outsideBed } from './plater/geometry';
+import { calibProject, firstLayer, jobFields, outputKind, plateSignature } from './slice-input';
+import { arrange, bakeStl, bedBounds, instanceBox, loadMesh, loadProject, nextFreeSpot, parsePoints, plateJson, outsideBed } from './plater/geometry';
 import { projectEdits } from './plater/projectTransforms';
 import { confirmDialog, numberDialog, promptDialog } from './components/Ask';
 import {
-  PRESET_META, effectiveConfig, getState, markStale, newId, presetEdits, printerPreset, resolvePreset, selectPrinter, setState, toast, type JobView, type PlateObject, type State,
+  IDLE_JOB, PRESET_META, effectiveConfig, getState, markStale, newId, presetEdits, printerPreset, resolvePreset, selectPrinter, setState, toast, type JobView, type PlateObject, type State,
 } from './state/store';
 import { captureUndo, documentGeneration, historyVersion, leaveDocument, newDocument, undoable } from './state/history';
 import { clearPlateJobs, currentPlates } from './plater/plates';
@@ -33,7 +33,9 @@ import { nativeSupportCapable } from './settings-env';
 import { capturePrinterMaterials, selectionNotice } from './profiles/material-library';
 import { preferredHeight } from './profiles/context';
 import { loadPreviewView } from './components/preview-loader';
-import { SEP } from './separator';
+import { slotFilaments } from './profiles/slots';
+import { DEMO } from './demo/config';
+import { recordWarnings } from './engine-warnings';
 
 export async function init() {
   app.send({ type: 'BOOT' });
@@ -170,8 +172,7 @@ export async function importFiles(files: FileList | File[], opts: { sourceUrl?: 
     } catch (e) {
       if (!task.current()) break;
       task.fail(e);
-      const message = String(e instanceof Error ? e.message : e);
-      toast(message.startsWith('Oops') ? message : `Oops! Couldn't load ${f.name}: ${message}`);
+      toast('couldnt_load', { name: f.name, detail: e instanceof Error ? e.message : String(e) });
     } finally {
       busy?.end();
     }
@@ -228,7 +229,7 @@ export async function openProject(file: File) {
 
 export function clearPlate(preserveProfiles = false) {
   clearPlateJobs();
-  setState(() => ({ objects: [], selected: null, gizmo: 'none', project: null, projectPlates: [], plateIndex: 1, wipeTowerPos: {}, projectName: null, projectMaterials: null, projectNotice: null, events: [], ...(preserveProfiles ? {} : { projectPresets: null, flush: { matrix: null, multiplier: null } }), processScope: 'global', job: { state: 'idle', pct: 0, stage: '' } }));
+  setState(() => ({ objects: [], selected: null, gizmo: 'none', project: null, projectPlates: [], plateIndex: 1, wipeTowerPos: {}, projectName: null, projectMaterials: null, projectSlotValues: null, projectSlots: null, events: [], ...(preserveProfiles ? {} : { projectPresets: null }), job: IDLE_JOB }));
 }
 
 let creatingProject:Promise<boolean>|null=null;
@@ -249,7 +250,7 @@ async function replacePlate(title: string, question: string): Promise<(() => voi
   if (!s.objects.length && !s.projectPlates.some((p) => p.objects.length)) return () => {};
   if (!projects.storing()) return (await confirmDialog(title, question)) ? () => {} : null;
   if (title === 'New Project') return () => {};
-  return () => toast('Opened', { label: 'Undo', run: () => { const id = projects.previousProject(); if (id) void projects.openProject(id); } });
+  return () => toast('opened', undefined, { action: { label: 'Undo', run: () => { const id = projects.previousProject(); if (id) void projects.openProject(id); } } });
 }
 
 export function openProjectDialog() {
@@ -274,8 +275,8 @@ export function pickModelFiles(onFiles: (files: FileList) => unknown) {
 export function arrangeAll(allPlates = true) {
   const s = getState();
   const locked = !!s.projectPlates.find((p) => p.index === s.plateIndex)?.locked;
-  if (locked && !allPlates) return toast('This plate is locked');
-  if (s.features.arrange && !s.project && s.api && !s.api.mock) return locked ? toast('This plate is locked') : void import('./plater/operations').then((m) => m.arrangeNative());
+  if (locked && !allPlates) return toast('plate_locked');
+  if (!s.project && s.api && !s.api.mock) return locked ? toast('plate_locked') : void import('./plater/operations').then((m) => m.arrangeNative());
   const area = bedArea();
   undoable('Arrange', () => setState((st) => ({
     ...(locked ? {} : { objects: arrange(st.objects, area) }),
@@ -343,13 +344,13 @@ export function fillBed() {
   const fits = (objects: PlateObject[]) => outsideBed(objects, area, Infinity).size === 0;
   let lo = 0, hi = 1;
   let best = withCopies(0);
-  if (!fits(best)) return toast('The plate is full—there\'s no room for another copy!');
+  if (!fits(best)) return toast('plate_full_theres_no');
   for (let next = withCopies(hi); hi <= 1000 && fits(next); next = withCopies(hi)) { best = next; lo = hi; hi *= 2; }
   while (hi - lo > 1) {
     const mid = (lo + hi) >> 1, next = withCopies(mid);
     if (fits(next)) { best = next; lo = mid; } else hi = mid;
   }
-  if (!lo) return toast('The plate is full—couldn\'t fit any more copies!');
+  if (!lo) return toast('plate_full_couldnt_fit');
   undoable('Arrange', () => setState((st) => ({ objects: best, selected: { object: o.id, instance: o.instances[0].id, allInstances: true }, job: markStale(st.job) })));
 }
 
@@ -414,31 +415,20 @@ export function outsideVolumeWarning(s = getState()): string | null {
   if (!machine) return null;
   const objects = s.objects.filter((o) => !o.project?.placeholder);
   if (!objects.length) return null;
-  const outside = outsideBed(objects, parsePoints(machine.config.printable_area), Number(machine.config.printable_height ?? 1e6));
-  const names = objects.filter((o) => o.instances.some((i) => outside.has(i.id))).map((o) => o.name);
-  return names.length ? `Oops! These objects stick out past the edge of the plate or exceed the max print height: ${names.join('\n')}. Move them fully onto the bed and check their height before slicing.
-` : null;
-}
-
-function recordWarnings(record: Record<string, unknown> | undefined, stderr: string[]): string[] {
-  const text = (record?.text_summary ?? {}) as Record<string, unknown>;
-  const objects = Array.isArray(record?.object_warnings) ? record.object_warnings : [];
-  const exported = typeof text.export_warning === 'string' ? text.export_warning.split('\n') : [];
-  const firstLine = (w: string) => w.trim().split('\n')[0];
-  const shown = new Set(stderr.map(firstLine));
-  const added: string[] = [];
-  for (const w of [...objects, ...exported]) {
-    if (typeof w !== 'string' || !w.trim() || shown.has(firstLine(w))) continue;
-    shown.add(firstLine(w));
-    added.push(w.trim());
-  }
-  return [...stderr, ...added];
+  const area = parsePoints(machine.config.printable_area), height = Number(machine.config.printable_height ?? 1e6);
+  const outside = outsideBed(objects, area, height), bed = bedBounds(area), xy = (v: { x: number; y: number }) => `[${v.x.toFixed(3)}, ${v.y.toFixed(3)}]`;
+  const lines = objects.flatMap((o) => o.instances.filter((i) => outside.has(i.id)).slice(0, 1).map((i) => {
+    const b = instanceBox(o, i);
+    return b.max.z > height + 1e-3 ? `${o.name} is ${b.max.z.toFixed(1)} mm tall; the printer prints up to ${height} mm.`
+      : `${o.name} sticks out past the edge of the plate (Model XY ${xy(b.min)}–${xy(b.max)}, printable area ${xy(bed.min)}–${xy(bed.max)}).`;
+  }));
+  return lines.length ? `${lines.join('\n')}\nMove ${lines.length > 1 ? 'them' : 'it'} fully onto the print bed, then slice again.` : null;
 }
 
 export interface JobSink {
   progress(p: { pct: number; stage: string; id?: string }): void;
   done(job: JobView): void;
-  failed(error: string): void;
+  failed(error: string, code: string): void;
 }
 
 export function runJob(api: Api, request: JobRequest, signature: string, sink: JobSink, calib?: string): () => void {
@@ -449,9 +439,9 @@ export function runJob(api: Api, request: JobRequest, signature: string, sink: J
       id = await api.submit(request, submission.signal, (fraction) => live && sink.progress({ pct: Math.round(fraction * 100), stage: 'uploading' }));
       if (!live) return void api.cancel(id).catch(() => undefined);
       sink.progress({ id, pct: 0, stage: 'queued' });
-      const warnings: string[] = [], calibLog: string[] = [];
+      const calibLog: string[] = [];
       let pct = 0, resulted = false;
-      const complete = (status: JobStatus) => sink.done({ id: id!, state: 'done', pct: 100, stage: 'done', status, plateSignature: signature, warnings: recordWarnings(status.record, warnings), ...(calib ? { calib, calibLog } : {}) });
+      const complete = (status: JobStatus) => sink.done({ id: id!, state: 'done', pct: 100, stage: 'done', status, plateSignature: signature, warnings: recordWarnings(status.record), ...(calib ? { calib, calibLog } : {}) });
       stop = api.events(id, {
         progress: (e) => {
           if (!live || resulted) return;
@@ -470,23 +460,19 @@ export function runJob(api: Api, request: JobRequest, signature: string, sink: J
           live = false;
           complete(status);
         },
-        error: (msg) => {
+        error: (msg, code) => {
           if (!live) return;
           live = false;
-          sink.failed(msg);
+          sink.failed(msg, code);
         },
         log: (stream, line) => {
           if (stream === 'stdout' && line.startsWith('calib_')) calibLog.push(line);
-          if (stream !== 'stderr' || !line.trim()) return;
-          const m = /^warning:\s*(.*)$/i.exec(line);
-          if (m) warnings.push(m[1]);
-          else if (warnings.length && !/^error:/i.test(line)) warnings[warnings.length - 1] += `\n${line}`;
         },
       });
     } catch (e) {
       if (!live) return;
       live = false;
-      sink.failed(String(e));
+      sink.failed(String(e), failureCode(e));
     }
   })();
   return () => {
@@ -522,7 +508,7 @@ export async function plateJob(s = getState(), ask = true): Promise<JobRequest |
 let cancelJob: (() => void) | null = null;
 
 export async function slice(calib?: { kind: string; params: string; head?: string }) {
-  await flushReady();
+  if (DEMO) return void toast('demo_no_engine');
   const [{methodAvailability}, {methodSelectionProblem}] = await Promise.all([import('./profiles/method-context'), import('./profiles/capabilities')]);
   const s = getState();
   if (!s.api || !s.objects.length && !calib || s.job.state === 'running' || s.job.state === 'submitting') return;
@@ -542,7 +528,7 @@ export async function slice(calib?: { kind: string; params: string; head?: strin
   cancelJob = runJob(s.api, request, signature, {
     progress: ({ id, ...p }) => { if (!current()) return; bindSlicePreview(navigation, id); setState(st => id ? {job: {...st.job, id, state: 'running', ...p}} : st.job.state === 'submitting' ? {job: {...st.job, ...p}} : {}); },
     done: (job) => { if (!current()) return; bindSlicePreview(navigation, job.id); setState({job: {...job, stale: plateSignature(getState()) !== signature}}); },
-    failed: (error) => { if (current()) setState(st => ({job: {...st.job, state: 'failed', error}})); },
+    failed: (error, errorCode) => { if (current()) setState(st => ({job: {...st.job, state: 'failed', error, errorCode}})); },
   }, calib?.kind);
 }
 
@@ -593,19 +579,19 @@ export function fileUse(machine = printerPreset(getState())) {
 
 export const STALE_RESULT_TIP = 'Settings changed since the last slice; slice again';
 
-function exportBlocker(s: State) {
-  if (!s.objects.length) return 'Nothing to export yet! Add a model to the plate and slice it first.';
+function exportBlocked(s: State) {
+  if (!s.objects.length) return toast('export_nothing_to_export');
   const outside = outsideVolumeWarning(s);
-  if (outside) return outside;
-  if (s.job.state === 'running' || s.job.state === 'submitting') return 'Still slicing! You\'ll be able to export as soon as it finishes.';
-  if (s.job.state === 'done' && !s.job.stale && curveRefused(s)) return 'Oops! We couldn\'t slice this model with curved layers. Try slicing with flat layers instead, or tweak your curved-layer settings.';
-  return s.job.state === 'done' ? 'You\'ve made changes since the last slice—slice the plate again to update the toolpaths.' : 'Slice the plate first before continuing.';
+  if (outside) return toast('export_outside_volume', { detail: outside });
+  if (s.job.state === 'running' || s.job.state === 'submitting') return toast('export_still_slicing');
+  if (s.job.state === 'done' && !s.job.stale && curveRefused(s)) return toast('export_could_not_curve');
+  return s.job.state === 'done' ? toast('export_stale_slice') : toast('export_not_sliced');
 }
 
 export async function download() {
-  if (import.meta.env.MODE === 'demo') return void toast('Not available in demo mode', null, 3500, 'warning');
+  if (DEMO) return void toast('demo_no_engine');
   const s = getState();
-  if (!s.api || !canExport(s) || !s.job.id) return void (s.api && toast(exportBlocker(s)));
+  if (!s.api || !canExport(s) || !s.job.id) return void (s.api && exportBlocked(s));
   const task = output.begin('exporting');
   let href: string;
   try {
@@ -615,7 +601,8 @@ export async function download() {
   } catch (e) {
     if (!task.current()) return;
     task.fail(e);
-    toast((e as ApiError).code === 'could_not_curve' ? (e as ApiError).message : `Oops! Export failed: ${e instanceof Error ? e.message : e}`);
+    if ((e as ApiError).code === 'could_not_curve') toast('export_refused_curve', { detail: (e as ApiError).message });
+    else toast('export_failed', { detail: e instanceof Error ? e.message : e });
     return;
   }
   if (!task.current() || getState().job.id !== s.job.id || !canExport()) {
@@ -637,7 +624,7 @@ export const toolbarOperation = (operation: 'orient' | 'split' | 'split-parts', 
   import('./plater/operations').then((m) => m.run(operation, all));
 
 export async function saveProject(as = false) {
-  if (import.meta.env.MODE === 'demo') return void toast('Not available in demo mode', null, 3500, 'warning');
+  if (import.meta.env.MODE === 'demo') return void toast('not_available_demo_mode');
   const saving = await import('./saveProject');
   return saving.saveProject(as);
 }
@@ -649,7 +636,7 @@ export function toggleText() {
   void import('./plater/text').then((m) => {
     if (m.editedText()) return setState({ gizmo: 'text' });
     const o = s.objects.find((x) => x.id === s.selected?.object);
-    if (o && (o.project?.placeholder || o.native || s.selected?.all)) return toast('Select one object on the plate (or click empty space to deselect all) to add text.');
+    if (o && (o.project?.placeholder || o.native || s.selected?.all)) return toast('select_one_object_plate');
     void m.addText(o ? o.id : null);
   });
 }
@@ -670,7 +657,7 @@ export function toggleSvg() {
   void import('./plater/svg').then((m) => {
     if (m.editedSvg()) return setState({ gizmo: 'svg' });
     const o = s.objects.find((x) => x.id === s.selected?.object);
-    if (o && (o.project?.placeholder || o.native || s.selected?.all)) return toast('Select one object on the plate (or click empty space to deselect all) to add an SVG.');
+    if (o && (o.project?.placeholder || o.native || s.selected?.all)) return toast('select_one_object_plate_2');
     void m.addSvg(o ? o.id : null);
   });
 }

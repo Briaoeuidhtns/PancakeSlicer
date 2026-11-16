@@ -51,7 +51,7 @@ async function withService<T>(work: () => Promise<T>): Promise<T | undefined> {
   try {
     return await work();
   } catch (e) {
-    toast(`Text: ${e instanceof Error ? e.message : String(e)}`);
+    toast('text', { detail: e instanceof Error ? e.message : String(e) });
     return undefined;
   } finally {
     busy = false;

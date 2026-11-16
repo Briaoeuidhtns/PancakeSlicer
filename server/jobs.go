@@ -14,11 +14,13 @@ import (
 	"log"
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -75,18 +77,20 @@ type JobRequest struct {
 }
 
 type Event struct {
-	Seq           uint64   `json:"seq"`
-	QueuePosition *int     `json:"queue_position,omitempty"`
-	ETA           *float64 `json:"eta_seconds,omitempty"`
-	ReplayGap     bool     `json:"replay_gap,omitempty"`
-	ID            int      `json:"id"`
-	Type          string   `json:"type"`
-	Stream        string   `json:"stream,omitempty"`
-	Line          string   `json:"line,omitempty"`
-	State         JobState `json:"state,omitempty"`
-	Error         string   `json:"error,omitempty"`
-	Stage         string   `json:"stage,omitempty"`
-	Pct           *float64 `json:"pct,omitempty"`
+	Seq            uint64   `json:"seq"`
+	QueuePosition  *int     `json:"queue_position,omitempty"`
+	ETA            *float64 `json:"eta_seconds,omitempty"`
+	ReplayGap      bool     `json:"replay_gap,omitempty"`
+	ID             int      `json:"id"`
+	Type           string   `json:"type"`
+	Stream         string   `json:"stream,omitempty"`
+	Line           string   `json:"line,omitempty"`
+	State          JobState `json:"state,omitempty"`
+	LifecycleState JobState `json:"lifecycle_state,omitempty"`
+	Error          string   `json:"error,omitempty"`
+	ErrorCode      string   `json:"error_code,omitempty"`
+	Stage          string   `json:"stage,omitempty"`
+	Pct            *float64 `json:"pct,omitempty"`
 }
 
 const maxEvents = 20000
@@ -145,6 +149,7 @@ type JobView struct {
 	Started        *time.Time      `json:"started,omitempty"`
 	Finished       *time.Time      `json:"finished,omitempty"`
 	Error          string          `json:"error,omitempty"`
+	ErrorCode      string          `json:"error_code,omitempty"`
 	ExitCode       *int            `json:"exit_code,omitempty"`
 	Request        JobRequest      `json:"request"`
 	DownloadURL    string          `json:"download_url,omitempty"`
@@ -172,7 +177,7 @@ func (j *Job) View() JobView {
 func (j *Job) snapshotView() JobView {
 	j.mu.Lock()
 	defer j.mu.Unlock()
-	v := JobView{ID: j.ID, RetryOf: j.RetryOf, State: j.state, Created: j.Created, Error: j.errMsg, ExitCode: j.exitCode,
+	v := JobView{ID: j.ID, RetryOf: j.RetryOf, State: j.state.legacy(), LifecycleState: j.state, Created: j.Created, Error: j.errMsg, ErrorCode: j.errCode, ExitCode: j.exitCode,
 		Stage: j.stage, Progress: j.progress, Request: j.Request, QueuePosition: j.queuePosition, ETA: j.eta, EventsURL: "/api/jobs/" + j.ID + "/events", Slice: j.slice,
 		ResultReady: j.resultReady && !j.state.Finished()}
 	if !j.started.IsZero() {
@@ -801,18 +806,18 @@ func (m *JobManager) run(ctx context.Context, j *Job) {
 	}
 
 	if err := copyUserHeads(m.cfg, filepath.Join(j.Dir, "datadir")); err != nil {
-		j.setState(StateFailed, "cannot copy the user heads: "+err.Error())
+		j.failWith("slice_setup_failed", "cannot copy the user heads: "+err.Error())
 		return
 	}
 	cmd, commandErr := lineBufferedCommand(ctx, m.cfg.Tool, args)
 	if commandErr != nil {
-		j.setState(StateFailed, sanitizeToolError(commandErr))
+		j.failWith("slice_setup_failed", sanitizeToolError(commandErr))
 		return
 	}
 	cmd.Dir = j.Dir
 	cmd.Env = engineEnv(filepath.Join(j.Dir, "tmp"))
 	if err := limitJobMemory(cmd); err != nil {
-		j.setState(StateFailed, err.Error())
+		j.failWith("slice_setup_failed", err.Error())
 		return
 	}
 	configureJobProcess(cmd)
@@ -830,9 +835,9 @@ func (m *JobManager) run(ctx context.Context, j *Job) {
 		case errors.Is(ctx.Err(), context.Canceled):
 			j.setState(StateCancelled, "cancelled before the slicer started")
 		case errors.Is(ctx.Err(), context.DeadlineExceeded):
-			j.setState(StateFailed, "slicing exceeded the time limit")
+			j.failWith("slice_timeout", "slicing exceeded the time limit")
 		default:
-			j.setState(StateFailed, "cannot start the slicer: "+sanitizeToolError(err))
+			j.failWith("slice_setup_failed", "cannot start the slicer: "+sanitizeToolError(err))
 		}
 		return
 	}
@@ -952,11 +957,11 @@ func (m *JobManager) run(ctx context.Context, j *Job) {
 	case errors.Is(ctx.Err(), context.Canceled):
 		j.setState(StateCancelled, "cancelled")
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):
-		j.setState(StateFailed, fmt.Sprintf("slicing exceeded the %s time limit", m.cfg.JobTimeout))
+		j.failWith("slice_timeout", fmt.Sprintf("slicing exceeded the %s time limit", m.cfg.JobTimeout))
 	case waitErr != nil:
-		j.setState(StateFailed, lastErr.message(waitErr))
+		j.failWith(lastErr.code(waitErr), lastErr.message(waitErr))
 	case recordErr != nil:
-		j.setState(StateFailed, "the slicer output could not be read: "+sanitizeToolError(recordErr))
+		j.failWith("slice_output_unreadable", "the slicer output could not be read: "+sanitizeToolError(recordErr))
 	default:
 		kind := j.Request.Output
 		if j.Request.Arrange || j.Request.WipeTower {
@@ -968,7 +973,7 @@ func (m *JobManager) run(ctx context.Context, j *Job) {
 		if kind == "plan-tops" {
 			mapped, err := m.mapPlanFacets(ctx, j, raw)
 			if err != nil {
-				j.setState(StateFailed, "the curved tops plan could not be read: "+sanitizeToolError(err))
+				j.failWith("slice_output_unreadable", "the curved tops plan could not be read: "+sanitizeToolError(err))
 				return
 			}
 			raw = mapped
@@ -981,7 +986,7 @@ func (m *JobManager) run(ctx context.Context, j *Job) {
 			m.keepPreview(j, args, raw)
 		}
 		if _, err := os.Stat(j.OutputPath(kind)); !j.Request.Orient && !j.Request.Explode && j.Request.Cut == "" && err != nil {
-			j.setState(StateFailed, "the slicer finished without writing "+filepath.Base(j.OutputPath(kind)))
+			j.failWith("slice_output_missing", "the slicer finished without writing "+filepath.Base(j.OutputPath(kind)))
 			return
 		}
 		if !j.setState(StateStoring, "") {
@@ -992,7 +997,7 @@ func (m *JobManager) run(ctx context.Context, j *Job) {
 		j.mu.Unlock()
 		if _, err := os.Stat(j.ExtendedMovesPath()); err == nil && !stripped {
 			if err := stripExtendedMoves(j.ExtendedMovesPath(), j.MovesPath()); err != nil {
-				j.setState(StateFailed, "the preview stream could not be written: "+sanitizeToolError(err))
+				j.failWith("slice_output_unreadable", "the preview stream could not be written: "+sanitizeToolError(err))
 				return
 			}
 		}
@@ -1086,10 +1091,27 @@ func scanLines(r io.Reader, fn func(string)) {
 	io.Copy(io.Discard, r)
 }
 
-type lastLines struct{ lines []string }
+type lastLines struct {
+	lines []string
+	engineCode, engineDetail string
+}
 
 func (l *lastLines) add(s string) {
 	if strings.TrimSpace(s) == "" {
+		return
+	}
+	trimmed := strings.TrimSpace(s)
+	if strings.HasPrefix(trimmed, `{"warning":`) {
+		return
+	}
+	var typed struct {
+		Error *struct {
+			Code   string `json:"code"`
+			Detail string `json:"detail"`
+		} `json:"error"`
+	}
+	if strings.HasPrefix(trimmed, `{"error":`) && json.Unmarshal([]byte(trimmed), &typed) == nil && typed.Error != nil && typed.Error.Code != "" {
+		l.engineCode, l.engineDetail = typed.Error.Code, typed.Error.Detail
 		return
 	}
 	l.lines = append(l.lines, s)
@@ -1099,6 +1121,9 @@ func (l *lastLines) add(s string) {
 }
 
 func (l *lastLines) message(waitErr error) string {
+	if l.engineDetail != "" {
+		return sanitizeToolError(errors.New(l.engineDetail))
+	}
 	for i := len(l.lines) - 1; i >= 0; i-- {
 		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(l.lines[i])), "error") {
 			return sanitizeToolError(errors.New(strings.TrimSpace(l.lines[i])))
@@ -1108,6 +1133,24 @@ func (l *lastLines) message(waitErr error) string {
 		return sanitizeToolError(errors.New(strings.TrimSpace(l.lines[len(l.lines)-1])))
 	}
 	return "slicer " + waitErr.Error()
+}
+
+func (l *lastLines) code(waitErr error) string {
+	var exit *exec.ExitError
+	switch {
+	case l.engineCode != "":
+		return "engine_" + l.engineCode
+	case errors.As(waitErr, &exit) && exitSignal(exit) == syscall.SIGKILL:
+		return "slice_out_of_memory"
+	}
+	return "slice_failed"
+}
+
+func exitSignal(e *exec.ExitError) syscall.Signal {
+	if ws, ok := e.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+		return ws.Signal()
+	}
+	return -1
 }
 
 func quoteArgs(args []string) string {

@@ -89,15 +89,15 @@ export function TopBar() {
           { label: 'Import profiles…', action: () => setState({ presetUx: { kind: 'import' } }), tip: 'Load printer, filament and process profiles' },
           'sep',
           { label: exportLabel, shortcut: `${MOD}+G`, action: download, disabled: !exportEnabled, tip: stale ? STALE_RESULT_TIP : exportTip },
-          ...(plates ? [{ label: 'Export sliced files for all plates', action: () => void exportAll(), disabled: !exportAllEnabled, tip: 'Export sliced files for all plates' }] : []),
-          ...(hasPrinters ? [{ label: 'Send…', action: () => setState({ appDialog: 'send' }), disabled: !exportEnabled, tip: 'Upload the sliced file to a printer' }] : []),
-          { label: 'Export all objects as one STL', action: () => void exportStl(false), disabled: !hasMeshes, tip: 'Export all objects as one STL' },
-          { label: 'Export all objects as STLs', action: () => void exportStl(true), disabled: !hasMeshes, tip: 'Export all objects as STLs' },
-          ...(exportDrc ? [{ label: 'Export all objects as one DRC', action: () => void import('../plater/exportModel').then((m) => m.exportModel('drc')), disabled: !hasMeshes, tip: 'Export all objects as one DRC' }] : []),
-          ...(generic3mf ? [{ label: 'Export generic 3MF', action: () => void import('../plater/exportModel').then((m) => m.exportModel('generic3mf')), disabled: !hasMeshes, tip: 'Export a standard 3MF file for other slicers' }] : []),
-          { label: 'Export toolpaths as OBJ', disabled: !toolpaths || tab !== 'preview', tip: 'Export toolpaths as OBJ',
+          ...(plates ? [{ label: 'Export sliced files for all plates', output: true, action: () => void exportAll(), disabled: !exportAllEnabled, tip: 'Export sliced files for all plates' }] : []),
+          ...(hasPrinters ? [{ label: 'Send…', output: true, action: () => setState({ appDialog: 'send' }), disabled: !exportEnabled || undecided, tip: undecided ? OFFER_UNDECIDED : 'Upload the sliced file to a printer' }] : []),
+          { label: 'Export all objects as one STL', output: true, action: () => void exportStl(false), disabled: !hasMeshes, tip: 'Export all objects as one STL' },
+          { label: 'Export all objects as STLs', output: true, action: () => void exportStl(true), disabled: !hasMeshes, tip: 'Export all objects as STLs' },
+          { label: 'Export all objects as one DRC', output: true, action: () => void import('../plater/exportModel').then((m) => m.exportModel('drc')), disabled: !hasMeshes, tip: 'Export all objects as one DRC' },
+          { label: 'Export generic 3MF', output: true, action: () => void import('../plater/exportModel').then((m) => m.exportModel('generic3mf')), disabled: !hasMeshes, tip: 'Export a standard 3MF file for other slicers' },
+          { label: 'Export toolpaths as OBJ', output: true, disabled: !toolpaths || tab !== 'preview', tip: 'Export toolpaths as OBJ',
             action: () => void import('../preview/objExport').then((m) => m.exportToolpathsObj(exportName || 'toolpaths')) },
-          { label: 'Export profiles…', action: () => setState({ presetUx: { kind: 'export' } }), tip: 'Export profiles to files' },
+          { label: 'Export profiles…', output: true, action: () => setState({ presetUx: { kind: 'export' } }), tip: 'Export profiles to files' },
         ];
   const devReset = useDevReset();
   const update = useUpdate();
@@ -224,7 +224,7 @@ export function TabBar() {
     ...(folded ? [{label: exportLabel, action: download, disabled: !exportEnabled, tip: job.stale ? STALE_RESULT_TIP : 'Slice the plate first'}] : []),
     ...(!wide && hasPrinters ? [{label: 'Send to printer', action: () => setState({appDialog: 'send'}), disabled: !exportEnabled || undecided}] : []),
     ...(tier === 'phone' && saved ? [{label: 'Version history', action: toggleHistory} satisfies MenuEntry] : []),
-    ...(!wide && plates ? [{label: 'Slice all plates', action: () => void sliceAll(), disabled: !printer || busy}, {label: 'Export all plates', action: () => void exportAll(), disabled: !exportAllEnabled}] : []),
+    ...(!wide && plates ? [{label: 'Slice all plates', action: () => void sliceAll(), disabled: !printer || busy}, {label: 'Export all plates', output: true, action: () => void exportAll(), disabled: !exportAllEnabled}] : []),
   ];
   return (
     <div className="tabbar">
@@ -255,7 +255,7 @@ export function TabBar() {
         {!folded && <SideOptions className={ready ? 'btn' : 'btn-primary'} options={wide && plates ? ['Slice all', 'Slice plate'] : []} value={sliceMode} onChange={setSliceMode}
           actions={[sliceMethods]} disabled={!printer || busy || (!plates && !hasObjects)} />}
         {!allSlice && !folded && changed && <button className="btn slant" disabled={!printer || busy || !!outside} onClick={compareSlice}>Slice and compare</button>}
-        {!folded && <span className="export-actions">{allExport ? (
+        {!folded && <span className="export-actions" data-output>{allExport ? (
           <button className={exportClass} disabled={!exportAllEnabled} onClick={() => void exportAll()}>Export all sliced plates</button>
         ) : (
           <button className={exportClass} disabled={!exportEnabled} onClick={download}>

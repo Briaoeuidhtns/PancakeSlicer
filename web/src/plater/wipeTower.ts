@@ -36,7 +36,7 @@ async function estimate() {
   try {
     const fd = await plateForm(s, 'wipe-tower');
     fd.append('priority', 'low');
-    const response = await postJob(fd);
+    const response = await postJob(fd, '/api/jobs', { quiet: true });
     if (!response.ok) throw await responseError(response);
     const { id } = await response.json() as { id: string };
     try {

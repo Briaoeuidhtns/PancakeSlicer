@@ -154,9 +154,9 @@ export async function saveAsNewProfile(type: PresetType, slot: number, name: str
   if (printer) await commitProfileRecords([printer]);
   switchPreset(type, slot, created, 'discard');
   if (chosen && Object.keys(chosen.kept).length) setState((st) => ({ dirty: { ...st.dirty, process: { ...st.dirty.process, ...chosen.kept } } }));
-  toast(`Saved as ${name.trim()}`, { label: 'Undo', run: () => {
+  toast('saved_as', { value: name.trim() }, { action: { label: 'Undo', run: () => {
     switchPreset(type, slot, key, 'discard');
     restoreChanges(type, slot, key, before);
-    void archiveProfiles(type, [created]).catch((e) => toast(message(e)));
-  } });
+    void removeRecords(type === 'machine' ? 'printer' : type, [created]).catch((e: unknown) => toast('undo_save_as_failed', { detail: message(e) }));
+  } } });
 }

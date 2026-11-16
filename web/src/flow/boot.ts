@@ -13,15 +13,15 @@ import { loadSource } from './viewer';
 let adoptTracking = () => {};
 let started = false, active: ReturnType<typeof followJob> | null = null;
 export async function retryTrackedJob() {
-  try { adoptTracking(); await active?.retry(); } catch (e) { toast(e instanceof Error ? e.message : 'Retry failed'); }
+  try { adoptTracking(); await active?.retry(); } catch (e) { toast('job_retry_failed', { detail: e instanceof Error ? e.message : '' }); }
 }
 export async function cancelTrackedJob() {
-  try { await active?.cancel(); } catch (e) { toast(e instanceof Error ? e.message : 'Cancel failed'); }
+  try { await active?.cancel(); } catch (e) { toast('job_cancel_failed', { detail: e instanceof Error ? e.message : '' }); }
 }
 export async function startFlows() {
   if (started) return;
   started = true;
-  try { await initialiseRecovery(); } catch (error) { started = false; toast(error instanceof Error ? error.message : 'Oops! Couldn\'t load the recovery files for this project.'); return; }
+  try { await initialiseRecovery(); } catch (error) { started = false; toast('recovery_load_failed', { detail: error instanceof Error ? error.message : '' }); return; }
   const recovery = readRecovery();
   let seenId: string | undefined, generation = documentGeneration();
   const watch = (tracked: TrackedJob, seq = -1, restoring = false) => {
@@ -56,7 +56,7 @@ export async function startFlows() {
       failed: (message) => {
         if (!current()) return;
         if (recovering) setState((s) => ({ job: { ...s.job, state: 'failed', error: message } }));
-        toast(message, { label: 'Retry', run: () => void retryTrackedJob() }, 15_000);
+        toast('tracked_job_failed', { detail: message }, { action: { label: 'Retry', run: () => void retryTrackedJob() } });
       },
     });
   };

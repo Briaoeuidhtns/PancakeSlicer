@@ -104,17 +104,17 @@ func (c *BambuControls) command(in bambuControlRequest) (map[string]any, error) 
 func (s *Server) deviceControl(w http.ResponseWriter, r *http.Request) {
 	p := s.sends.printer(r.PathValue("printer"))
 	if p == nil || p.Kind == "bambu-connect" {
-		fail(w, 404, "This printer doesn't have an active connection that supports live controls.")
+		fail(w, 404, "printer_doesnt_have_active")
 		return
 	}
 	var in bambuControlRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&in); err != nil {
-		fail(w, 400, "Expected a printer control name and a whole-number value.")
+		fail(w, 400, "expected_printer_control_name")
 		return
 	}
 	status, ok := s.sends.hub.current(p.Printer)
 	if !ok || !status.Online {
-		fail(w, 409, "Hang on a second—waiting for live status from the printer before changing controls.")
+		fail(w, 409, "hang_second_waiting_live")
 		return
 	}
 	command, err := status.Controls.command(in)
@@ -155,17 +155,17 @@ func (s *Server) deviceControl(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err != nil {
-		fail(w, 422, err.Error())
+		fail(w, 422, "bambu_controls_unprocessable", err.Error())
 		return
 	}
 	secret, err := p.secret()
 	if err != nil {
-		fail(w, 409, err.Error())
+		fail(w, 409, "bambu_controls_conflict", err.Error())
 		return
 	}
 	if ok, retry := s.sends.allowBurst("device "+s.clientIP(r), deviceBurst, deviceRate); !ok {
 		w.Header().Set("Retry-After", fmt.Sprint(min(retry, 86400)))
-		fail(w, 429, "Whoa, slow down! Too many printer commands sent at once—wait a moment and try again.")
+		fail(w, 429, "slow_down_too_many")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), controlWait)
@@ -180,7 +180,7 @@ func (s *Server) deviceControl(w http.ResponseWriter, r *http.Request) {
 	err = controlHostDevice(ctx, p, secret, in)
 	audit(map[string]any{"event": "printer_device_control", "printer": p.Printer, "control": in.Control, "fan": in.Fan, "value": *in.Value, "client": s.clientIP(r), "error": fmt.Sprint(err)})
 	if err != nil {
-		fail(w, 502, redact(err.Error(), secret))
+		fail(w, 502, "bambu_controls_upstream", redact(err.Error(), secret))
 		return
 	}
 	s.sends.hub.poke(p.Printer)

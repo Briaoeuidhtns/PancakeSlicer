@@ -18,7 +18,7 @@ const publish = (next: Update | null) => {
   listeners.forEach((l) => l());
   if (next && read(SEEN) !== next.version) {
     write(SEEN, next.version);
-    toast(`New update available: PancakeSlicer v${next.version}!`, { label: 'View', run: () => openUpdate(next) }, 15_000, 'warning');
+    toast('new_update_available_pancakeslicer', { version: next.version }, { action: { label: 'View', run: () => openUpdate(next) } });
   }
 };
 

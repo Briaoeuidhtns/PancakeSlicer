@@ -36,7 +36,7 @@ export default function BedShapeDialog({ config, close, onSet = (key, value) => 
     const errorId = `${id}-${label.replace(/ /g, '-')}`;
     return <label className="form-row"><span>{label}<InfoTip label={label}>Allowed range: {min} mm to {max} mm</InfoTip></span>
       <span className="control-stack"><span className="modal-unit"><input className="text num" type="number" min={min} max={max} step="any" value={Number.isFinite(value) ? value : ''} aria-invalid={!!reason || undefined} aria-describedby={reason ? errorId : undefined}
-        onChange={(e) => set(e.target.valueAsNumber)} onBlur={() => { if (reason) toast(`${label}: ${reason} (kept your previous value).`, null, undefined, 'warning'); }} /><span>mm</span></span>
+        onChange={(e) => set(e.target.valueAsNumber)} onBlur={() => { if (reason) toast('kept_previous_value', { label, reason }); }} /><span>mm</span></span>
         {reason && <span className="control-error" id={errorId} role="status">{reason}</span>}</span></label>;
   };
   const at = (values: number[], set: (v: number[]) => void, i: number) => (v: number) => set(values.map((x, j) => (i === j ? v : x)));

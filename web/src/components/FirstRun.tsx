@@ -80,7 +80,7 @@ function Sample({ label, variants }: SampleDef) {
     try {
       await importFetched(label, [[await modelBlobUrl(v.model), v.file]]);
     } catch (e) {
-      toast(`${label}: ${e instanceof Error ? e.message : String(e)}`);
+      toast('couldnt_load_2', { label, detail: e instanceof Error ? e.message : String(e) });
     } finally {
       setBusy(false);
     }

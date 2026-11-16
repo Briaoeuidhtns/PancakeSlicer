@@ -34,8 +34,8 @@ export function BuildPlateField({ printerId, disabled = false }: { printerId: st
       onValueChange={(value) => void setBuildPlate(value, printerId)} options={setup.plates.map((p) => ({ value: p.value, label: p.label }))} /></span></div>;
 }
 
-export function addSlot(name: string) {
-  void import('../plater/mixed').then((m) => m.addPhysical(undefined, name)).catch((error) => toast(String(error)));
+export function addFilament() {
+  void import('../plater/mixed').then((m) => m.addPhysical()).catch((error) => toast('add_physical_failed', { detail: String(error) }));
 }
 
 export function removeSlot(i: number) {
@@ -43,7 +43,7 @@ export function removeSlot(i: number) {
     const done = removeSlotAt(i + 1);
     if (!done) return;
     const notes = [done.moved ? `${done.moved} object${done.moved === 1 ? '' : 's'} moved to slot ${done.to}` : '', ...done.merged.map((d) => `mix ${d.mix} merged into slot ${d.into}`)].filter(Boolean);
-    toast([`Removed filament ${i + 1}`, ...notes].join('; '), { label: 'Undo', run: undo });
+    toast('filament_removed', { slot: i + 1, notes: notes.join('; ') }, { action: { label: 'Undo', run: undo } });
   });
 }
 

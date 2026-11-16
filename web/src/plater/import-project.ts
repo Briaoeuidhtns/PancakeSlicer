@@ -102,6 +102,8 @@ export async function importObjects(file: File, allowNew = false, sourceUrl?: st
     if (choice !== 'new' && !task.current()) return 0;
     undoable('Import objects', () => setState((state) => objectsPatch(state, [...plates.values()].sort((a, b) => a.index - b.index))));
     committed = true;
+    if (project) reportProjectSettings(project, report);
+    else if (settingsNote) toast('import_project_failed', { name: file.name, settingsNote });
     task.done();
     return objects.length;
   } catch (error) {

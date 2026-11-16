@@ -46,7 +46,7 @@ export default function ContextMenu() {
     { label: 'Delete', shortcut: 'Del', action: () => deleteVolume(o.id, volume.id), tip: 'Delete the selected part' },
     { label: 'Mirror', tip: 'Mirror the part', sub: ([0, 1, 2] as const).map((a) => (
       { label: `Along ${'XYZ'[a]} Axis`, action: () => void ops().then((m) => m.mirrorVolume(o.id, volume.id, a)), tip: `Mirror along the ${'XYZ'[a]} Axis` })) },
-    { label: 'Export as STL...', action: () => void ops().then((m) => m.exportVolumeStl(o.id, volume.id)), tip: 'Export the part as an STL' },
+    { label: 'Export as STL...', output: true, action: () => void ops().then((m) => m.exportVolumeStl(o.id, volume.id)), tip: 'Export the part as an STL' },
     ...(volume.type === 'part' ? ['sep' as const, { label: 'Change Filament', sub: [{ label: 'Object’s filament', checked: !volume.extruder, action: () => updateVolume(o.id, volume.id, { extruder: 0 }) },
       ...slotsOf(s).map((slot) => ({ label: slot.name, icon: <SlotChip n={slot.n} colour={slot.colour} />, role: 'menuitemradio' as const, checked: volume.extruder === slot.n, action: () => updateVolume(o.id, volume.id, { extruder: slot.n }) }))] }] : []),
     'sep',
@@ -102,8 +102,8 @@ export default function ContextMenu() {
     { label: 'Printable', shortcut: 'V', checked: printable, action: () => togglePrintable(o.id, menu.instance) },
     { label: 'Edit in Parameter Table', action: () => setState({ appDialog: 'objectTable' }), tip: 'Edit print parameters for a single object' },
     'sep',
-    { label: 'Export as one STL...', action: () => void exportStl(true), disabled: !editable },
-    ...(all ? [{ label: 'Export as STLs...', action: () => void exportStl(true, true), disabled: !editable }] : []),
+    { label: 'Export as one STL...', output: true, action: () => void exportStl(true), disabled: !editable },
+    ...(all ? [{ label: 'Export as STLs...', output: true, action: () => void exportStl(true, true), disabled: !editable }] : []),
   ] : [
     { label: 'Add Primitive', disabled: !!s.project, sub: SHAPES.map((shape) => ({ label: shape, action: () => void addPrimitiveObject(shape) })) },
     { label: 'Add Handy models', disabled: !!s.project, sub: HANDY.map(([label], i) => ({ label, action: () => void import('../plater/handy').then((m) => m.addHandyModel(i)) })) },

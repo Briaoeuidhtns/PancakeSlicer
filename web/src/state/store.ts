@@ -13,10 +13,10 @@ import { OPTIONS, type OptionMode } from '../options';
 import { undo, undoable } from './history';
 import { selectChanges } from './changes';
 import type { PaintKind, Painting } from '../plater/paint';
-import { decideConflict, profileConflicts, resolveProfile } from '../profiles/model';
-import { noticeKind, shouldToast, type NoticeEntry, type NoticeKind } from '../notice-text';
-import { emptyPrinterLibrary, type PrinterProfileLibrary, type ProjectProfileReferences, type ProfileRecovery } from '../profiles/ownership';
-import { capturePrinterMaterials,planPrinterSwitch,reconcilePrinterSelection,type ProfileTransitionSummary } from '../profiles/material-library';
+import type { EngineWarning } from '../engine-warnings';
+import { NOTICES, noticeText, type NoticeCode, type NoticeKind, type NoticeParams } from '../notice-codes';
+import { type ProjectProfileReferences, type ProfileRecovery } from '../profiles/ownership';
+import { planPrinterSwitch } from '../profiles/material-library';
 import { findProfile,profileKey } from '../profiles/identity';
 import type { PrinterConnections } from '../printers/connections';
 export { PRESET_META } from '../profiles/model';
@@ -144,10 +144,11 @@ export interface JobView {
   stage: string;
   queuePosition?: number;
   error?: string;
+  errorCode?: string;
   status?: JobStatus;
   stale?: boolean;
   plateSignature?: string;
-  warnings?: string[];
+  warnings?: EngineWarning[];
   calib?: string;
   calibLog?: string[];
   exported?: string;
@@ -249,6 +250,7 @@ export interface State {
   toastSeq: number;
   toastAction: { label: string; run: () => void; msg?: string } | null;
   toastKind: NoticeKind | null;
+  toastStep: string | null;
   toastMs: number | null;
   recommendedStyle: Record<number, 'standard'>;
   heads: HeadInfo[] | null;
@@ -281,6 +283,7 @@ export interface OrientConfirm {
   error?: string;
 }
 
+export const IDLE_JOB: JobView = { state: 'idle', pct: 0, stage: '' };
 let state: State = {
   api: null,
   orientPrompts: {},
@@ -340,12 +343,13 @@ let state: State = {
   plateIndex: 1,
   project: null,
   projectName: null,
-  job: { state: 'idle', pct: 0, stage: '' },
+  job: IDLE_JOB,
   noticeLog: [],
   toast: null,
   toastSeq: 0,
   toastAction: null,
   toastKind: null,
+  toastStep: null,
   toastMs: null,
   recommendedStyle: {},
   heads: null,
@@ -514,14 +518,25 @@ export function hasUnsavedEdits(s: State, type: PresetType, slot: number) {
 }
 
 
-export function logNotice(message: string, kind: NoticeKind = noticeKind(message)) {
+export interface NoticeEntry { id: number; message: string; kind: NoticeKind }
+export interface ToastOptions { action?: State['toastAction']; ms?: number }
+type NoticeArgs<C extends NoticeCode> = NoticeParams<C> extends undefined ? [params?: undefined, options?: ToastOptions] : [params: NoticeParams<C>, options?: ToastOptions];
+
+export function logNotice<C extends NoticeCode>(code: C, ...[params]: NoticeArgs<C>) {
+  recordNotice(noticeText(code, params as NoticeParams<C>), NOTICES[code].kind);
+}
+function recordNotice(message: string, kind: NoticeKind) {
   setState((s) => ({ noticeLog: [...s.noticeLog.slice(-99), { id: (s.noticeLog.at(-1)?.id ?? 0) + 1, message, kind }] }));
 }
 
-export function toast(msg: string, action: State['toastAction'] = null, ms = action ? 8000 : null, kind?: NoticeKind, interrupt = false) {
-  logNotice(msg, kind);
-  if (interrupt || shouldToast(msg, action, kind))
-    setState({ toast: msg, toastSeq: getState().toastSeq + 1, toastAction: action && { ...action, msg }, toastMs: ms, toastKind: kind ?? null });
+export function toast<C extends NoticeCode>(code: C, ...[params, options]: NoticeArgs<C>) {
+  const notice: { kind: NoticeKind; step?: string; ms?: number; interrupt?: boolean } = NOTICES[code];
+  const msg = noticeText(code, params as NoticeParams<C>);
+  const action = options?.action ?? null;
+  recordNotice(msg, notice.kind);
+  if (notice.interrupt || notice.kind === 'error' || notice.kind === 'warning' || action?.label === 'Undo')
+    setState({ toast: msg, toastSeq: getState().toastSeq + 1, toastAction: action && { ...action, msg },
+      toastMs: options?.ms ?? notice.ms ?? (action || notice.kind === 'error' ? 8000 : 3500), toastKind: notice.kind, toastStep: notice.step ?? null });
 }
 
 function editName(patch: object): string {
@@ -610,8 +625,8 @@ export function removeSelected() {
 export function deleteAll() {
   const n = state.objects.length;
   undoable('Delete all', () => setState((s) => !s.project && s.projectPlates.length ? { objects: [], selected: null, job: markStale(s.job) }
-    : { objects: [], selected: null, project: null, projectPlates: [], plateIndex: 1, wipeTowerPos: {}, projectName: null, projectMaterials: null, projectPresets: null, projectNotice: null, job: markStale(s.job) }));
-  if (n) toast(n === 1 ? 'Deleted 1 object' : `Deleted ${n} objects`, { label: 'Undo', run: undo });
+    : { objects: [], selected: null, project: null, projectPlates: [], plateIndex: 1, wipeTowerPos: {}, projectName: null, projectMaterials: null, projectPresets: null, projectSlotValues: null, projectSlots: null, job: markStale(s.job) }));
+  if (n) (n === 1 ? toast('deleted_object', undefined, { action: { label: 'Undo', run: undo } }) : toast('deleted_objects', { n }, { action: { label: 'Undo', run: undo } }));
 }
 
 export function setObjectOption(id: number, key: string, value: ConfigValue) {

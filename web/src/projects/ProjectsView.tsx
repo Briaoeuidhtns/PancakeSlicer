@@ -62,7 +62,7 @@ const sorters: Record<Sort,(a:ProjectMeta,b:ProjectMeta)=>number> = {
 async function exportProject(p:ProjectMeta) {
   if(!await confirmDialog('Export 3MF',`Open “${p.name}” and export it?`,['Export','Cancel']))return;
   try {const flow=await import('../flow/project');await flow.openProject(p.id);if(flow.project.get().context.id!==p.id || ['missing','failed','opening'].includes(flow.project.get().value))throw new Error('Oops! We couldn\'t open that project.');await (await import('../actions')).saveProject();}
-  catch(error){toast(`Oops! Export failed: ${message(error)}`);}
+  catch(error){toast('export_failed', { detail: message(error) });}
 }
 
 function Thumb({p}:{p:ProjectMeta}) {
@@ -200,7 +200,7 @@ function Projects() {
         catch(error){failed.push(`${entry.name}: ${message(error)}`);}
       }
       setError(failed.length?`${restored} restored, ${failed.length} not confirmed (${failed.join('; ')}). Undo stays available.`:null);
-      if(restored)toast(`${restored} ${restored===1?'project':'projects'} restored`);
+      if(restored)toast('restored_2', { restored, value: restored===1?'project':'projects' });
     }finally{void loadTrash();}
   };
   const restore=(entries:readonly ProjectUndo[])=>runProjectsOp('restoring',()=>restoreEntries(entries));
@@ -210,7 +210,7 @@ function Projects() {
     await runProjectsOp('retrying',async()=>{
       if(!trashRestores.has(p.id))trashRestores.set(p.id,p.revision);
       setError(null);
-      try{await (await import('../flow/project')).restoreArchivedProject(p.id,trashRestores.get(p.id));trashRestores.delete(p.id);toast(`${p.name} restored`);}
+      try{await (await import('../flow/project')).restoreArchivedProject(p.id,trashRestores.get(p.id));trashRestores.delete(p.id);toast('restored_3', { name: p.name });}
       catch(error){setError(`Couldn't finish restoring: ${message(error)}`);}
       finally{void loadTrash();}
     },p.id);
@@ -293,7 +293,7 @@ function Projects() {
   const move=async(ids:readonly string[],folder:string|null)=>{
     if(!ids.length)return;
     const name=folder?folders.find(f=>f.id===folder)?.name ?? 'folder':'Unsorted';
-    try{await moveProjects(ids,folder);toast(`${ids.length===1?(list?.find(p=>p.id===ids[0])?.name ?? 'Project'):`${ids.length} projects`} moved to ${name}`);if(ids.length>1)dispatch({type:'CLEAR'});}
+    try{await moveProjects(ids,folder);toast('moved', { value: ids.length===1?(list?.find(p=>p.id===ids[0])?.name ?? 'Project'):`${ids.length} projects`, name });if(ids.length>1)dispatch({type:'CLEAR'});}
     catch(error){setError(`Oops! Couldn't move item: ${message(error)}`);}
   };
   const uniqueName=(parent:string|null)=>{const taken=new Set(childFolders(folders,parent).map(f=>f.name.toLocaleLowerCase()));let name='New folder';for(let n=2;taken.has(name.toLocaleLowerCase());n++)name=`New folder ${n}`;return name;};
@@ -332,7 +332,7 @@ function Projects() {
     const n=counts.inFolder.get(f.id) ?? 0,inner=childFolders(folders,f.id).length;
     const detail=[`${count(n,'project moves','projects move')} to Unsorted.`,inner?`${count(inner,'folder moves','folders move')} up a level.`:''].filter(Boolean).join(' ');
     if(!await confirmDialog(`Delete “${f.name}”?`,detail,['Delete folder','Cancel'],true))return;
-    try{await deleteFolder(f.id);if(place.kind==='folder' && place.id===f.id)go(f.parentId?{kind:'folder',id:f.parentId}:{kind:'home'});toast(`${f.name} deleted`);}
+    try{await deleteFolder(f.id);if(place.kind==='folder' && place.id===f.id)go(f.parentId?{kind:'folder',id:f.parentId}:{kind:'home'});toast('deleted', { name: f.name });}
     catch(error){setError(`Oops! Couldn't delete: ${message(error)}`);}
   };
   const moveEntries=(ids:readonly string[]):MenuEntry[]=>{
@@ -360,7 +360,7 @@ function Projects() {
     {label:'Duplicate',disabled:blocked(p.id),action:()=>void duplicateProject(p.id)},
     {label:'Move to',sub:moveEntries(dragIds(p.id))},
     {label:favorites.has(p.id)?'Remove from favorites':'Add to favorites',disabled:!prefsLoaded,action:()=>toggleFavorite(p.id)},
-    {label:'Export 3MF…',action:()=>void exportProject(p)},
+    {label:'Export 3MF…',output:true,action:()=>void exportProject(p)},
     'sep',
     {label:'Move to Trash',shortcut:'Del',disabled:busy || blocked(p.id),action:()=>void remove(selected.length>1 && selected.includes(p.id)?selected:[p.id])},
   ];

@@ -1,3 +1,4 @@
+import type { EngineWarning } from './engine-warnings';
 import { useSyncExternalStore } from 'react';
 import { jobRequest } from './actions';
 import type { JobStatus } from './api/types';
@@ -67,7 +68,7 @@ export function useCompareWanted(): CompareSource | null {
   return useSyncExternalStore(subscribe, () => wanted);
 }
 
-export interface Baseline { id: string; status: JobStatus; signature: string; warnings: string[] }
+export interface Baseline { id: string; status: JobStatus; signature: string; warnings: EngineWarning[] }
 let baseline: Baseline | null = null;
 export function useBaseline(): Baseline | null {
   return useSyncExternalStore(subscribe, () => baseline);

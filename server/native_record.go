@@ -230,6 +230,7 @@ func uncurvedObjects(raw, rawInputs json.RawMessage) []map[string]any {
 		share, measured := o["curved_share"].(float64)
 		limit, _ := o["planar_limit"].(string)
 		reason, _ := o["planar_fallback_reason"].(string)
+		reasonCode, _ := o["planar_fallback_code"].(string)
 		if mode == "" || mode == "off" || !measured || share > 0 || (limit == "" && reason == "") {
 			continue
 		}
@@ -238,7 +239,7 @@ func uncurvedObjects(raw, rawInputs json.RawMessage) []map[string]any {
 			method = mode
 		}
 		entry := map[string]any{"object": i, "name": o["name"], "mode": mode, "method": method, "planar_limit": limit, "reason": reason,
-			"try_ignore_duct": marked && !report.Clearance.Override && o["access_by"] != "nozzle" && (limit == "access" || strings.Contains(reason, "print head"))}
+			"try_ignore_duct": marked && !report.Clearance.Override && o["access_by"] != "nozzle" && (limit == "access" || reasonCode == "head_strike")}
 		for _, k := range []string{"curved_max_angle_deg", "reachable_slope_deg"} {
 			if v, ok := o[k].(float64); ok {
 				entry[k] = v

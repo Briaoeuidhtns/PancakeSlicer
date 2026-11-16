@@ -400,7 +400,9 @@ func (m *SendManager) connections() []*PrinterConfig {
 	return m.conns
 }
 
-func (m *SendManager) allow(client string) (bool, int) { return m.allowBurst(client, sendBurst) }
+func (m *SendManager) allow(client string) (bool, int) {
+	return m.allowBurst(client, sendBurst, sendRate)
+}
 
 func (m *SendManager) allowBurst(client string, burst, rate float64) (bool, int) {
 	m.mu.Lock()
@@ -448,7 +450,7 @@ func (s *Server) getSend(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, t)
 		return
 	}
-	fail(w, 404, "This job hasn't been sent to a printer yet.")
+	fail(w, 404, "job_hasnt_been_sent")
 }
 
 func (s *Server) cancelSend(w http.ResponseWriter, r *http.Request) {
@@ -460,7 +462,7 @@ func (s *Server) cancelSend(w http.ResponseWriter, r *http.Request) {
 	t := j.send
 	if t == nil || !t.active() {
 		j.mu.Unlock()
-		fail(w, 409, "This job isn't currently uploading.")
+		fail(w, 409, "job_isnt_currently_uploading")
 		return
 	}
 	cancel := t.cancel
@@ -525,7 +527,7 @@ func (s *Server) sendJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.sends.store == nil {
-		fail(w, 403, "Printer network connections are disabled on this server.")
+		fail(w, 403, "printer_network_connections_disabled")
 		return
 	}
 	var body struct {
@@ -540,33 +542,33 @@ func (s *Server) sendJob(w http.ResponseWriter, r *http.Request) {
 	}
 	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 4<<10))
 	if err != nil {
-		fail(w, 413, "send request exceeds 4 KiB")
+		fail(w, 413, "send_request_exceeds_kib")
 		return
 	}
 	if json.Unmarshal(raw, &body) != nil || body.Printer == "" {
-		fail(w, 400, `expected {"printer": printer setup key, "start": boolean}`)
+		fail(w, 400, "expected_printer_printer_setup")
 		return
 	}
 	p := s.sends.printer(body.Printer)
 	if p == nil {
-		fail(w, 404, "This printer isn't connected yet—add a connection in its Connection settings.")
+		fail(w, 404, "printer_isnt_connected_add")
 		return
 	}
 	if p.Kind == "bambu-connect" {
-		fail(w, 409, "Bambu Connect opens files through the desktop app rather than directly from the server.")
+		fail(w, 409, "bambu_connect_opens_files")
 		return
 	}
 	start := body.Start == nil || *body.Start
 	filename := j.DownloadName()
 	if body.Filename != "" {
 		if strings.ContainsAny(body.Filename, "/\\") || len(body.Filename) > 240 || strings.IndexFunc(body.Filename, unicode.IsControl) >= 0 || !strings.HasSuffix(strings.ToLower(body.Filename), "."+j.Request.Output) || strings.HasPrefix(body.Filename, ".") {
-			fail(w, 400, "filename must be a basename ending in ."+j.Request.Output)
+			fail(w, 400, "filename_must_basename_ending", j.Request.Output)
 			return
 		}
 		filename = body.Filename
 	}
 	if j.AwaitFinished(r.Context()) != StateDone || j.Request.Orient || j.Request.Output == "3mf" {
-		fail(w, 409, "Wait for slicing to finish before sending the job to your printer.")
+		fail(w, 409, "wait_slicing_finish_before")
 		return
 	}
 	if refusal := j.curveRefusal(); refusal != "" {
@@ -574,7 +576,7 @@ func (s *Server) sendJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if want := map[bool]string{true: "gcode.3mf", false: "gcode"}[p.Kind == "bambu-lan"]; j.Request.Output != want {
-		fail(w, 400, fmt.Sprintf("%s needs a .%s export; this job produced .%s", connectionKinds[p.Kind], want, j.Request.Output))
+		fail(w, 400, "needs_export_job_produced", connectionKinds[p.Kind], want, j.Request.Output)
 		return
 	}
 	var amsMapping []int
@@ -621,18 +623,18 @@ func (s *Server) sendJob(w http.ResponseWriter, r *http.Request) {
 	client := s.clientIP(r)
 	if ok, retry := s.sends.allow(client); !ok {
 		w.Header().Set("Retry-After", fmt.Sprint(min(retry, 86400)))
-		fail(w, 429, "Too many print uploads started at once—wait a moment before sending again.")
+		fail(w, 429, "too_many_print_uploads")
 		return
 	}
 	f, err := os.Open(j.OutputPath(j.Request.Output))
 	if err != nil {
-		fail(w, 404, "That download link has expired—please slice or export again.")
+		fail(w, 404, "download_link_has_expired")
 		return
 	}
 	st, err := f.Stat()
 	if err != nil {
 		f.Close()
-		fail(w, 500, "Oops! Couldn't read the exported print file.")
+		fail(w, 500, "couldnt_read_exported_print")
 		return
 	}
 	m := s.sends
@@ -640,7 +642,7 @@ func (s *Server) sendJob(w http.ResponseWriter, r *http.Request) {
 	if m.busy[p.Printer] {
 		m.mu.Unlock()
 		f.Close()
-		fail(w, 409, p.Name + " is busy receiving another file right now—try again once that upload finishes.")
+		fail(w, 409, "busy_receiving_another_file", p.Name)
 		return
 	}
 	j.mu.Lock()
@@ -648,7 +650,7 @@ func (s *Server) sendJob(w http.ResponseWriter, r *http.Request) {
 		j.mu.Unlock()
 		m.mu.Unlock()
 		f.Close()
-		fail(w, 409, "This print job is already being uploaded to the printer.")
+		fail(w, 409, "print_job_already_being")
 		return
 	}
 	card := p.Printer + "\x00" + filename
@@ -754,7 +756,7 @@ func (s *Server) runSend(ctx context.Context, stopTimeout context.CancelFunc, j 
 			err = cause
 		}
 		if stalled.Load() {
-			err = errors.New("The printer stopped responding during the upload (timed out after 30 seconds).")
+			err = &connError{"timeout", "The printer stopped responding during the upload (timed out after 30 seconds)."}
 		}
 		cancelled = errors.Is(context.Cause(ctx), errSendCancelled)
 	}
@@ -797,26 +799,22 @@ func (s *Server) runSend(ctx context.Context, stopTimeout context.CancelFunc, j 
 }
 
 func sendFailure(err error) (string, string) {
+	reason := "connection"
 	var conn *connError
-	stage := ""
-	if errors.As(err, &conn) {
-		stage = conn.stage
-	}
-	text := strings.ToLower(err.Error())
+	var ftp *ftpError
 	switch {
-	case stage == "access_code" || strings.Contains(text, "access code") || strings.Contains(text, "api key") || strings.Contains(text, "password") || strings.Contains(text, "401") || strings.Contains(text, "403"):
-		return "credentials", "Check the access code or API key in Connection settings, then retry."
-	case strings.Contains(text, "developer mode"):
-		return "developer_mode", "Turn on LAN-only mode and Developer Mode on the printer's screen, then retry."
-	case stage == "busy" || strings.Contains(text, "busy") || strings.Contains(text, "in use") || strings.Contains(text, "409"):
-		return "busy", "Wait for the current print to finish, or upload only and start it later."
-	case strings.Contains(text, "sd card") || strings.Contains(text, "storage") || strings.Contains(text, "no space") || strings.Contains(text, " 452") || strings.Contains(text, " 552"):
-		return "storage", "Insert or free space on the printer's SD card, then retry."
-	case strings.Contains(text, "in time") || strings.Contains(text, "timed out") || strings.Contains(text, "stopped accepting data"):
-		return "timeout", "Check that the printer is on and on the same network, then retry."
-	default:
-		return "connection", "Check the printer and its Connection settings, then retry."
+	case errors.As(err, &conn):
+		reason = map[string]string{"access_code": "credentials", "developer_mode": "developer_mode", "refused": "refused", "busy": "busy",
+			"storage": "storage", "timeout": "timeout"}[conn.stage]
+	case errors.As(err, &ftp) && (ftp.code == 452 || ftp.code == 552):
+		reason = "storage"
+	case errors.Is(err, context.DeadlineExceeded) || os.IsTimeout(err):
+		reason = "timeout"
 	}
+	if reason == "" {
+		reason = "connection"
+	}
+	return reason, failureTexts["send_"+reason].Step
 }
 
 func (m *SendManager) activeTransfers() []Transfer {
@@ -881,12 +879,15 @@ func netError(err error, what string) error {
 	var dns *net.DNSError
 	var opErr *net.OpError
 	var verify *tls.CertificateVerificationError
+	var unknownAuthority x509.UnknownAuthorityError
+	var invalid x509.CertificateInvalidError
+	var hostname x509.HostnameError
 	switch {
 	case errors.Is(err, context.DeadlineExceeded) || os.IsTimeout(err):
-		return fmt.Errorf("%s didn't respond in time—make sure the printer is powered on and reachable on your network.", what)
+		return &connError{"timeout", fmt.Sprintf("%s didn't respond in time—make sure the printer is powered on and reachable on your network.", what)}
 	case errors.As(err, &dns):
 		return fmt.Errorf("Couldn't find the network address for %s.", what)
-	case errors.As(err, &verify) || strings.Contains(err.Error(), "certificate"):
+	case errors.As(err, &verify) || errors.As(err, &unknownAuthority) || errors.As(err, &invalid) || errors.As(err, &hostname):
 		return fmt.Errorf("%s's security certificate was rejected: %v", what, lastClause(err))
 	case errors.As(err, &opErr) && opErr.Op == "dial":
 		return fmt.Errorf("Couldn't connect to %s—make sure the printer is powered on and on the same network.", what)

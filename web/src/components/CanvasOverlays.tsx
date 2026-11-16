@@ -190,11 +190,11 @@ function TrySmoothest({ f }: { f: CurveFailure }) {
 
 function WarningLines({ warnings, open, onToggle }: { warnings: PlainWarning[]; open: boolean; onToggle(): void }) {
   const lines = [...new Set(warnings.flatMap((w) => (w.text ? [w.text] : [])))];
-  const unknown = warnings.filter((w) => w.text === undefined);
+  const unknown = warnings.filter((w) => w.detail);
   return <>
     {lines.map((l) => <div key={l} className="notif-body">{l}</div>)}
     {unknown.length > 0 && <div className="notif-body notif-actions"><button type="button" className="notif-link" aria-expanded={open} onClick={onToggle}>Details</button></div>}
-    {open && unknown.map((w) => <div key={w.raw} className="notif-body notif-detail">{w.raw}</div>)}
+    {open && unknown.map((w) => <div key={`${w.code}|${w.detail}`} className="notif-body notif-detail">{w.detail}</div>)}
   </>;
 }
 
@@ -249,7 +249,7 @@ export function SliceNotification() {
   const perObject = plateObjects.flatMap((o) => {
     const bare = bareName(o.name), key = `${done ?? job.id}:o${o.id}`;
     const r = results.find((x) => x.objectId === o.id), f = failures.find((x) => x.objectId === o.id);
-    const ws = plain.filter((w) => w.object === bare && w.text !== null);
+    const ws = plain.filter((w) => w.object === bare && (w.text !== null || w.detail));
     return r || f || ws.length ? [{ o, bare, key, r, f, ws }] : [];
   });
   const known = new Set(plateObjects.map((o) => bareName(o.name)));
@@ -315,8 +315,8 @@ export function SliceNotification() {
       <InTopLayer>
         <div className="notif-group">
           <AccessNotification />
-          {job.state === 'failed' && notice?.message !== cleanError(job.error) && !/Access token needed|Oops! Server storage is full|The slicer is busy right now/.test(job.error ?? '') && !closed.has('error') && (
-            <SliceFailed error={cleanError(job.error)} onClose={() => setClosed((c) => new Set(c).add('error'))} />
+          {job.state === 'failed' && notice?.message !== cleanError(job.error) && !ACCESS_FAILURES.has(job.errorCode ?? '') && !closed.has('error') && (
+            <SliceFailed error={cleanError(job.error)} code={job.errorCode ?? 'slice_failed'} onClose={() => setClosed((c) => new Set(c).add('error'))} />
           )}
         </div>
       </InTopLayer>
@@ -338,7 +338,7 @@ export function SliceNotification() {
         <div key={`cnc${key}`} className="notification curve-failed" role="alert">
           <div className="notif-title notif-sentence">Oops! Couldn't slice {f.label} with {f.method}</div>
           <div className="notif-body">{f.why[0].toUpperCase() + f.why.slice(1)}</div>
-          <WarningLines warnings={ws.filter((w) => !/^Printed with flat layers so the print head doesn't bump the part/.test(w.text ?? ''))} open={details.has(key)} onToggle={() => toggleDetails(key)} />
+          <WarningLines warnings={ws.filter((w) => w.code !== 'conformal_flat_fallback')} open={details.has(key)} onToggle={() => toggleDetails(key)} />
           <div className="notif-body notif-actions">
             <button type="button" className="notif-link" onClick={() => sliceFlatInstead([f])}>Slice flat instead</button>
             {f.tryDuct && <button type="button" className="notif-link" onClick={() => tryIgnoreDuct()}>Try Ignore cooling duct</button>}

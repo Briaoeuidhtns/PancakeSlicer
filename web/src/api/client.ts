@@ -1,5 +1,5 @@
 import { submissionHeaders } from '../flow/submission';
-import { bootstrapAccessToken, mutation, responseError } from './access';
+import { bootstrapAccessToken, failureCode, mutation, responseError } from './access';
 import { attachFiles, postJob } from './blobs';
 import { readHealth } from './health';
 import { followJobStream, type JobStreamEvent } from './job-stream';
@@ -11,7 +11,7 @@ export interface Api {
   presets(vendor: string, models: string[], update?: (c: PresetCatalog) => void, names?: string[]): Promise<PresetCatalog>;
   submit(req: JobRequest, signal?: AbortSignal, onUpload?: (fraction: number) => void): Promise<string>;
   status(id: string): Promise<JobStatus>;
-  events(id: string, on: { progress(e: ProgressEvent): void; done(s: JobStatus): void; error(msg: string): void; log?(stream: string, line: string): void; result?(s: JobStatus): void }): () => void;
+  events(id: string, on: { progress(e: ProgressEvent): void; done(s: JobStatus): void; error(msg: string, code: string): void; log?(stream: string, line: string): void; result?(s: JobStatus): void }): () => void;
   cancel(id: string): Promise<void>;
   downloadUrl(id: string): string;
   movesUrl(id: string): string;
@@ -35,6 +35,12 @@ export function parseProgress(data: string): ProgressEvent | null {
 }
 
 const statusRequests = new Map<string, Promise<JobStatus>>();
+
+function isTerminalState(data: string) {
+  try { return ['done', 'failed', 'canceled'].includes(JSON.parse(data)?.state); } catch { return false; }
+}
+
+const refusal = (code: string, message: string) => Object.assign(new Error(message), { code });
 
 const realApi: Api = {
   mock: false,
@@ -101,7 +107,7 @@ const realApi: Api = {
   },
   events(id, on) {
     let finished = false, disposed = false, checking = false, resulted = false, last = -1;
-    let reason: string | undefined, stop = () => {}, retry: ReturnType<typeof setTimeout> | undefined;
+    let reason: string | undefined, reasonCode: string | undefined, stop = () => {}, retry: ReturnType<typeof setTimeout> | undefined;
     const close = () => { finished = true; stop(); clearTimeout(retry); };
     const finish = async (reconnect = false) => {
       if (finished || checking) return;
@@ -115,11 +121,11 @@ const realApi: Api = {
         }
         close();
         if (s.state === 'done') on.done(s);
-        else on.error(s.error ?? `job ${s.state}`);
+        else on.error(s.error ?? `job ${s.state}`, s.error_code ?? (s.state === 'canceled' ? 'job_canceled' : 'slice_failed'));
       } catch (e) {
         if (!disposed) {
           close();
-          on.error(reason ?? String(e));
+          on.error(reason ?? String(e), reasonCode ?? failureCode(e));
         }
       } finally {
         checking = false;
@@ -132,7 +138,7 @@ const realApi: Api = {
         case 'message': case 'progress': case 'state': {
           const p = parseProgress(e.data);
           if (p) on.progress(p);
-          if (/"state"\s*:\s*"(done|failed|canceled)"/.test(e.data)) void finish();
+          if (isTerminalState(e.data)) void finish();
           return;
         }
         case 'queue':
@@ -156,7 +162,9 @@ const realApi: Api = {
           return;
         case 'done': case 'end': case 'complete': case 'failed': case 'error_event':
           try {
-            reason = JSON.parse(e.data).error || reason;
+            const data = JSON.parse(e.data);
+            reason = data.error || reason;
+            reasonCode = data.error_code || reasonCode;
           } catch {
           }
           void finish();

@@ -106,12 +106,12 @@ func (s *Server) bambuJobMapping(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if j.Request.Output != "gcode.3mf" || j.AwaitFinished(r.Context()) != StateDone {
-		fail(w, 409, "No finished Bambu .gcode.3mf package was found for this job.")
+		fail(w, 409, "no_finished_bambu_gcode")
 		return
 	}
 	mapping, err := readBambuJobMapping(j.OutputPath("gcode.3mf"))
 	if err != nil {
-		fail(w, 422, "Couldn't read the nozzle assignment from the sliced file: " + err.Error())
+		fail(w, 422, "couldnt_read_nozzle_assignment", err.Error())
 		return
 	}
 	writeJSON(w, 200, mapping)

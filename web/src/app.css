@@ -459,7 +459,6 @@ html.orca-parity, :where(.orca-parity) body, :where(.orca-parity) #root { margin
 :where(.orca-parity) .app-notices > * { box-shadow: var(--shadow-pop); }
 :where(.orca-parity) .lease-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--s-2) var(--s-4); flex: none; min-height: var(--h-bar); padding: var(--s-2) var(--s-5); background: var(--chrome-raised); border-bottom: 1px solid var(--line); color: var(--ink); font: var(--t-body); }
 :where(.orca-parity) .lease-bar > span { min-width: 0; overflow-wrap: anywhere; }
-:where(.orca-parity) .lease-bar-actions { display: flex; flex: none; gap: var(--s-2); }
 :where(.orca-parity) .lease-bar button { flex: none; height: var(--h-compact); }
 :root[data-readonly] :where(.orca-parity) :is(.sidebar, .canvas-toolbar, .objects-outliner, .manip-panel, .empty-plate) { pointer-events: none; opacity: 0.55; }
 

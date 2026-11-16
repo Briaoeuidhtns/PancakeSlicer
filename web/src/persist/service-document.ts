@@ -1,6 +1,7 @@
 import { createMachine, type StateNode } from '../flow/fsm';
 import { projectId } from './identity';
 import { jsonWrite, serviceJson } from './service';
+import type { NoticeOwner } from '../api/access';
 export type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue };
 export type ServiceDocument = Record<string, unknown>;
 export type DocumentSyncState = 'loading' | 'ready' | 'debounced' | 'writing' | 'failed' | 'conflict';
@@ -86,7 +87,7 @@ export function createServiceDocument<D extends ServiceDocument>(path: string, m
         const captured = operation, { serial: _serial, ...body } = captured;
         await beforeWrite(captured.document);
         let ack: { revision: number } | null;
-        try { ack = await serviceJson<{revision:number}>(path, jsonWrite(method, body)); }
+        try { ack = await serviceJson<{revision:number}>(path, jsonWrite(method, body), false, owner); }
         catch (error) {
           if ((error as { code?: string }).code !== 'revision_conflict') throw error;
           const carried = error as { revision?: number; document?: D };

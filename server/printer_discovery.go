@@ -40,12 +40,12 @@ const discoveryWindow = 4 * time.Second
 func (s *Server) discoverPrinters(w http.ResponseWriter, r *http.Request) {
 	m := s.sends
 	if m.store == nil {
-		fail(w, 403, "Printer network connections are disabled on this server.")
+		fail(w, 403, "printer_network_connections_disabled")
 		return
 	}
 	if ok, retry := m.allowBurst("discover "+s.clientIP(r), 3, sendRate); !ok {
 		w.Header().Set("Retry-After", fmt.Sprint(min(retry, 86400)))
-		fail(w, 429, "Network scan was just run—wait a few seconds before scanning again.")
+		fail(w, 429, "network_scan_run_wait")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), discoveryWindow+2*time.Second)

@@ -7,8 +7,7 @@ import type { StoredDoc } from '../persist/session';
 import { clearPlate } from '../actions';
 import { documentGeneration, leaveDocument, newDocument, snapshot, type Doc } from '../state/history';
 import { clearPlateJobs } from '../plater/plates';
-import { getState, setState, toast } from '../state/store';
-import { ensureCompatibleSelection } from '../profiles/material-library';
+import { IDLE_JOB, setState } from '../state/store';
 import { project, projectList, flushProject, writeProjectRoute, type ProjectDraftInventory } from './project';
 import { writeRoute } from './routes';
 import { checkpointCommitted, conflictFailure, draftConflictFailure, failureError, projectFailure, TRASHED, recoveryDocument, type DraftCheckpoint, type ProjectFailure, type CheckpointDocument, RECOVERED_MESSAGE } from './project-recovery';
@@ -53,7 +52,7 @@ export async function adoptProjectDraft(runtime: RecoveryRuntime, draft: Project
   runtime.adopt(() => {
     leaveDocument(); clearPlateJobs();
     setState({ ...fields, projectName: draft.name, tab: 'prepare', gizmo: 'none', dialog: null,
-      job: { state: 'idle', pct: 0, stage: '' } });
+      job: IDLE_JOB });
     newDocument(false);
     settleOffer();
   });
@@ -176,7 +175,7 @@ export async function openProject(runtime: RecoveryRuntime, id: string, options:
       runtime.adopt(() => {
       leaveDocument(); clearPlateJobs();
       setState({ ...fields, projectName: rec.meta.name, tab: 'prepare', gizmo: 'none', dialog: null,
-        job: { state: 'idle', pct: 0, stage: '' } });
+        job: IDLE_JOB });
       newDocument(true);
       settleOffer();
     });
@@ -207,7 +206,7 @@ export async function viewProjectVersion(runtime: RecoveryRuntime, id: string, r
   runtime.invalidateWrites();
   runtime.adopt(() => {
     leaveDocument(); clearPlateJobs();
-    setState({ ...fields, projectName: record.meta.name, gizmo: 'none', dialog: null, job: { state: 'idle', pct: 0, stage: '' } });
+    setState({ ...fields, projectName: record.meta.name, gizmo: 'none', dialog: null, job: IDLE_JOB });
     newDocument(true);
     settleOffer();
   });

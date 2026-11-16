@@ -84,7 +84,7 @@ export function ConnectionEditor({ printer, name, onSaved }: { printer: string; 
         const key = await addPrinterOnVariant(foundModel(d)!, d.preset!, d.name || undefined);
     const label = printerOf(getState(), key)?.name ?? key;
     if (d.kind !== 'bambu-lan') await saveConnection(key, { kind: d.kind, name: label, url: d.url });
-    toast(d.kind === 'bambu-lan' ? `Added ${label}! Pop into its Connection settings to enter the access code.` : `Added ${label} and connected it`);
+    (d.kind === 'bambu-lan' ? toast('added_pop_into_connection', { label }) : toast('added_connected', { label }));
   });
 
   return (

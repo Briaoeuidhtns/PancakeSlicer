@@ -182,7 +182,7 @@ func (s *Server) importFromURL(w http.ResponseWriter, r *http.Request) {
 	case urlImportSlots <- struct{}{}:
 		defer func() { <-urlImportSlots }()
 	default:
-		fail(w, 429, "Two URL imports are already downloading right now—give it a moment and try again!")
+		fail(w, 429, "two_url_imports_already")
 		return
 	}
 	var in struct {
@@ -191,12 +191,12 @@ func (s *Server) importFromURL(w http.ResponseWriter, r *http.Request) {
 		Name    string `json:"name"`
 	}
 	if json.NewDecoder(http.MaxBytesReader(w, r.Body, 32<<10)).Decode(&in) != nil {
-		fail(w, 400, "Please enter a valid URL.")
+		fail(w, 400, "enter_valid_url")
 		return
 	}
 	u, err := importURL(in.URL)
 	if err != nil {
-		fail(w, 400, err.Error())
+		fail(w, 400, "import_url_invalid", err.Error())
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
@@ -258,11 +258,11 @@ func (s *Server) importFromURL(w http.ResponseWriter, r *http.Request) {
 	if err = run(); err != nil {
 		var failure *urlImportError
 		if errors.As(err, &failure) {
-			fail(w, failure.status, failure.message)
+			fail(w, failure.status, "import_url_refused", failure.message)
 		} else if ctx.Err() != nil {
-			fail(w, 408, "The URL download timed out or was canceled.")
+			fail(w, 408, "url_download_timed_out")
 		} else {
-			fail(w, 422, "Oops! We couldn't download a model from that link. Make sure it's a public link and try again.")
+			fail(w, 422, "couldnt_download_model_link")
 		}
 		return
 	}

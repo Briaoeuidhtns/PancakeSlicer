@@ -186,10 +186,10 @@ export function ProfileEditor({type, name, draft, update, onBack, onSavingChange
     await commitProfileRecords([renameOwnedProfile(current, next)]);
     const renamed = findProfile(getState(), type, name);
     if (draft && renamed) update(key, {...latest.current, origin: renamed});
-    toast(`Renamed to ${next}`, {label: 'Undo', run: () => {
-      if (!m.can({type: 'RENAME', name: next})) {toast('Wait a second for the current save to finish, then you can rename it.'); return;}
+    toast('renamed', { next }, { action: {label: 'Undo', run: () => {
+      if (!m.can({type: 'RENAME', name: next})) {toast('rename_wait_for_save'); return;}
       m.send({type: 'RENAME', name: next}); m.send({type: 'TYPE', value: prior}); void commitName();
-    }});
+    }} });
   };
   const commitName = async () => {
     const v = m.get().value;

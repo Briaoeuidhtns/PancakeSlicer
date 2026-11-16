@@ -15,9 +15,9 @@ export function requestPreset(type: PresetType, slot: number, name: string) {
       reviewSlot = Math.max(0, s.projectPresets?.filaments.findIndex((f) => Object.keys(f).length) ?? 0);
     }
   }
-  toast(`${kept} changes kept${dropped ? `${SEP}${dropped} unavailable` : ''}`, {
+  toast('changes_keptx', { kept, value: dropped ? `${SEP}${dropped} unavailable` : '' }, { action: {
     label: 'Review', run: () => reviewChanges(reviewType, reviewSlot),
-  });
+  } });
 }
 
 import { PrinterPicker, FilamentPicker } from '../profiles/Pickers';

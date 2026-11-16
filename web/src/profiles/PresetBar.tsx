@@ -35,10 +35,10 @@ async function exportCurrent(type: PresetType, slot: number) {
     await exportProfiles({ kind: 'current', type, slot });
 }
 
-interface MenuItem { label: string; run(): void; disabled?: boolean }
+interface MenuItem { label: string; run(): void; disabled?: boolean; output?: boolean }
 
 function PresetMenu({ label, items }: { label: string; items: MenuItem[] }) {
-  return <MenuButton className="icon-btn preset-more" label={label} items={items.map(it => ({label: it.label, action: it.run, disabled: it.disabled}))}>⋯</MenuButton>;
+  return <MenuButton className="icon-btn preset-more" label={label} items={items.map(it => ({label: it.label, action: it.run, disabled: it.disabled, output: it.output}))}>⋯</MenuButton>;
 
 }
 
@@ -197,7 +197,7 @@ function usePresetActions(type: PresetType, slot: number) {
     const u = findProfile(getState(),type,presetName ?? '');
     if (u) void import('./PresetsWindow').then((m) => m.removePreset(type, u));
   };
-  const save=()=>{try {reviewProjectProfileChanges(type,slot);}catch(error){toast(error instanceof Error ? error.message : String(error));}};
+  const save=()=>{try {reviewProjectProfileChanges(type,slot);}catch(error){toast('presetbar_failed', { detail: error instanceof Error ? error.message : String(error) });}};
   return { list, project, state, presetName, isUser, onDelete, save };
 }
 

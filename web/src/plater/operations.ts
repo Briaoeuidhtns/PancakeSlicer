@@ -101,7 +101,7 @@ export async function run(operation: 'orient' | 'split' | 'split-parts', all: bo
   const s = getState();
   if (busy || s.project || s.tab !== 'prepare') return;
   const plateWide = operation === 'orient' && (all || !s.selected);
-  if (plateWide && s.projectPlates.find((p) => p.index === s.plateIndex)?.locked) return toast('This plate is locked');
+  if (plateWide && s.projectPlates.find((p) => p.index === s.plateIndex)?.locked) return toast('plate_locked');
   const objects = plateWide ? s.objects : s.objects.filter((o) => o.id === s.selected?.object);
   if (!objects.length) return;
   busy = true;
@@ -123,7 +123,7 @@ export async function run(operation: 'orient' | 'split' | 'split-parts', all: bo
       () => setState({ objects: next, selected: { object: first.id, instance: first.instances[0].id }, toast: null }));
   } catch (error) {
     created.forEach((o) => o.geometry.dispose());
-    toast(error instanceof Error ? error.message : String(error));
+    toast('operations_failed', { detail: error instanceof Error ? error.message : String(error) });
   } finally {
     busy = false;
     overlay.end();
@@ -181,9 +181,9 @@ export async function arrangeNative() {
       return { ...turned, x: turned.x + r.x - cx + (r.plate - 1) * width * 1.2, y: turned.y + r.y - cy };
     }) }));
     undoable('Arrange', () => setState({ objects }));
-    if (away) toast(`${away} copy${away > 1 ? 's do' : ' does'} couldn't fit on the plate`);
+    if (away) toast('copyx_couldnt_fit_plate', { away, value: away > 1 ? 's do' : ' does' });
   } catch (e) {
-    toast(`Oops! Couldn't auto-arrange the plate: ${e instanceof Error ? e.message : e}`);
+    toast('couldnt_auto_arrange_plate', { detail: e instanceof Error ? e.message : e });
   } finally {
     busy = false;
     overlay.end();

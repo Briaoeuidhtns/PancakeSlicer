@@ -1,12 +1,12 @@
-import { mutation, responseError } from '../api/access';
+import { mutation, responseError, type NoticeOwner } from '../api/access';
 import { documentText, parseDocument } from './wire';
 import { readHealth } from '../api/health';
 
-export async function serviceRequest(path: string, init: RequestInit = {}, missing = false): Promise<Response | null> {
+export async function serviceRequest(path: string, init: RequestInit = {}, missing = false, owner?: NoticeOwner): Promise<Response | null> {
   try {
     const write = init.method && init.method !== 'GET' && init.method !== 'HEAD';
     const request = { cache: write ? 'no-store' as const : 'no-cache' as const, ...init, signal: init.signal ?? AbortSignal.timeout(30_000) };
-    const response = write ? await mutation(path, request) : await fetch(path, request);
+    const response = write ? await mutation(path, request, false, undefined, undefined, false, owner) : await fetch(path, request);
     if (missing && response.status === 404) return null;
     if (!response.ok) throw await responseError(response);
     return response;
@@ -18,8 +18,8 @@ export async function serviceRequest(path: string, init: RequestInit = {}, missi
     throw Object.assign(error instanceof Error ? error : new Error(String(error)), { name });
   }
 }
-export async function serviceJson<T>(path: string, init?: RequestInit, missing = false): Promise<T | null> {
-  const response = await serviceRequest(path, init, missing);
+export async function serviceJson<T>(path: string, init?: RequestInit, missing = false, owner?: NoticeOwner): Promise<T | null> {
+  const response = await serviceRequest(path, init, missing, owner);
   return response && parseDocument<T>(await response.text());
 }
 export function jsonWrite(method: 'PUT' | 'POST' | 'PATCH' | 'DELETE', value: unknown): RequestInit {
@@ -31,7 +31,7 @@ const assets = new Map<string, Promise<unknown>>();
 const assetPath = (key: string) => `/api/assets/${routeKey(key)}`;
 export function putAsset(key: string, blob: Blob): Promise<unknown> {
   let sent = assets.get(key);
-  if (!sent) assets.set(key, (sent = serviceRequest(assetPath(key), { method: 'PUT', body: blob }).catch((error) => { assets.delete(key); throw error; })));
+  if (!sent) assets.set(key, (sent = serviceRequest(assetPath(key), { method: 'PUT', body: blob }, false, 'project').then((r) => r?.text()).catch((error) => { assets.delete(key); throw error; })));
   return sent;
 }
 export async function readAsset(key: string): Promise<Blob | null> {

@@ -38,10 +38,10 @@ export function noticeSend(t: Transfer) {
     const key = `${x.state}:${x.outcome}`;
     if (key === last) return;
     last = key;
-    if (x.state === 'done' && x.outcome === 'printing') toast(`Printing on ${x.name}`, { label: 'View', run: openDevice }, 8000, 'success', true);
-    else if (x.state === 'done' && x.outcome === 'uploaded') toast(`Uploaded to ${x.name}`, { label: 'View', run: openDevice }, 6000, 'success', true);
-    else if (x.state === 'done' && x.outcome === 'waiting_for_printer') toast(`Sent to ${x.name}—waiting for the print to start`, { label: 'View', run: openDevice }, 8000, 'warning');
-    else if (x.state === 'failed' || x.state === 'cancelled') toast(x.state === 'cancelled' ? 'Upload canceled' : `Couldn't send to ${x.name}${SHORT_REASON[x.reason ?? ''] ? `: ${SHORT_REASON[x.reason!]}` : ''}`, { label: 'Retry', run: () => setState({ appDialog: 'send' }) }, 10000, 'error');
+    if (x.state === 'done' && x.outcome === 'printing') toast('printing', { name: x.name }, { action: { label: 'View', run: () => openDevice(x.printer) } });
+    else if (x.state === 'done' && x.outcome === 'uploaded') toast('uploaded', { name: x.name }, { action: { label: 'View', run: () => openDevice(x.printer) } });
+    else if (x.state === 'done' && x.outcome === 'unconfirmed') toast('print_start_unconfirmed', { name: x.name }, { action: { label: 'View', run: () => openDevice(x.printer) } });
+    else if (x.state === 'failed' || x.state === 'cancelled') (x.state === 'cancelled' ? toast('upload_canceled', undefined, { action: { label: 'Retry', run: () => setState({ appDialog: 'send' }) } }) : toast('couldnt_send_xx', { name: x.name, value: SHORT_REASON[x.reason ?? ''] ? `: ${SHORT_REASON[x.reason!]}` : '' }, { action: { label: 'Retry', run: () => setState({ appDialog: 'send' }) } }));
   };
   const settled = (x: Transfer) => x.state !== 'uploading' && x.state !== 'starting' && x.outcome !== 'unconfirmed';
   show(t);

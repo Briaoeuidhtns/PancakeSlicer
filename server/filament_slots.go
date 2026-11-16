@@ -300,7 +300,7 @@ func (s *Server) printerSlotRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/printer-slots", func(w http.ResponseWriter, r *http.Request) {
 		lib, err := s.libraryDocument()
 		if err != nil {
-			fail(w, 503, "Your profile library isn't available right now: " + err.Error())
+			fail(w, 503, "profile_library_isnt_available", err.Error())
 			return
 		}
 		out := map[string]*printerSlots{}
@@ -319,12 +319,12 @@ func (s *Server) printerSlotRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/printer-slots/{printer}", func(w http.ResponseWriter, r *http.Request) {
 		lib, err := s.libraryDocument()
 		if err != nil {
-			fail(w, 503, "Your profile library isn't available right now: " + err.Error())
+			fail(w, 503, "profile_library_isnt_available", err.Error())
 			return
 		}
 		slots, err := s.printerSlotsFor(r.PathValue("printer"), lib)
 		if err != nil {
-			fail(w, 409, err.Error())
+			fail(w, 409, "filament_slots_conflict", err.Error())
 			return
 		}
 		writeJSON(w, 200, slots)
@@ -333,16 +333,16 @@ func (s *Server) printerSlotRoutes(mux *http.ServeMux) {
 		key, slot := r.PathValue("printer"), r.PathValue("slot")
 		lib, err := s.libraryDocument()
 		if err != nil {
-			fail(w, 503, "Your profile library isn't available right now: " + err.Error())
+			fail(w, 503, "profile_library_isnt_available", err.Error())
 			return
 		}
-		if f := profiles[filament]; filament != "" && (f == nil || f.Type != "filament" || !f.live()) {
-			fail(w, 400, "Please pick a filament from My filaments.")
+		if f := lib.Filament(filament); filament != "" && (f == nil || !f.Live()) {
+			fail(w, 400, "pick_filament_library")
 			return
 		}
 		current, err := s.printerSlotsFor(key, lib)
 		if err != nil {
-			fail(w, 409, err.Error())
+			fail(w, 409, "filament_slots_conflict", err.Error())
 			return
 		}
 		var tray *slotReport
@@ -382,7 +382,7 @@ func (s *Server) printerSlotRoutes(mux *http.ServeMux) {
 			Filament string `json:"filament"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body); err != nil || body.Filament == "" {
-			fail(w, 400, "send {filament}")
+			fail(w, 400, "send_filament")
 			return
 		}
 		choose(w, r, body.Filament)

@@ -191,7 +191,7 @@ export default function CalibDialog({ which }: { which: Exclude<CalibMenu, 'nonp
   const close = () => setState({ calibDialog: null });
   const ok = async () => {
     const result = c.run(v, p);
-    if (typeof result === 'string') return toast(result);
+    if (typeof result === 'string') return toast('calibration_values_invalid', { detail: result });
     await runCalibration(result.kind, Object.entries(result.params).map(([k, x]) => `${k}=${x}`).join(','));
   };
   return (

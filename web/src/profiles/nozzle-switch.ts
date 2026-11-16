@@ -60,13 +60,9 @@ function follow(s: State, printerId: string, from: CatalogVariant | undefined, t
   return { dirty: { ...s.dirty, machine: strip(s.dirty.machine) }, projectPresets: s.projectPresets && { ...s.projectPresets, machine: strip(s.projectPresets.machine) } };
 }
 
-async function undoNozzle(printerKey: string, previous: UserPreset) {
-  const current = findProfile(getState(), 'machine', printerKey);
-  if (!current) { toast('Can\'t undo because that printer was removed from your library.'); return; }
-  const from = resolveProfile(getState(), 'machine', printerKey).base, to = resolveProfile({ ...getState(), userPresets: [] }, 'machine', previous.base?.name ?? previous.inherits).base;
-  try {
-    const restored = { ...previous, revision: current.revision };
-    await commitProfileRecords([restored], { apply: (s) => from && to ? follow(s, restored, from, to, []) : {} });
-    toast(`${previous.name}: nozzle restored`);
-  } catch (e) { toast(e instanceof Error ? e.message : String(e)); }
+async function restore(previous: PrinterRecord) {
+  const current = printerOf(previous.id);
+  if (!current) { toast('cant_undo_because_printer'); return; }
+  try { await commitRecords([{ kind: 'printer', record: { ...previous, revision: current.revision } }], { label: 'Nozzle' }); toast('nozzle_restored', { name: previous.name }); }
+  catch (e) { toast('nozzle_switch_failed_2', { detail: e instanceof Error ? e.message : String(e) }); }
 }

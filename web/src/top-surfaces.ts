@@ -381,7 +381,7 @@ async function request() {
     if (curvedMoves) applyOutcome();
   } catch (e) {
     if (mine !== generation) return;
-    toast(`Top surfaces: ${e instanceof Error ? e.message : e}`, null, 5000, 'warning');
+    toast('top_surfaces', { detail: e instanceof Error ? e.message : e });
     lastKey = '';
   } finally {
     if (mine === generation) {

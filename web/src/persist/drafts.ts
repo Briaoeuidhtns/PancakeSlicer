@@ -97,7 +97,7 @@ const serviceDraftStore: ProjectDraftStore = {
       if (!(blob instanceof Blob)) throw new Error(`Oops! A 3D model file in this draft is missing: ${key}`);
       await putAsset(key, blob);
     }
-    const ack = await serviceJson<{sequence:number}>(draftPath(draft.id), request);
+    const ack = await serviceJson<{sequence:number}>(draftPath(draft.id), request, false, 'project');
     if (!ack || ack.sequence !== draft.sequence) throw new Error('Oops! The server returned an unexpected response while saving your draft.');
     acknowledged.set(draft.id, Math.max(acknowledged.get(draft.id) ?? 0, ack.sequence));
     if (pendingDrafts.get(key) === preparation) pendingDrafts.delete(key);

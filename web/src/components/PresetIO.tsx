@@ -63,7 +63,7 @@ export function ImportDialog() {
     try {
       const result=await applyImportPlans(chosen);
       machine.send({ type: 'IMPORTED', rows: rows.map(row=>chosen.includes(row) ? {...row,ok:true,result:row.status === 'replace' ? 'replaced' : 'imported'} : row) });
-      toast([`Imported ${result.profiles} profiles and ${result.bases} templates`,...(result.connections?[`${result.connections} printer connection${result.connections>1?'s':''}`]:[]),...result.problems].join('\n'));
+      toast('profiles_imported', { profiles: result.profiles, connections: result.connections ?? 0, problems: result.problems.join('\n') });
     }catch(e){machine.send({ type: 'IMPORT_FAIL', rows: rows.map(row=>chosen.includes(row) ? {...row,ok:false,result:e instanceof Error ? e.message : String(e)} : row) });}
   };
 
@@ -155,7 +155,7 @@ export function ExportDialog() {
       </ModalBody>
       <ModalFooter lead={choices.length > 0 && `${selected.length} of ${choices.length}`}>
         <button type="button" className="btn" onClick={close}>Cancel</button>
-        <button type="button" className="btn-primary" disabled={!selected.length} onClick={run}>Export</button>
+        <button type="button" className="btn-primary" data-output disabled={!selected.length || busy} onClick={() => void run()}>Export</button>
       </ModalFooter>
     </Modal>
   );

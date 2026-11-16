@@ -62,7 +62,7 @@ async function state(): Promise<DemoState> {
 function save(s: DemoState) {
   if (!mainThread) return;
   try { sessionStorage.setItem(STORAGE, JSON.stringify(s)); }
-  catch { hooks.notice?.('Heads up: browser storage for this demo is full. Keep this tab open so you don\'t lose your edits.'); }
+  catch { hooks.notice?.('demo_storage_full'); }
 }
 export async function resetDemo() {
   const next = initial(await seed());

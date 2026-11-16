@@ -80,7 +80,7 @@ async function showSlice(id: string, v: ProjectVersion, request: number) {
   } catch (e) {
     const current = versionView.get().context.request === request;
     versionView.send({ type: 'SLICE_FAIL', request });
-    if (current) toast(`Oops! Couldn't load slice preview: ${errorText(e)}`);
+    if (current) toast('couldnt_load_slice_preview', { detail: errorText(e) });
   }
 }
 
@@ -100,7 +100,7 @@ export async function viewVersion(v: ProjectVersion) {
   } catch (e) {
     const wanted = versionWanted(request);
     versionView.send({ type: 'FAIL', request });
-    if (wanted) toast(errorText(e));
+    if (wanted) toast('versions_failed', { detail: errorText(e) });
   }
 }
 export async function backToLatest() {
@@ -118,7 +118,7 @@ export async function restoreVersion() {
     await restoreProjectVersion();
     await attachSlice(finishedJob());
   } catch (e) {
-    toast(errorText(e));
+    toast('versions_failed_2', { detail: errorText(e) });
   }
   void refreshHistory(id);
 }

@@ -73,7 +73,7 @@ export const canPaste = (s: State = getState()) => s.clipboard.length > 0;
 export function copySelection() {
   const targets = selectionTargets();
   if (!targets.length) return;
-  if (targets.some((t) => t.o.project)) return toast('Objects inside a locked 3MF project can\'t be copied directly.');
+  if (targets.some((t) => t.o.project)) return toast('objects_inside_locked_3mf');
   const byObject = new Map<PlateObject, Instance[]>();
   for (const { o, inst } of targets) byObject.set(o, [...(byObject.get(o) ?? []), inst]);
   setState({ clipboard: [...byObject].map(([o, instances]) => ({ ...o, settings: { ...o.settings }, scale: [...o.scale], instances: instances.map((i) => ({ ...i })) })) });
@@ -88,7 +88,7 @@ export function cutSelection() {
 export function pasteClipboard() {
   const s = getState();
   if (!canPaste(s)) {
-    if (s.clipboard.length) toast('Can\'t paste into a locked 3MF project—clear the plate first to start fresh.');
+    if (s.clipboard.length) toast('cant_paste_into_locked');
     return;
   }
   const box = new T3.Box3();
@@ -112,7 +112,7 @@ export function pasteClipboard() {
 export function startRename(id = getState().selected?.object) {
   const o = getState().objects.find((ob) => ob.id === id);
   if (!o) return;
-  if (o.project) return toast('Part names are locked in this imported 3MF project');
+  if (o.project) return toast('part_names_are_locked');
   setState({ renaming: o.id, contextMenu: null });
 }
 

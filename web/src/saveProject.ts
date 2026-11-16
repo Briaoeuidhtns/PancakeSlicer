@@ -26,7 +26,7 @@ export async function projectBlob(s: State, task?: OperationTicket): Promise<Blo
 export async function saveProject(as = false) {
   const s = getState();
   if (!s.api || !s.objects.length && !s.projectPlates.some((p) => p.objects.length)) return;
-  if (s.api.mock) { toast('Saving projects requires a connection to the slicing service.'); return; }
+  if (s.api.mock) { toast('saving_projects_requires_connection'); return; }
   const first = s.objects[0] ?? s.projectPlates.flatMap((p) => p.objects)[0];
   let name = s.projectName ?? (first.name.replace(/\.(stl|obj|3mf)$/i, '') + '.3mf');
   if (as) {
@@ -47,7 +47,7 @@ export async function saveProject(as = false) {
     setState({ projectName: name });
     markSaved(snapshot(s));
     task.done();
-    toast('Downloading project…');
+    toast('downloading_project');
   } catch (e) {
     if (!task.current()) return;
     task.fail(e);
