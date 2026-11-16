@@ -97,6 +97,13 @@ type workspaceData struct {
 	Folders        map[string]workspaceFolder  `json:"folders,omitempty"`
 	FolderRevision uint64                      `json:"folderRevision,omitempty"`
 	Migrations     map[string]int64            `json:"migrations,omitempty"`
+	Problems       map[string]workspaceProblem `json:"problems,omitempty"`
+}
+
+type workspaceProblem struct {
+	Code    string `json:"code"`
+	File    string `json:"file"`
+	Message string `json:"message"`
 }
 
 func newWorkspaceData() *workspaceData {

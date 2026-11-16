@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -345,12 +346,28 @@ func importVersionIndexes(d *workspaceData, dir string) error {
 			continue
 		}
 		path := filepath.Join(dir, id, "index.json")
+		skip := func(code, file string, err error) {
+			if d.Problems == nil {
+				d.Problems = map[string]workspaceProblem{}
+			}
+			rel, relErr := filepath.Rel(filepath.Dir(dir), file)
+			if relErr != nil {
+				rel = filepath.Base(file)
+			}
+			reason := err
+			for pe := (*fs.PathError)(nil); errors.As(reason, &pe); {
+				reason = pe.Err
+			}
+			d.Problems[id] = workspaceProblem{Code: code, File: filepath.ToSlash(rel), Message: reason.Error()}
+			log.Printf("workspace migration: project %s history not imported (%s): %s: %v", id, code, file, err)
+		}
 		raw, err := os.ReadFile(path)
 		if errors.Is(err, os.ErrNotExist) {
 			continue
 		}
 		if err != nil {
-			return err
+			skip("version_history_unreadable", path, err)
+			continue
 		}
 		p, ok := d.Projects[id]
 		if !ok {
@@ -359,10 +376,19 @@ func importVersionIndexes(d *workspaceData, dir string) error {
 		}
 		var x versionIndex
 		if err := json.Unmarshal(raw, &x); err != nil {
-			return fmt.Errorf("project %s version history %s: %w", id, path, err)
+			skip("version_history_unreadable", path, err)
+			continue
 		}
 		if x.Versions == nil {
 			x.Versions = []projectVersion{}
+		}
+		var record []byte
+		if last := lastVersion(&x); last != nil && last.Revision != p.Revision && p.Record != nil {
+			file := filepath.Join(dir, id, "records", last.Record+".json")
+			if record, err = os.ReadFile(file); err != nil {
+				skip("version_record_missing", file, fmt.Errorf("version %d's record: %w", last.ID, err))
+				continue
+			}
 		}
 		p.Versions = &x
 		d.Projects[id] = p
@@ -372,11 +398,7 @@ func importVersionIndexes(d *workspaceData, dir string) error {
 			newest = fmt.Sprint(last.Revision)
 		}
 		log.Printf("workspace migration: project %s history: %d versions, newest on revision %s, project at %d", id, len(x.Versions), newest, p.Revision)
-		if last := lastVersion(&x); last != nil && last.Revision != p.Revision && p.Record != nil {
-			record, err := os.ReadFile(filepath.Join(dir, id, "records", last.Record+".json"))
-			if err != nil {
-				return fmt.Errorf("project %s version %d record: %w", id, last.ID, err)
-			}
+		if last := lastVersion(&x); record != nil {
 			if recordContent(record) == recordContent(p.Record) {
 				log.Printf("workspace migration: project %s version %d shows the project's document; revision %d -> %d", id, last.ID, last.Revision, p.Revision)
 				last.Revision = p.Revision
