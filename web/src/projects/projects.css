@@ -151,3 +151,6 @@
 
 :where(.orca-parity) .topbar-slot { display: flex; flex: 1; min-width: 0; justify-content: flex-end; }
 :where(.orca-parity) .pj-top-actions { display: flex; align-items: center; gap: var(--s-2); }
+:where(.orca-parity) .pj-grid .pj-item { container-type: inline-size; }
+@container (max-width: 190px) { :where(.orca-parity) .pj-sub:has(.pj-open) .pj-count { display: none; } }
+:where(.orca-parity) .pj-folder-edit { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }

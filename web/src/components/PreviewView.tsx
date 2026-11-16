@@ -199,8 +199,7 @@ export function PreviewView() {
     };
   }, [epoch]);
 
-  const machineEdits = useStore((s) => s.dirty.machine);
-  const machine = useMemo(() => printerPreset(getState()), [printer, machines, machineEdits]);
+  const machine = useStore(printerPreset);
   useEffect(() => sceneRef.current?.setBed(machine), [machine, epoch]);
   useEffect(() => sceneRef.current?.setShells(objects, ui.shells), [objects, ui.shells, epoch]);
 

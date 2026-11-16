@@ -154,7 +154,7 @@ export function SettingsTab({ type, slot = 0, compact, hidePreset, editor, overr
     if (same) return prior;
     definitionCache.current.set(key, next); return next;
   };
-  const groupsVersion = useSettingsGroups();
+  useSettingsGroups();
   const groupId = (pageTitle: string, groupTitle: string) => `${TAB_OF[type]}/${pageTitle}/${groupTitle}`;
   const keysOf = (lines: TabLine[]) => lines.flatMap((l) => l.options.map((k) => splitKey(k)[0]));
   const pageMark = (p: TabDesc['pages'][number]) => markOf(p.groups.flatMap((g) => keysOf(g.lines)), unsaved);
@@ -163,22 +163,45 @@ export function SettingsTab({ type, slot = 0, compact, hidePreset, editor, overr
   const breaks = useTabFit(strip, `${pages.map((p) => p.title).join('|')}|${auxes.map((a) => a.label).join('|')}`);
   const openByDefault = editor || overrides && !compact ? typeof window !== 'undefined' && window.innerWidth >= 1100 : uiMode === 'simple';
   const body = useRef<HTMLDivElement>(null);
-  const labelWidths = useRef<{ flow: Element | null; byKey: Map<string, number> }>({ flow: null, byKey: new Map() });
+  const textMeasure = useRef<CanvasRenderingContext2D | null>(null);
   const rowKeys = groups.flatMap((g) => g.lines.flatMap((l) => l.options)).join(',');
   useLayoutEffect(() => {
     const flow = editor ? body.current?.querySelector<HTMLElement>('.page-flow') : null;
     if (!flow) return;
-    const cache = labelWidths.current;
-    if (cache.flow !== flow) { cache.flow = flow; cache.byKey.clear(); }
-    const natural = (l: Element, extra: number) => {
-      const row = l.parentElement, id = `${row?.dataset.opt ?? row?.querySelector('[data-opt]')?.getAttribute('data-opt') ?? ''}|${l.textContent}`;
-      let w = cache.byKey.get(id);
-      if (w === undefined) { w = [...l.children].reduce((n, c) => n + (c as HTMLElement).scrollWidth, 0) + extra; cache.byKey.set(id, w); }
-      return w;
-    };
-    const widest = Math.max(0, ...[...flow.querySelectorAll('.opt-line:not(.full) > .opt-label')].map((l) => natural(l, 0)), ...[...flow.querySelectorAll('.option-row > .opt-label')].map((l) => natural(l, 80)));
+    const probe = document.createElement('div');
+    probe.className = 'opt-line';
+    probe.innerHTML = '<span class="opt-label"><span class="control-check nullable-toggle"></span><button type="button" class="opt-label-text label-tip"></button></span>';
+    probe.style.position = 'absolute'; probe.style.visibility = 'hidden';
+    flow.append(probe);
+    const textStyle = getComputedStyle(probe.querySelector('.opt-label-text')!), boxStyle = getComputedStyle(probe.querySelector('.nullable-toggle')!);
+    const font = textStyle.font || `${textStyle.fontWeight} ${textStyle.fontSize} ${textStyle.fontFamily}`;
+    const box = (parseFloat(boxStyle.width) || 16) + (parseFloat(boxStyle.marginLeft) || 0) + (parseFloat(boxStyle.marginRight) || 0);
+    probe.remove();
+    const ctx = textMeasure.current ??= document.createElement('canvas').getContext('2d');
+    if (!ctx) return;
+    ctx.font = font;
+    const text = (t: string | undefined) => (t ? ctx.measureText(t).width : 0);
+    let widest = 0;
+    for (const g of groups) {
+      const own = groupSwitch(g), fixed = own >= 0 && g.lines.length === 1;
+      g.lines.forEach((line, row) => {
+        if (row === own && !fixed) return;
+        if (customRow(line)) { widest = Math.max(widest, text(line.label)); return; }
+        let labels = line.index_labels, keys = labels ? line.options.flatMap((k) => labels!.map((_, i) => `${splitKey(k)[0]}#${i}`)) : line.options;
+        if (line.indexed_columns) { labels = env.silent_mode ? ['Normal', 'Silent'] : undefined; keys = keys.flatMap((k) => (labels ?? ['']).map((_, i) => `${splitKey(k)[0]}#${i}`)); }
+        if (keys.length > 1) {
+          const key = splitKey(keys[0])[0], shared = line.label ?? (OPTIONS[key]?.full_label || OPTIONS[key]?.label);
+          widest = Math.max(widest, text(shared && displayLabel(key, shared)) + 80);
+          return;
+        }
+        const key = splitKey(keys[0])[0], def = { ...OPTIONS[key], ...definition(key, line) } as Partial<OptionDef>;
+        if (def.full_width || def.multiline) return;
+        const given = labels?.[0] ?? line.label, full = given ?? (def.label || def.full_label || key), shown = given === undefined ? displayLabel(key, full) : full;
+        widest = Math.max(widest, text(shown) + (def.nullable ? box : 0));
+      });
+    }
     flow.style.setProperty('--label-w', `${Math.min(240, Math.ceil(widest) + 4)}px`);
-  }, [!!editor, rowKeys, auxiliaryOn, groupsVersion]);
+  }, [!!editor, rowKeys, auxiliaryOn, pageIdx, !!env.silent_mode]);
   useEffect(() => {
     if (!focus || !desc) return;
     const i = pages.findIndex((p) => p.title === focus.page);
@@ -203,7 +226,7 @@ export function SettingsTab({ type, slot = 0, compact, hidePreset, editor, overr
     <div className={`settings-tab ${compact ? 'compact' : ''}`}>
       {bedDialog && <Suspense fallback={<div role="status">Loading bed shape…</div>}><BedShapeDialog config={config} onSet={editor?.set} close={() => setBedDialog(false)} /></Suspense>}
       {!hidePreset && <PresetBar type={type} slot={slot} />}
-      <Tabs.Root className="settings-pages" value={auxiliaryOn ? `aux:${auxIdx}` : String(Math.min(pageIdx, pages.length - 1))} onValueChange={v => {const a = v.startsWith('aux:') ? Number(v.slice(4)) : null; setAuxIdx(a); if (a === null) setPageIdx(Number(v));}}><Tabs.List ref={strip} className="page-bar" aria-label={`${TYPE_NAME[type]} settings`}>
+      <Tabs.Root className="settings-pages" value={auxiliaryOn ? `aux:${auxIdx}` : String(Math.min(pageIdx, pages.length - 1))} onValueChange={v => {const a = v.startsWith('aux:') ? Number(v.slice(4)) : null; setAuxIdx(a); if (a === null) setPageIdx(Number(v));}}><Tabs.List ref={strip} className="page-bar" data-rows={breaks.length + 1} aria-label={`${TYPE_NAME[type]} settings`}>
         {pages.map((p, i) => [breaks.includes(i) && <span key={`break-${i}`} className="tab-break" aria-hidden />, (
           <Tabs.Trigger key={p.title} value={String(i)} aria-label={p.title} className={`page-tab ${p === page && !auxiliaryOn ? 'active' : ''} ${pageMark(p) ? `modified ${pageMark(p)}` : ''}`} onClick={() => setPageIdx(i)}>
             <span className="page-tab-label">{p.title}</span>

@@ -10,7 +10,8 @@ import { Caret } from '../Caret';
 import { edgeOf, type Edge } from '../anchor';
 import { SlotChip } from '../SlotChip';
 import { joinParts } from '../../separator';
-export interface PickerItem { id: string; label: string; child?: boolean; sub?: string; swatch?: string | null; meta?: string; facet?: string; search?: string; disabled?: boolean | string;
+import { InLayer } from '../PageLayer';
+export interface PickerItem { id: string; label: string; child?: boolean;  muted?: boolean; sub?: string; meta?: string; facet?: string; search?: string; disabled?: boolean | string;
   image?: string | null; status?: { label: string; tone: 'online' | 'printing' | 'paused' | 'offline' | 'error' }; slots?: { n: number; colour: string }[] }
 export interface PickerGroup { id: string; title: string; items: PickerItem[]; filter?: boolean; allOnly?: boolean }
 export interface PickerAction { label: string; run(): void; keep?: boolean }
@@ -145,7 +146,7 @@ export function Picker({ label, value, groups, sections = false, onPick, facetHe
       triggerProps?.onKeyDown?.(e);
       if (!e.defaultPrevented && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) { e.preventDefault(); e.stopPropagation(); resetType(); setRail(''); setOpen(true); }
     }}>{children}<Caret className="pk-caret"/></button></Popover.Trigger>
-    <Popover.Portal forceMount={primed || undefined}><Popover.Content forceMount={primed || undefined} className={`orca-menu pk-pop ${rows.some(r => r.image !== undefined) ? 'pk-media' : ''}`} data-menu-family="orca" aria-label={label} side="bottom" align={edge.align} sideOffset={4} collisionPadding={8} onOpenAutoFocus={e => { e.preventDefault(); if (open) focusChoice(); }} onKeyDown={e => {
+    <InLayer portal={Popover.Portal} forceMount={primed || undefined}><Popover.Content forceMount={primed || undefined} className={`orca-menu pk-pop ${rows.some(r => r.image !== undefined) ? 'pk-media' : ''}`} data-menu-family="orca" aria-label={label} side="bottom" align={edge.align} sideOffset={4} collisionPadding={8} onOpenAutoFocus={e => { e.preventDefault(); if (open) focusChoice(); }} onKeyDown={e => {
       if (e.key === 'Escape' || e.key === 'Tab') return;
       e.stopPropagation();
       const at = enabled.indexOf(active), inRail = e.target instanceof Element && !!e.target.closest('.pk-rail');
@@ -176,6 +177,6 @@ export function Picker({ label, value, groups, sections = false, onPick, facetHe
         <div className="pk-list" role="listbox" aria-label={label} ref={list}>{tabs.map(t => <PickerTab key={t.tab} t={t} on={t.tab === activeRail} active={t.tab === activeRail ? active : -1} id={id} value={value} pinned={pinnedSet} empty={empty} onActive={setActive} onPick={pick} onPin={pin} />)}</div>
       </div>
       <div className="pk-foot">{footer.map(a => <button type="button" className="btn" key={a.label} onClick={() => { if (!a.keep) setOpen(false); a.run(); }}>{a.label}</button>)}</div>
-    </Popover.Content></Popover.Portal>
+    </Popover.Content></InLayer>
   </Popover.Root>;
 }

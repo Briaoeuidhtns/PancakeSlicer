@@ -10,7 +10,6 @@ import { ACCESS_FAILURES, accessNotice, accessSnapshot, saveAccessToken, subscri
 import { useMachine } from '../flow/fsm';
 import { libraryWrites } from '../profiles/library-writes';
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement } from 'react';
-import { createPortal } from 'react-dom';
 import { addInstance, arrangeAll, cancelSlice, fileUse, openFileDialog, removeInstance, toolbarOperation, outsideVolumeWarning, canBoolean, toggleBoolean, toggleSvg, toggleText } from '../actions';
 import { setCompareWanted } from '../compare';
 import { toggleNonplanarView, useNonplanarView, usePatchPreview } from '../patch-preview';
@@ -83,6 +82,7 @@ export function CanvasToolbar() {
   const preview = !!usePatchPreview();
   const nonplanarView = useNonplanarView();
   const [arranging, setArranging] = useState(false);
+  usePageLeave(() => setArranging(false));
   const arrangeAt = useRef<HTMLSpanElement>(null);
   const rare: MenuEntry[] = [
     {label: 'Auto orient', shortcut: 'Q', icon: menuGlyph('toolbar_orient'), action: () => toolbarOperation('orient'), disabled: !hasObjects || project},
@@ -130,7 +130,7 @@ function ArrangeOptions({ at }: { at: HTMLElement | null }) {
   const a = useSyncExternalStore(subscribeArrangeSettings, arrangeSettings);
   const hasObjects = useStore((s) => s.objects.length > 0);
   const r = at?.getBoundingClientRect();
-  return createPortal(
+  return <PagePortal>
     <div className="manip-panel" role="dialog" aria-label="Arrange options" style={{ position: 'fixed', top: (r?.bottom ?? 40) + 8, left: r?.left ?? 0, zIndex: 5 }}>
       <div className="manip-grid" style={{ gridTemplateColumns: '70px 140px 70px' }}>
         <span>Spacing</span>
@@ -152,9 +152,8 @@ function ArrangeOptions({ at }: { at: HTMLElement | null }) {
         <button className="btn primary" disabled={!hasObjects} onClick={() => arrangeAll()}>Arrange</button>
         <button className="btn" onClick={resetArrangeSettings}>Reset</button>
       </div>
-    </div>,
-    document.body,
-  );
+    </div>
+  </PagePortal>;
 }
 
 const cleanError = (msg = '') => msg.replace(/^(error:\s*)?(validate:\s*)?/i, '');

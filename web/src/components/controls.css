@@ -87,6 +87,7 @@
 
 :where(.orca-parity) .form-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-4); width: 100%; min-height: var(--h-control); }
 :where(.orca-parity) .form-row > :first-child { flex: 0 0 11rem; min-width: 0; }
+:where(.orca-parity) .form-row > span:first-child:has(> .info-tip) { display: flex; align-items: center; }
 :where(.orca-parity) .form-row > :last-child { flex: 1 1 12rem; min-width: 0; max-width: 20rem; }
 :where(.orca-parity) .form-row > .text { width: 100%; height: var(--h-field); }
 :where(.orca-parity) .form-row > .text.num { flex: 0 0 96px; width: 96px; max-width: 96px; text-align: right; }

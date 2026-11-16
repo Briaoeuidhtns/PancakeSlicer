@@ -5,9 +5,11 @@ import { Popover } from 'radix-ui';
 import * as THREE from 'three';
 import { setState, updateInstance, updateObject, useStore, markStale } from '../state/store';
 import { undoable } from '../state/history';
-import { Num } from './Num';
+import { Num, type NumIssue } from './Num';
+import { Dropdown } from './Dropdown';
 import { arrangeAll, toolbarOperation } from '../actions';
 import { canDrop, centreSelection, dropSelection } from '../edit';
+import { InLayer } from './PageLayer';
 
 const PartManipulation = preloadable(() => import('./PartManipulation'));
 
@@ -130,13 +132,13 @@ export function TransformPanel() {
       body = <>
         <div className="xf-grid">
                     <span className="xf-key">Scale %</span>
-          {perAxis ? [0, 1, 2].map((a) => <Num key={a} axis={AX[a]} label={`Scale ${AX[a]}`} value={pct[a]} onCommit={(val) => rescale(a, Math.max(0.1, val) / 100 / Math.abs(o.scale[a]))} />)
-            : <><Num label="Scale" value={pct[0]} onCommit={(val) => setAll(Math.max(0.1, val))} />
+          {perAxis ? [0, 1, 2].map((a) => <Num key={a} axis={AX[a]} label={`Scale ${AX[a]}`} value={pct[a]} check={aboveZero} onCommit={(val) => rescale(a, val / 100 / Math.abs(o.scale[a]))} />)
+            : <><Num label="Scale" value={pct[0]} check={aboveZero} onCommit={setAll} />
               <span className="seg xf-steps" role="group" aria-label="Scale steps">{[50, 100, 200].map((p) => <button key={p} type="button" aria-pressed={Math.abs(pct[0] - p) < 1e-6} onClick={() => setAll(p)}>{p}%</button>)}</span></>}
           <span/>
           <span className="xf-key">Size mm</span>
           {[0, 1, 2].map((a) => <Num key={a} axis={AX[a]} label={`Size ${AX[a]}`} value={Math.abs(o.scale[a]) * mesh.getComponent(a)}
-            onCommit={(val) => rescale(a, Math.max(0.01, val) / Math.max(1e-6, Math.abs(o.scale[a]) * mesh.getComponent(a)))} />)}
+            check={aboveZero} onCommit={(val) => rescale(a, val / Math.max(1e-6, Math.abs(o.scale[a]) * mesh.getComponent(a)))} />)}
           <span className="xf-act">{lock}</span>
         </div>
         <div className="xf-actions"><button type="button" className="btn" onClick={() => void import('../plater/objectOps').then((m) => m.scaleToBuildVolume(o.id))}>Fit to bed</button>
@@ -147,12 +149,12 @@ export function TransformPanel() {
   if (!active || !valid) return null;
   return <Popover.Root open onOpenChange={open => { if (!open) close(); }}>
     <Popover.Anchor asChild><div className="transform-anchor" /></Popover.Anchor>
-    <Popover.Portal><Popover.Content className="xf transform-floating" aria-label={`${title} ${v?.name ?? o.name}`} side="bottom" align="start" sideOffset={0} collisionPadding={12}
+    <InLayer portal={Popover.Portal}><Popover.Content className="xf transform-floating" aria-label={`${title} ${v?.name ?? o.name}`} side="bottom" align="start" sideOffset={0} collisionPadding={12}
       onOpenAutoFocus={e => e.preventDefault()} onCloseAutoFocus={e => e.preventDefault()}
       onInteractOutside={e => e.preventDefault()} onEscapeKeyDown={e => { e.stopPropagation(); close(); }}>
       <div className="xf-head"><span className="xf-label">{title}</span><button type="button" className="xf-fold" aria-label="Close transform" onClick={close}><Glyph name="close" size={14} /></button></div>
       <div className="xf-selection">{v?.name ?? o.name}</div>
       {v ? <div className="xf-grid">{body}</div> : body}
-    </Popover.Content></Popover.Portal>
+    </Popover.Content></InLayer>
   </Popover.Root>;
 }

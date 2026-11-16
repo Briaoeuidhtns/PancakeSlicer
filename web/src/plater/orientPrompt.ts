@@ -1,7 +1,7 @@
-import { flushReady } from '../flush-state';
+import { objectValues } from '../profiles/view';
 import { firstLayer, jobFields } from '../slice-input';
 import { loadMoves, supportGrams } from '../preview/data';
-import { effectiveConfig, getState, printerPreset, setState, subscribeStore, type OrientPrompt, type OrientSlice, type PlateObject, type State } from '../state/store';
+import { getState, printerPreset, setState, subscribeStore, type OrientPrompt, type OrientSlice, type PlateObject, type State } from '../state/store';
 import { undoable } from '../state/history';
 import { instanceBox, parsePoints, plateJson } from './geometry';
 import { orientJob } from './operations';
@@ -70,7 +70,7 @@ function check() {
   for (const o of s.objects) {
     const key = `${s.printer}|${pose(o)}`;
     if (o.project?.placeholder || fromProject(o) || s.orientDismissed.includes(o.id) || scored.get(o.id) === key) continue;
-    const cfg = { ...effectiveConfig(s, 'process'), ...o.settings } as Record<string, unknown>;
+    const cfg = objectValues(s, o.id).values as Record<string, unknown>;
     const on = (v: unknown) => v === true || v === 1 || v === '1' || v === 'true';
     const mode = String(Array.isArray(cfg.nonplanar_mode) ? cfg.nonplanar_mode[0] : cfg.nonplanar_mode ?? 'off');
     if (!on(cfg.enable_support) || mode !== 'off') {
@@ -125,7 +125,7 @@ export async function confirmOrientPrompt(id: number) {
     setState((st) => ({ orientPrompts: without(st, id) }));
     return;
   }
-  const support = o.settings.enable_support ?? effectiveConfig(s, 'process').enable_support;
+  const support = objectValues(s, id).values.enable_support;
   const base = { id, supportOn: support === true || support === 1 || support === '1' || support === 'true', supportArea: prompt.supportArea };
   setState({ orientConfirm: base });
   try {

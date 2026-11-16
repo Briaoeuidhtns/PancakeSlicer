@@ -55,7 +55,8 @@ const MeasurePanel = preloadable(() => import('./components/MeasurePanel'));
 import { dropLastFeature, setMeasure } from './plater/measureState';
 import { redo, undo, undoable } from './state/history';
 import { assembly, setAssembly, useAssembly } from './plater/assembly';
-import { toggleSidebar, useSidebarHidden } from './sidebar';
+import { toggleSidebar, useRailWidth, useSidebarHidden } from './sidebar';
+import { RailResizer } from './components/RailResizer';
 import { loadedPreviewView, loadPreviewView } from './components/preview-loader';
 
 const PresetDialog = preloadable(() => import('./components/Dialogs').then((m) => ({ default: m.PresetDialog })));
@@ -141,7 +142,7 @@ export default function App() {
   const jobDone = useStore((s) => s.job.state === 'done');
   const empty = useStore((s) => !s.objects.length && !s.project && s.projectPlates.length < 2);
   const assemblyOn = useAssembly().on;
-  const sidebarHidden = useSidebarHidden();
+  const sidebarHidden = useSidebarHidden(), railWidth = useRailWidth();
   const [dragOver, setDragOver] = useState(false);
   const previewOpened = useRef(false);
   const slideOutOpened = useRef(false);
@@ -193,6 +194,7 @@ export default function App() {
         setState((s) => ({ tab: s.tab === 'prepare' ? 'preview' : 'prepare' }));
         focusSoon(visibleCanvas);
       }
+      else if (!prepare) return;
       else if (getState().gizmo === 'measure' && (e.key === 'Delete' || e.key === 'Backspace')) setMeasure({});
       else if (getState().gizmo === 'measure' && e.key === 'Escape') { if (!dropLastFeature()) setState({ gizmo: 'none' }); }
       else if (e.key === 'Delete' || e.key === 'Backspace') removeSelected();
@@ -301,19 +303,21 @@ export default function App() {
   }, []);
 
   return (
-    <div className="app">
+    <div className="app" style={railWidth ? { '--user-rail-width': `${railWidth}px` } as React.CSSProperties : undefined}>
       <TopBar />
       <Suspense fallback={null}><LeaseBar /></Suspense>
       <Suspense fallback={null}><SavedPreferencesNotice /></Suspense>
       <Suspense fallback={null}><SessionNotice /></Suspense>
       {!projects && <Suspense fallback={null}><HeldProjectBanner/><ProjectBanner /></Suspense>}
       {setupOpen && <Suspense fallback={null}><Setup /></Suspense>}
-      {projects && <Suspense fallback={null}><ProjectsView /></Suspense>}
-      {tab === 'device' && <Suspense fallback={<div role="status">Loading devices…</div>}><DeviceView /></Suspense>}
-      <div style={{ display: projects || tab === 'device' ? 'none' : undefined }} className={`main ${sidebarHidden ? 'sidebar-hidden' : ''} ${dragOver ? 'drag-over' : ''}`}>
-        <Suspense fallback={null}><WorkspaceRail><Sidebar /></WorkspaceRail></Suspense>
+      {projects && <PageScope page="projects"><Suspense fallback={null}><ProjectsView /></Suspense></PageScope>}
+      {tab === 'device' && <PageScope page="device"><Suspense fallback={<div role="status">Loading devices…</div>}><DeviceView /></Suspense></PageScope>}
+      {libraryOpened && <PageScope page="library"><Suspense fallback={null}><LibraryPage hidden={tab !== 'library' || projects} /></Suspense></PageScope>}
+      <div style={{ display: projects || tab === 'device' || tab === 'library' ? 'none' : undefined }} className={`main ${sidebarHidden ? 'sidebar-hidden' : ''} ${dragOver ? 'drag-over' : ''}`}>
+        <Suspense fallback={<SidebarSkeleton />}><WorkspaceRail><Suspense fallback={<SidebarSkeleton />}><Sidebar /></Suspense></WorkspaceRail></Suspense>
+        {!sidebarHidden && <RailResizer />}
         <div className="canvas-area" data-viewport={tab}>
-          {!empty && tab === 'prepare' && <Suspense fallback={null}><ObjectsPanel/></Suspense>}
+          <PageScope page="prepare">{!empty && tab === 'prepare' && <Suspense fallback={null}><ObjectsPanel/></Suspense>}
           {sidebarHidden && (
             <button type="button" className="btn sidebar-reveal" aria-expanded={false} onClick={() => toggleSidebar(false)}>Settings</button>
           )}
@@ -331,14 +335,15 @@ export default function App() {
             {gizmo === 'svg' && <Suspense fallback={null}><SvgPanel /></Suspense>}
             {assemblyOn && <Suspense fallback={null}><AssemblyBar /></Suspense>}
             {empty && !loading && <Suspense fallback={null}><EmptyPlate /></Suspense>}
-          </div>
-          {previewOpened.current && (
+            {slideOutOpened.current && <Suspense fallback={null}><ProfileSlideOut /></Suspense>}
+          </div></PageScope>
+          {previewOpened.current && (<PageScope page="preview">
             <div style={{ display: tab === 'preview' ? 'contents' : 'none' }}>
               {graphicsCapability().webgl2 ? <Suspense fallback={<div role="status">Loading preview…</div>}>
                 <Viewer />
               </Suspense> : <NoGraphics />}
             </div>
-          )}
+          </PageScope>)}
           {multiPlate && <Suspense fallback={null}><PlateChoice /></Suspense>}
           <Suspense fallback={null}><Navigator /></Suspense>
           <Suspense fallback={null}><ProjectStatus /></Suspense>

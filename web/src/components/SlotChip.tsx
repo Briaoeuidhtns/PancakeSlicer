@@ -41,7 +41,7 @@ export function SlotPicker({ value, onChange, label, disabled = false, inherit }
         <button type="button" className="slot-pick" data-follows={value === 0 && inherit ? '' : undefined} aria-label={`${label}: slot ${shown}${value === 0 && inherit ? ' (the object’s)' : ''}`}
           onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>{chip}</button>
       </Menu.Trigger>
-      <Menu.Portal>
+      <InLayer portal={Menu.Portal}>
         <Menu.Content className="orca-menu slot-menu" data-menu-family="orca" align="end" sideOffset={4} collisionPadding={8} onClick={(e) => e.stopPropagation()}>
           {inherit !== undefined && (
             <Menu.Item className="menu-item" data-current={value === 0 ? '' : undefined} onSelect={() => onChange(0)}>
@@ -54,7 +54,7 @@ export function SlotPicker({ value, onChange, label, disabled = false, inherit }
             </Menu.Item>
           ))}
         </Menu.Content>
-      </Menu.Portal>
+      </InLayer>
     </Menu.Root>
   );
 }

@@ -11,7 +11,6 @@ import { fieldIssue, fieldNumber, fieldRange } from './field-validation';
 import { Glyph } from './Glyph';
 import { MODE_HELP, MODE_LABELS } from '../nonplanar-mode';
 import { LabelTip, SourceGlyph } from './InfoTip';
-import { Choice } from './kit';
 import { displayLabel } from './fields/labels';
 import { display } from '../profiles/format';
 import { ScopeMark } from '../profiles/Scope';
@@ -216,8 +215,6 @@ function Widget({ def, label, value, onCommit, glyph }: { def: OptionDef; label:
     const v = asText(value);
     const known = def.enum_values.includes(v);
     const labels = def.enum_values.map((ev, i) => def.enum_labels?.[i] ?? ev);
-    if (known && !def.enum_notes?.some(Boolean) && def.gui_type !== 'select_close' && segmented(labels)) return <Choice label={def.full_label || def.label || def.key} value={v} disabled={def.readonly} onChange={onCommit}
-      options={def.enum_values.map((ev, i) => ({ id: ev, label: labels[i], disabled: def.enum_disabled?.includes(ev) }))} />;
     return (
       <Dropdown className="combo" {...named} value={v} disabled={def.readonly} onValueChange={onCommit} options={[...(!known ? [{ value: v, label: v }] : []), ...def.enum_values.map((ev, i) => (
           ({ value: ev, label: def.enum_notes?.[i] ? <>{labels[i]}<span className="menu-note">{def.enum_notes[i]}</span></> : labels[i], search: labels[i], disabled: def.enum_disabled?.includes(ev) })
@@ -240,15 +237,13 @@ function OpenNumber({ def, label, value, onCommit }: { def: OptionDef; label: st
   useEffect(() => setDraft(value), [value]);
   const issue = draft.trim() !== '' ? fieldIssue(draft, bounded(def)) : undefined;
   return <span className="control-stack">
-    <EditableDropdown {...named} value={value} readOnly={def.readonly} className="text" aria-invalid={!!issue || undefined} aria-describedby={issue ? errorId : undefined}
+    <EditableDropdown {...named} value={value} readOnly={def.readonly} className="text num" aria-invalid={!!issue || undefined} aria-describedby={issue ? errorId : undefined}
       onInputValueChange={setDraft} onValueChange={(next) => { setDraft(next); if (next !== value && !def.readonly && !rejectField(next, value, def, label)) onCommit(next); }}
       options={def.enum_values!.map((v, i) => ({ value: v, label: def.enum_labels?.[i] ?? v }))} />
     {issue && <span className="control-error" id={errorId} role="status">{issue.inline}</span>}
   </span>;
 }
 
-const segmented = (labels: string[]) => labels.length >= 2 && labels.length <= 4 && labels.every((l) => l.trim())
-  && labels.reduce((w, l) => w + l.length * 7 + 16, 0) <= 150;
 
 const floatStep = (n: number) => (n ? 10 ** (Math.floor(Math.log10(Math.abs(n))) - 1) : 0.1);
 

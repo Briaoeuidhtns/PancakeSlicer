@@ -8,6 +8,7 @@ import { addPrintMaster, createPrintProfile, freeName, isAdded, layerRange, useP
 import { newProfileNameError } from './save-to-profile';
 import '../components/menu.css';
 import './add-print-menu.css';
+import { InLayer } from '../components/PageLayer';
 
 const message = (e: unknown) => e instanceof Error ? e.message : String(e);
 const copyName = (base: string) => freeName(getState(), `${base.replace(/ copy( \d+)?$/, '')} copy`);
@@ -17,11 +18,11 @@ export function AddPrintMenu({ open, onOpenChange, anchor, onOpen, onCreated, ch
 }) {
   return <Popover.Root open={open} onOpenChange={onOpenChange}>
     {anchor ? <><Popover.Anchor virtualRef={anchor as RefObject<HTMLElement>}/>{children}</> : <Popover.Trigger asChild>{children}</Popover.Trigger>}
-    <Popover.Portal><Popover.Content className="orca-menu add-print" data-menu-family="orca" aria-label="Add print settings" side="bottom" align="start" sideOffset={4} collisionPadding={8}
+    <InLayer portal={Popover.Portal}><Popover.Content className="orca-menu add-print" data-menu-family="orca" aria-label="Add print settings" side="bottom" align="start" sideOffset={4} collisionPadding={8}
       onOpenAutoFocus={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement | null)?.querySelector<HTMLElement>('[data-autofocus]')?.focus(); }}
       onKeyDown={(e) => { if (e.key !== 'Escape' && e.key !== 'Tab') e.stopPropagation(); }}>
       {open && <AddPrintBody close={() => onOpenChange(false)} onOpen={onOpen} onCreated={onCreated}/>}
-    </Popover.Content></Popover.Portal>
+    </Popover.Content></InLayer>
   </Popover.Root>;
 }
 

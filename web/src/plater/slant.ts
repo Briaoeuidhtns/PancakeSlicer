@@ -1,3 +1,4 @@
+import { objectValues } from '../profiles/view';
 import type * as THREE from 'three';
 import { T3 } from '../three-runtime';
 import { effectiveConfig, getState, setState, updateObject, type Instance, type PlateObject, type SlantEdit, type State } from '../state/store';
@@ -57,7 +58,7 @@ function lowestStart(s: State, e: SlantEdit): number {
 }
 
 const num = (v: unknown, fallback: number) => (v === undefined || v === '' || !Number.isFinite(Number(v)) ? fallback : Number(v));
-const objectValue = (s: State, o: PlateObject, key: string) => o.settings[key] ?? effectiveConfig(s, 'process')[key];
+const objectValue = (s: State, o: PlateObject, key: string) => objectValues(s, o.id).values[key];
 
 export function initialSlant(s: State = getState()): SlantEdit | null {
   const t = slantTarget(s);

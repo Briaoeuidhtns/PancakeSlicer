@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Choice } from '../components/kit';
+import { Dropdown } from '../components/Dropdown';
 import { OPTIONS, splitKey, TABS } from '../options';
 import { useTabLoaded } from '../components/PresetDialogs';
 import { Glyph } from '../components/Glyph';
@@ -136,7 +136,7 @@ export function DynamicTab({ speedModel, speeds: firstSpeeds = {}, nozzleSpeeds,
       {!readOnly && <li className="dyn-formula dyn-add">{adding
         ? !adding.key ? <SettingFinder exclude={own} onPick={(key) => setAdding({ key, basis: rows.find((r) => r.key === key)?.basis ?? (isWidth(key) ? 'nozzle' : 'layer') })} onCancel={() => setAdding(null)}/>
           : <><span className="dyn-name">{nameOf(adding.key)}</span>
-          <Choice label="Basis" value={adding.basis} options={BASES} onChange={(basis) => setAdding({ ...adding, basis: basis as ScaleBasis })}/>
+          <Dropdown className="combo" aria-label="Basis" value={adding.basis} options={BASES.map((b) => ({ value: b.id, label: b.label }))} onValueChange={(basis) => setAdding({ ...adding, basis: basis as ScaleBasis })}/>
           <button type="button" className="btn" onClick={add}>Add</button><button type="button" className="btn-ghost" onClick={() => setAdding(null)}>Cancel</button></>
         : <button type="button" className="link" onClick={() => setAdding({ key: '', basis: 'nozzle' })}>+ Add formula</button>}</li>}
     </ul>

@@ -19,7 +19,7 @@ export function toggleSidebar(next = !hidden) {
 const subscribe = (l: () => void) => { listeners.add(l); return () => void listeners.delete(l); };
 export const useSidebarHidden = () => useSyncExternalStore(subscribe, sidebarHidden);
 
-export const RAIL_MIN = 280, RAIL_MAX = 520, RAIL_DEFAULT = 360;
+export const RAIL_MIN = 320, railMax = () => Math.round(window.innerWidth * 0.45);
 const WIDTH_KEY = 'orca.web.railWidth';
 const clampRail = (w: number) => Math.round(Math.min(Math.max(RAIL_MIN, railMax()), Math.max(RAIL_MIN, w)));
 let width: number | null = ((w) => w === null ? null : clampRail(w))(((last) => last === undefined ? bootShape()?.railWidth ?? null : last)(lastRailWidth()));

@@ -7,6 +7,7 @@ import type { ProjectDraftMeta } from '../persist/drafts';
 import type { DraftCheckpoint, DraftDurability, ProjectFailure } from './project-recovery';
 import { documentGeneration, leaveDocument, newDocument, onLeaveDocument, sameContents, snapshot, subscribeHistory, type Doc } from '../state/history';
 import { getState, setState, subscribeStore, toast } from '../state/store';
+import { tools } from './tools';
 import { assertNever, createMachine, useMachine, type Machine, type Snapshot } from './fsm';
 import { currentRoute, writeRoute } from './routes';
 import type { createDraftJournal } from './project-journal';
@@ -341,7 +342,8 @@ async function start(ready: Promise<unknown>) {
     project.subscribe(({ value }) => { if (wasBlank && value === 'saving') forgetBlankSetup(); wasBlank = value === 'blank'; });
   })().catch(() => {});
   observed = snapshot();
-  subscribeStore(() => {
+  const observe = () => {
+    if (tools.get().value === 'dragging') return;
     if (adopting || versionShown() || leaving) return;
     if (project.get().value === 'opening' || project.get().value === 'missing' || project.get().context.loadError || !project.get().context.loaded) {
       if (getState().tab === 'projects' && !routing) showProjects();
@@ -361,7 +363,9 @@ async function start(ready: Promise<unknown>) {
       if (tab === 'projects' && r.kind !== 'projects') writeRoute('/projects');
       else if (tab !== 'projects' && r.kind === 'projects') writeProjectRoute();
     }
-  });
+  };
+  subscribeStore(observe);
+  tools.subscribe(observe);
   project.subscribe(routeSavedProject);
   project.subscribe(retryUnavailable);
   onLeaveDocument(() => {

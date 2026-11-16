@@ -1,3 +1,5 @@
+import { recordOf } from '../profiles/view';
+import type { PrinterRecord } from '../profiles/records';
 import { Check } from './Check';
 import { MODE_LABELS } from '../nonplanar-mode';
 import { Dropdown } from './Dropdown';
@@ -134,6 +136,7 @@ export const Legend = memo(function Legend(props: {
   const record = d.sourceUrl && state.job.id && d.sourceUrl === state.api?.movesUrl(state.job.id)
     ? state.job.status?.record : undefined;
   const printStats = d.statistics(record);
+  const manualSwap = useStore((s) => (recordOf(s, 'machine', s.printer) as PrinterRecord | undefined)?.swap === 'manual');
   const fil = filamentInfo(d, printStats);
   const totalsByExtruder = printStats
     ? [...printStats.per_extruder].sort((a, b) => a.extruder_id - b.extruder_id)
