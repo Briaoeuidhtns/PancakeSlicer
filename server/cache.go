@@ -286,7 +286,7 @@ func mimeType(path string) string {
 	}
 	return t
 }
-func (c *staticCache) serve(w http.ResponseWriter, r *http.Request, path string, st os.FileInfo) {
+func (c *staticCache) serve(w http.ResponseWriter, r *http.Request, path string, st os.FileInfo, boot func(*http.Request) []byte) {
 	policy := "public, max-age=300, must-revalidate"
 	if filepath.Base(path) == "index.html" {
 		policy = "no-cache"

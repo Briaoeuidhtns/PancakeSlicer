@@ -19,9 +19,13 @@ import './settings.css';
 import { Glyph, type GlyphName } from './Glyph';
 import { AutoInputs } from '../profiles/AutoInputs';
 import { PrinterLive } from '../printers/PrinterLive';
-import { ExtruderRows } from '../profiles/ExtruderRows';
-import { Sep } from '../separator';
-const ObjectScope = preloadable(() => import('./ObjectOverrides'));
+import { slotFilaments } from '../profiles/slots';
+import { useMachine } from '../flow/fsm';
+import { project } from '../flow/project';
+import { urlProject } from '../flow/routes';
+import { noticeOf, projectSlots } from '../flow/project-slots';
+import { ProjectNoticeRow } from './ProjectNotice';
+import { RecordProblem } from '../profiles/RecordProblem';
 const SettingsTab = preloadable(() => import('./SettingsTab').then(m => ({default: m.SettingsTab})));
 
 function RailSection({title, summary, meta, actions, className = '', children}: {title: string; summary?: ReactNode; meta?: ReactNode; actions?: ReactNode; className?: string; children: ReactNode}) {

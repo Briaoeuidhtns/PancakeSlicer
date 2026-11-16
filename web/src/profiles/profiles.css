@@ -188,12 +188,5 @@
 :where(.orca-parity) .dyn-speed-table :is(td, th) { padding-block: var(--s-2); }
 :where(.orca-parity) .dyn-speed-override { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); color: var(--ink-3); font-size: var(--t-small); }
 
-:where(.orca-parity) .extruder-rows { display: flex; flex-direction: column; gap: var(--s-2); padding-inline: var(--s-5); }
-:where(.orca-parity) .pf-full-editor .extruder-rows, :where(.orca-parity) .settings-tab .extruder-rows { padding-inline: 0; }
-:where(.orca-parity) .extruder-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); min-height: var(--h-control); }
-:where(.orca-parity) .extruder-name { flex: none; min-width: 48px; color: var(--ink-2); font: var(--t-body); }
-:where(.orca-parity) .extruder-row > .combo { flex: 1 1 180px; min-width: 0; }
-:where(.orca-parity) .extruder-variant { flex: 1 1 auto; font: var(--t-body); }
-:where(.orca-parity) .extruder-nozzle { flex: none; color: var(--ink-3); font: var(--t-small); font-variant-numeric: tabular-nums; }
 
 :where(.orca-parity) :is(.pf-results-heading, .pf-results-actions) > .btn.slant[aria-pressed=true] { --slant-bg: var(--slant-fill-selected); }

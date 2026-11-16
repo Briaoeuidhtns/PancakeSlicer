@@ -25,18 +25,20 @@ export interface RecoveryRuntime {
   drafts(): Promise<ProjectDraftStore>; refreshDrafts(): Promise<ProjectDraftInventory>;
 }
 const codec = () => import('../persist/session');
-function keepCompatible() {
-  const fixed = ensureCompatibleSelection(getState());
-  if (!fixed) return;
-  setState(fixed.patch);
-  if (fixed.notice) toast(fixed.notice, null, undefined, 'warning');
+const editedOf = (d: ProjectDraftMeta) => d.editedAt ?? d.updatedAt;
+async function documentOffer(document: StoredDoc): Promise<() => void> {
+  const m = await import('./project-slots');
+  const offer = await m.documentOffer(document as Parameters<typeof m.documentOffer>[0]);
+  return () => m.settleOffer(offer);
 }
 export async function adoptProjectDraft(runtime: RecoveryRuntime, draft: ProjectDraft, canonical: ProjectMeta | null, mine: number, { offer = false } = {}) {
   const document = recoveryDocument(draft.doc) as StoredDoc;
   await runtime.ensureCatalogs(document, () => runtime.isCurrent(mine));
   if (!runtime.isCurrent(mine)) return;
+  const offered = documentOffer(document);
   const storage = await runtime.drafts();
   const fields = await (await codec()).decode(document, async (key) => draft.blobs[key] ?? await storage.asset(key));
+  const settleOffer = await offered;
   if (!runtime.isCurrent(mine)) return;
   const meta: ProjectMeta = canonical ?? { id: draft.projectId, name: draft.name, revision: draft.baseRevision,
     savedAt: 0, objects: draft.objects, thumbnail: null };
@@ -45,7 +47,7 @@ export async function adoptProjectDraft(runtime: RecoveryRuntime, draft: Project
     : draft.failure?.kind === 'conflict' ? draft.failure
     : runtime.session.tab.includes(draft.owner) && (canonical ? canonical.revision ?? 0 : 0) === draft.baseRevision ? null
     : { kind: 'interrupted', name: 'ProjectInterruptedError', projectId: draft.projectId, expectedRevision: draft.baseRevision,
-      message: 'We recovered your unsaved changes! Click Retry to save them, or reload the last saved version.' } satisfies ProjectFailure;
+      message: RECOVERED_MESSAGE } satisfies ProjectFailure;
   runtime.previous(project.get().context.id);
   runtime.adopt(() => {
     leaveDocument(); clearPlateJobs();
@@ -170,7 +172,9 @@ export async function openProject(runtime: RecoveryRuntime, id: string, options:
     const document = recoveryDocument(rec.doc) as StoredDoc;
     await runtime.ensureCatalogs(document, () => runtime.isCurrent(mine));
     if (!runtime.isCurrent(mine)) return;
+    const offered = documentOffer(document);
     const fields = await (await codec()).decode(document, (k) => runtime.storage()!.getBlob(rec.meta.id, k));
+    const settleOffer = await offered;
     if (!runtime.isCurrent(mine)) return;
     if (runtime.removed.has(rec.meta.id)) { project.send({ type: 'MISSING', id }); return; }
     for (const k of Object.keys(rec.doc.files ?? {})) runtime.known.add(`${rec.meta.id}/${k}`);
@@ -200,7 +204,9 @@ export async function viewProjectVersion(runtime: RecoveryRuntime, id: string, r
   const document = recoveryDocument(record.doc) as StoredDoc;
   await runtime.ensureCatalogs(document, () => runtime.isCurrent(mine));
   if (!runtime.isCurrent(mine)) return false;
+  const offered = documentOffer(document);
   const fields = await (await codec()).decode(document, (k) => runtime.storage()!.getBlob(id, k));
+  const settleOffer = await offered;
   if (!runtime.isCurrent(mine)) return false;
   if (!enter()) return false;
   runtime.invalidateWrites();

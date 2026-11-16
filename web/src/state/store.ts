@@ -213,8 +213,8 @@ export interface State {
   dirty: Record<'machine' | 'process', Config>;
   filamentEdits: Record<string, Config>;
   projectPresets: { machine: Config; process: Config; filaments: Config[] } | null;
-  projectNotice: string | null;
-  bedType: string;
+  projectSlotValues: (Config | null)[] | null;
+  projectSlots: { filaments: string[]; colours: (string | undefined)[]; mixes: Record<number, unknown> } | null;
   uiMode: OptionMode;
   developerMode: boolean;
   mixedTemperatures: boolean;
@@ -310,8 +310,9 @@ let state: State = {
   dirty: { machine: {}, process: {} },
   filamentEdits: {},
   projectPresets: null,
-  projectNotice: null,
-  bedType: '',
+ 
+  projectSlotValues: null,
+  projectSlots: null,
   uiMode: 'simple',
   developerMode: false,
   filamentsToUse: null,

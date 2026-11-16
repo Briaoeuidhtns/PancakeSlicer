@@ -206,8 +206,10 @@ func slotNoticeChoices(d *workspaceData) {
 			kept[id] = map[string]any{"dismissed": true, "at": n.At}
 		}
 	}
-	d.Migrations[migrationSlantMorph] = now.UnixMilli()
-	return true
+	log.Printf("workspace migration: project slot notices kept %d choices of %d entries", len(kept), len(notices))
+	session["projectSlotNotices"] = must(json.Marshal(kept))
+	v.Document, v.Revision = must(json.Marshal(session)), v.Revision+1
+	d.Values["session"] = v
 }
 
 func migrateVersionRecord(d *workspaceData, raw json.RawMessage, at int64) json.RawMessage {

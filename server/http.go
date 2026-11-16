@@ -1030,7 +1030,7 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func spaFiles(dir, resources string) http.Handler {
+func spaFiles(dir, resources string, boot func(*http.Request) []byte) http.Handler {
 	cache := &staticCache{files: map[string]staticEntry{}}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {

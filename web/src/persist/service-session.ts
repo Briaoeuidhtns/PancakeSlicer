@@ -2,7 +2,16 @@ import { createServiceDocument } from './service-document';
 import { requireWorkspaceService } from './service';
 const owners = (remote: unknown, local: unknown) => [...new Set([...(local as string[] ?? []), ...(remote as string[] ?? [])])].slice(0, 32);
 const latest = (_remote: unknown, local: unknown) => local;
-const session = createServiceDocument('/api/session', 'PATCH', requireWorkspaceService, { projectDraftOwners: owners, fsmRecovery: latest });
+const setups = (remote: unknown, local: unknown) => mergeSetups(remote as BlankSetup | null, local as BlankSetup | null);
+type Notices = Record<string, { at?: number; dismissed?: boolean }>;
+const notices = (remote: unknown, local: unknown) => {
+  const all: Notices = { ...(remote as Notices ?? {}) };
+  for (const [id, n] of Object.entries(local as Notices ?? {})) if ((n?.at ?? 0) >= (all[id]?.at ?? 0)) all[id] = n;
+  return Object.fromEntries(Object.entries(all).sort(([, a], [, b]) => (b?.at ?? 0) - (a?.at ?? 0)).slice(0, 24));
+};
+export type SessionDocument = { fsmRecovery?: unknown; blankSetup?: BlankSetup | null; projectSlotNotices?: Notices };
+const merge: Record<keyof SessionDocument, KeyMerge> = { fsmRecovery: latest, blankSetup: setups, projectSlotNotices: notices };
+const session = createServiceDocument<SessionDocument>('/api/session', 'PATCH', 'session', requireWorkspaceService, merge);
 export const serviceSessionSnapshot = session.snapshot;
 export const subscribeServiceSession = session.subscribe;
 export const sessionDocument = () => session.snapshot().document;

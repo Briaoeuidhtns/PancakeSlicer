@@ -1,8 +1,11 @@
 import type { Config, ConfigValue } from '../api/types';
 import { Dropdown } from '../components/Dropdown';
-import { getState, resolvePreset, toast, useStore, type State } from '../state/store';
-import { extruderCount, extruderLabel, replaceAt, valueAt, valuesOf } from '../multinozzle/config';
-import { findProfile, profileKey } from './identity';
+import { resolvePreset, toast, useStore } from '../state/store';
+import { selectionValues } from './view';
+import './extruder-rows.css';
+import { extruderLabel, valuesOf } from '../multinozzle/config';
+import { INSTALLED } from './records';
+import { setPrinterNozzle } from './record-edits';
 
 const TYPES = ['Direct Drive', 'Bowden'];
 const split = (variant: string) => { const type = TYPES.find((t) => variant.startsWith(`${t} `)) ?? 'Direct Drive'; return { type, volume: variant.slice(type.length).trim() || 'Standard' }; };
