@@ -30,6 +30,8 @@ import { newSpeedModel, speedModelOf, SPEED_KEYS, type SpeedModel } from './spee
 import { dynamicSpeeds, effectiveLayerHeight, type SettingOrigin } from './context';
 import { DynamicBadge } from '../components/DynamicBadge';
 import { Sep, joinParts } from '../separator';
+import { slotFilaments } from './slots';
+import { randomId } from '../random-id';
 const ConnectionEditor = preloadable(() => import('../printers/ConnectionEditor').then(m => ({default: m.ConnectionEditor})));
 export interface ProfileDraft { speedModel?: SpeedModel | null; speedOverrides?: Config; scales?: ScaleRow[];  printOverrides?: Config; values: Config; baseline: Config; origin: UserPreset | undefined; printer: string; applicability?: ProfileApplicability; baselineApplicability?: ProfileApplicability;staged?:ProjectProfileChanges}
 export function acknowledgedProfileDraft(current:ProfileDraft,submitted:ProfileDraft,origin:UserPreset,baseline:Config):ProfileDraft|null {

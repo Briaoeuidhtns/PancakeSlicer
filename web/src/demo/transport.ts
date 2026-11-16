@@ -130,7 +130,7 @@ async function handle(request: Request): Promise<Response> {
     const key = sample?.doc.objects[0]?.source;
     return key && data.assets[key] ? from64(data.assets[key]) : missing();
   }
-  if (path === 'about') return json({ name: 'PancakeSlicer Demo', version: 'Client-side demo', source_url: 'https://github.com/ZimengXiong/nonplanar-orcaslicer/tree/np/wa-orcaparity-1', source_configured: true, license: 'AGPL-3.0', revision: data.health.server_revision });
+  if (path === 'about') return json({ name: 'PancakeSlicer Demo', version: 'Client-side demo', source_url: GITHUB_URL, source_configured: true, license: 'AGPL-3.0', revision: (await engine()).health.server_revision });
   const s = await state();
   if (path === 'resolve') {
     try { return json(await hooks.resolve?.(await body(request) as import('./resolve').DemoResolveInput)); }

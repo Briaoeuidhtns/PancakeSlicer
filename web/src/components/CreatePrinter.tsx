@@ -10,7 +10,8 @@ import type { CatalogVariant } from '../catalog/types';
 import { commitRecords } from '../profiles/transactions';
 import { switchPreset } from '../actions';
 import { Modal, ModalBody, ModalFooter, ModalTitle } from './Modal';
-import { More } from './kit';
+import { vendorLabel } from '../profiles/metadata';
+import { randomId } from '../random-id';
 
 async function variantFor(model: CatalogModel, nozzle: number): Promise<CatalogVariant | undefined> {
   const near = (v: CatalogVariant) => Math.abs(Number(v.nozzle) - nozzle);

@@ -1,4 +1,3 @@
-import { reportProblem } from '../build-info';
 import { openUrlImport } from '../url-import';
 import { savePreferences } from '../saved-preferences';
 import { addInstance, arrangeAll, canBoolean, canExport, cancelSlice, download, fillBed, openFileDialog, outputKind,
@@ -18,6 +17,7 @@ import { openGcode } from '../preview/jump';
 import { setThemePref } from '../theme';
 import { canEditLayers } from '../components/LayerHeight';
 import { registerCommand, type Command } from './registry';
+import { reportProblem } from '../build-info';
 
 const s = getState;
 const objects = () => s().objects.length > 0 || 'Add a model first';

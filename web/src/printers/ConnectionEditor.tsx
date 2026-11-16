@@ -44,17 +44,16 @@ export function ConnectionEditor({ printer, name, onSaved }: { printer: string; 
   const [working, setWorking] = useState('');
   const [error, setError] = useState('');
   const sameKind = saved?.kind === kind;
-  const bambu = kind === 'bambu-lan', flashforge = kind === 'flashforge', http = !bambu && !flashforge && kind !== 'bambu-connect';
+  const bambu = kind === 'bambu-lan', flashforge = kind === 'flashforge', http = !!kind && !bambu && !flashforge && kind !== 'bambu-connect';
   const digest = kind === 'prusalink' && auth === 'digest';
   const keyOptional = kind === 'moonraker' || kind === 'duet';
   const edit = (): ConnectionEdit => ({ kind, name, model: model || undefined,
     ...(bambu || flashforge ? { host: host.trim(), serial: serial.trim(), access_code: secret } : {}),
     ...(http ? { url: url.trim(), key: secret, auth: kind === 'prusalink' ? auth : undefined, username: digest ? user.trim() : undefined } : {}) });
   const hasSecret = !!saved?.has_secret && sameKind;
-  const ready = kind === 'bambu-connect' || (flashforge ? !!host.trim() && (!secret || !!serial.trim()) : bambu ? !!host.trim() && !!serial.trim() && (!!secret || hasSecret)
-    : !!url.trim() && (keyOptional || !!secret || hasSecret) && (!digest || !!user.trim()));
-  const fields = useRef(0);
-  const touched = () => { fields.current++; setTest(null); };
+  const ready = !!kind && (kind === 'bambu-connect' || (flashforge ? !!host.trim() && (!secret || !!serial.trim()) : bambu ? !!host.trim() && !!serial.trim() && (!!secret || hasSecret)
+    : !!url.trim() && (keyOptional || !!secret || hasSecret) && (!digest || !!user.trim())));
+  const touched = () => m.send({ type: 'EDIT' });
   const changed = <T,>(set: (v: T) => void) => (v: T) => { set(v); touched(); };
 
   const run = async (what: string, action: () => Promise<void>) => {

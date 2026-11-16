@@ -316,6 +316,8 @@ export function startProjects(ready: Promise<unknown> = Promise.resolve()): Prom
   if (started) return started;
   started = start(ready);
   window.orcaDesktop?.onBeforeClose?.(async () => { await started; await flushProject(); await (await import('../saved-preferences')).flushSavedPreferences(); });
+  window.orcaDesktop?.onPendingSaves?.(async () => (hasUnsavedProject() ? 1 : 0)
+    + ((await import('../saved-preferences')).savedPreferencesSnapshot().state === 'pending' ? 1 : 0));
   return started;
 }
 async function start(ready: Promise<unknown>) {

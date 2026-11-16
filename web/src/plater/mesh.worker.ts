@@ -1,4 +1,3 @@
-import { sha256 } from '../sha256';
 import { bakeStl, centre, creaseSplit, hullPoints, parseObj, parseStl, vertexNormals, weld } from './meshcore';
 import { buildBvh, type Bvh } from './bvh';
 import { split } from './split';
@@ -7,6 +6,7 @@ import { readProject } from './threemf';
 import { displayLod, type DisplayMesh } from './display-lod';
 import { simplifyMesh, type SimplificationInfo } from './simplify-core';
 import type { ShellsOut, ShellsIn } from './shells.worker';
+import { sha256 } from '../sha256';
 
 export interface MeshData {
   display?: DisplayMesh;
@@ -72,6 +72,7 @@ function checkShells(id: number, positions: Float32Array, index: Uint32Array, it
   shellsWorker.postMessage({ id: request, positions, index } satisfies ShellsIn);
 }
 
+const contentHash = (array: Float32Array | Uint32Array) => sha256(array);
 
 function crisp(positions: Float32Array, index: Uint32Array, edges: boolean): DisplayMesh {
   const split = creaseSplit(positions, index);

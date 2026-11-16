@@ -1,4 +1,5 @@
 const tag = '$orcaBinary';
+export { sha256 } from '../sha256';
 const arrays = { Int8Array, Uint8Array, Uint8ClampedArray, Int16Array, Uint16Array, Int32Array, Uint32Array,
   Float32Array, Float64Array, BigInt64Array, BigUint64Array };
 export function bytesBase64(bytes: Uint8Array): string {

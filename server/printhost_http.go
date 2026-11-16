@@ -47,9 +47,9 @@ func sendHTTP(ctx context.Context, u *upload) (string, error) {
 			}
 			return req, nil
 		case "octoprint":
-			return multipartUpload(ctx, base.JoinPath("api/files/local").String(), u, body, [][2]string{{"print", fmt.Sprint(u.start)}})
+			return multipartUpload(ctx, base.JoinPath("api/files/local").String(), "file", u.filename, u.size, body, [][2]string{{"print", fmt.Sprint(u.start)}})
 		default:
-			return multipartUpload(ctx, base.JoinPath("server/files/upload").String(), u, body, [][2]string{{"root", "gcodes"}, {"print", fmt.Sprint(u.start)}})
+			return multipartUpload(ctx, base.JoinPath("server/files/upload").String(), "file", u.filename, u.size, body, [][2]string{{"root", "gcodes"}, {"print", fmt.Sprint(u.start)}})
 		}
 	}
 	var resp *http.Response
@@ -132,11 +132,7 @@ func limitSendBuffer(conn net.Conn) {
 	}
 }
 
-func multipartUpload(ctx context.Context, target string, u *upload, file io.Reader, fields [][2]string) (*http.Request, error) {
-	return multipartFile(ctx, target, "file", u.filename, u.size, file, fields)
-}
-
-func multipartFile(ctx context.Context, target, field, filename string, size int64, file io.Reader, fields [][2]string) (*http.Request, error) {
+func multipartUpload(ctx context.Context, target, field, filename string, size int64, file io.Reader, fields [][2]string) (*http.Request, error) {
 	var head strings.Builder
 	w := multipart.NewWriter(&head)
 	for _, f := range fields {

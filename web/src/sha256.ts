@@ -1,5 +1,3 @@
-import { createSHA256 } from 'hash-wasm';
-
 const view = (data: ArrayBufferView | ArrayBuffer) => ArrayBuffer.isView(data) ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength) : new Uint8Array(data);
 
 export async function sha256(data: ArrayBufferView | ArrayBuffer | Blob): Promise<string> {

@@ -178,7 +178,7 @@ func sendFlashforgeAPI(ctx context.Context, u *upload, name string) (string, err
 	if err != nil {
 		return "", err
 	}
-	req, err = multipartFile(ctx, base+"/uploadGcode", "gcodeFile", name, u.size, progressReader{io.LimitReader(u.file, u.size), u.progress}, nil)
+	req, err = multipartUpload(ctx, base+"/uploadGcode", "gcodeFile", name, u.size, progressReader{io.LimitReader(u.file, u.size), u.progress}, nil)
 	if err != nil {
 		return "", err
 	}
