@@ -96,6 +96,8 @@ func NewServer(c Config, jobs *JobManager, catalog *resolve.Catalog) http.Handle
 	mux.HandleFunc("GET /api/about", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, buildAbout(c))
 	})
+	mux.HandleFunc("POST /api/access", s.saveAccess)
+	mux.HandleFunc("DELETE /api/access", s.forgetAccess)
 	mux.HandleFunc("POST /api/jobs", s.createJob)
 	mux.HandleFunc("POST /api/patch-preview", s.createJob)
 	mux.HandleFunc("POST /api/top-surfaces", s.topSurfaces)

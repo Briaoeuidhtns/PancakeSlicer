@@ -1,6 +1,5 @@
 import { noticeText } from '../notice-codes';
 import { sessionId } from './session';
-let token = '';
 export type AccessNotice = { status: number; message: string };
 let notice: AccessNotice | null = null;
 const listeners = new Set<() => void>();
@@ -13,13 +12,19 @@ export function accessNotice(value: AccessNotice | null) {
   notice = value;
   listeners.forEach((listener) => listener());
 }
-export function saveAccessToken(value: string) {
-  token = value.trim();
+export async function saveAccessToken(value: string) {
+  const response = await fetch('/api/access', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: value.trim() }) });
+  if (!response.ok) throw await responseError(response);
 }
+export async function forgetAccessToken() {
+  const response = await fetch('/api/access', { method: 'DELETE' });
+  if (!response.ok) throw await responseError(response);
+}
+let bootstrapping: Promise<unknown> = Promise.resolve();
 export function bootstrapAccessToken() {
   const url = new URL(location.href);
   if (url.searchParams.has('token')) {
-    saveAccessToken(url.searchParams.get('token') ?? '');
+    bootstrapping = saveAccessToken(url.searchParams.get('token') ?? '').catch(() => undefined);
     url.searchParams.delete('token');
     history.replaceState(history.state, '', url.pathname + url.search + url.hash);
   }
@@ -70,9 +75,9 @@ export async function mutation(path: string, init: RequestInit, retry = false, s
   if (discarding) throw new Error('Starting fresh—unsaved changes on this page were discarded.');
   const accessNotice = quiet || owner ? () => undefined : showNotice;
   init = await gzipBody(init);
+  await bootstrapping;
   const send = () => {
     const headers = new Headers(init.headers);
-    if (token) headers.set('Authorization', `Bearer ${token}`);
     headers.set('X-Orca-Session', sessionId);
     return onUpload && import.meta.env.MODE !== 'demo' ? sendWithProgress(path, init, headers, onUpload) : fetch(path, { ...init, headers });
   };
@@ -104,7 +109,7 @@ export async function mutation(path: string, init: RequestInit, retry = false, s
   }
   if (response.status === 401) {
     const message = noticeText('access_token_needed', undefined);
-    (owner ? showNotice : accessNotice)({ status: 401, message });
+    if (notice?.status !== 401) (owner ? showNotice : accessNotice)({ status: 401, message });
     throw Object.assign(new Error(message), { status: 401, code: 'access_token_needed' });
   }
   if (response.status === 507) {

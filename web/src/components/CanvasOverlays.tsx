@@ -7,7 +7,7 @@ import { Glyph } from './Glyph';
 import { Check } from './Check';
 import { Range } from './Range';
 import { slicingText } from '../api/progress';
-import { ACCESS_FAILURES, accessNotice, accessSnapshot, saveAccessToken, subscribeAccess } from '../api/access';
+import { ACCESS_FAILURES, accessNotice, accessSnapshot, forgetAccessToken, saveAccessToken, subscribeAccess } from '../api/access';
 import { useMachine } from '../flow/fsm';
 import { libraryWrites } from '../profiles/library-writes';
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactElement } from 'react';
@@ -171,12 +171,12 @@ export function AccessNotification() {
       {notice.status === 401 && (
         <form className="access-token-form" onSubmit={(event) => {
           event.preventDefault();
-          saveAccessToken(value);
           setValue('');
-          accessNotice(null);
+          saveAccessToken(value).then(() => accessNotice(null), (error: Error) => accessNotice({ status: 401, message: error.message }));
         }}>
           <input type="password" aria-label="Access token" autoComplete="off" value={value} onChange={(event) => setValue(event.target.value)} />
           <button type="submit">Save</button>
+          <button type="button" onClick={() => forgetAccessToken().then(() => accessNotice({ status: 401, message: 'Access token forgotten' }), (error: Error) => accessNotice({ status: 401, message: error.message }))}>Forget</button>
           <div className="notif-body">Save your access token, then give that another try.</div>
         </form>
       )}

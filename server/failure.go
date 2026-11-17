@@ -76,6 +76,8 @@ var failureTexts = map[string]failureText{
 	"send_refused":                         {Text: "The printer declined the job.", Step: "Check the printer's screen for why it declined the job, then retry."},
 	"send_timeout":                         {Text: "The printer didn't answer in time.", Step: "Check that the printer is on and on the same network, then retry."},
 	"access_token_required":                {Text: "Access token required."},
+	"access_token_wrong":                   {Text: "That access token isn't right.", Step: "Check the token your admin gave you, then save it again."},
+	"access_token_body":                    {Text: "Send the access token as {\"token\": \"...\"}."},
 	"admission_refused":                    {Text: "%s"},
 	"api_key_username_password":            {Text: "The API key, username, or password is too long or contains invalid characters."},
 	"arrange_multi_materials_must":         {Text: "arrange_multi_materials must be 0 or 1"},

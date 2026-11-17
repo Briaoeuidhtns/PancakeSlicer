@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -375,10 +374,9 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 				log.Writer().Write(append(b, '\n'))
 			}()
 		}
-		protected := r.Method == "DELETE" || (r.Method == "POST" && (r.URL.Path == "/api/jobs" || strings.HasPrefix(r.URL.Path, "/api/jobs/"))) || ((r.Method == "POST" || r.Method == "PUT" || r.Method == "PATCH") && (r.URL.Path == "/api/library" || r.URL.Path == "/api/dev/reset" || r.URL.Path == "/api/session" || r.URL.Path == "/api/preferences" || strings.HasPrefix(r.URL.Path, "/api/projects/") || strings.HasPrefix(r.URL.Path, "/api/folders") || strings.HasPrefix(r.URL.Path, "/api/drafts/") || strings.HasPrefix(r.URL.Path, "/api/assets/") || strings.HasPrefix(r.URL.Path, "/api/blobs/") || r.URL.Path == "/api/user-heads" || strings.HasPrefix(r.URL.Path, "/api/printer-connections")))
+		protected := r.URL.Path != "/api/access" && r.Method == "DELETE" || (r.Method == "POST" && (r.URL.Path == "/api/jobs" || strings.HasPrefix(r.URL.Path, "/api/jobs/"))) || ((r.Method == "POST" || r.Method == "PUT" || r.Method == "PATCH") && (r.URL.Path == "/api/library" || r.URL.Path == "/api/dev/reset" || r.URL.Path == "/api/session" || r.URL.Path == "/api/preferences" || strings.HasPrefix(r.URL.Path, "/api/projects/") || strings.HasPrefix(r.URL.Path, "/api/folders") || strings.HasPrefix(r.URL.Path, "/api/drafts/") || strings.HasPrefix(r.URL.Path, "/api/assets/") || strings.HasPrefix(r.URL.Path, "/api/blobs/") || r.URL.Path == "/api/user-heads" || strings.HasPrefix(r.URL.Path, "/api/printer-connections")))
 		if s.cfg.BearerToken != "" && protected {
-			token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-			if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") || subtle.ConstantTimeCompare([]byte(token), []byte(s.cfg.BearerToken)) != 1 {
+			if !s.authorized(r) {
 				w.Header().Set("WWW-Authenticate", "Bearer")
 				fail(w, 401, "access_token_required")
 				return
