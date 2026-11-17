@@ -17,6 +17,7 @@ import (
 	"net"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -759,6 +760,7 @@ func (b *bambuReport) trays() []AMSTray {
 		return ""
 	}
 	trays := []AMSTray{}
+	dual := b.dualNozzle()
 	if b.AMS != nil {
 		for _, unit := range b.AMS.AMS {
 			a, err := strconv.Atoi(unit.ID)
@@ -770,7 +772,7 @@ func (b *bambuReport) trays() []AMSTray {
 			var extruder *int
 			if infoErr == nil {
 				kind = map[uint64]string{1: "ams", 2: "ams-lite", 3: "ams-2-pro", 4: "ams-ht", 5: "ams-lite-mixed"}[info&15]
-				if binding := (info >> 8) & 15; binding < 2 {
+				if binding := (info >> 8) & 15; dual && binding < 2 {
 					extruder = ptr(1 - int(binding))
 				}
 			}
@@ -806,6 +808,13 @@ func (b *bambuReport) trays() []AMSTray {
 		trays = append(trays, AMSTray{ID: id, AMS: id, Slot: 0, Kind: "external", Active: b.activeTray(id, 0, true), Extruder: extruder, Remaining: e.Remaining, Type: e.Type, Color: color(e.Color), FilamentID: e.Idx, Spool: spoolID(e.UUID)})
 	}
 	return trays
+}
+
+func (b *bambuReport) dualNozzle() bool {
+	if b.Device != nil && b.Device.Extruder != nil && len(b.Device.Extruder.Info) > 1 {
+		return true
+	}
+	return slices.ContainsFunc(b.nozzles(), func(n NozzleStatus) bool { return n.Extruder > 0 })
 }
 
 func (b *bambuReport) status() PrinterStatus {
