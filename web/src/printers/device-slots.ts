@@ -22,9 +22,9 @@ export function editSetup(printer: string, change: (record: PrinterRecord) => Pr
   return import('../profiles/transactions').then(({ commitRecords }) => commitRecords([{ kind: 'printer', record: next }], { label: 'Printer setup', optimistic: true })).then(() => undefined);
 }
 
-export function reportedUnits(trays: readonly Tray[]): FeedUnit[] {
+export function reportedUnits(trays: readonly Tray[], nozzles: number): FeedUnit[] {
   const ids = [...new Set(trays.filter((t) => t.kind !== 'external' && t.id !== 254 && t.id !== 255).map((t) => t.ams))].sort((a, b) => a - b);
-  return Array.from({ length: ids.length ? ids[ids.length - 1] + 1 : 0 }, (_, u): FeedUnit => ({ nozzle: trays.find((t) => t.ams === u)?.extruder ?? 0 }));
+  return Array.from({ length: ids.length ? ids[ids.length - 1] + 1 : 0 }, (_, u): FeedUnit => ({ nozzle: nozzles > 1 ? trays.find((t) => t.ams === u)?.extruder ?? 0 : 0 }));
 }
 
 export async function pickSlotFilament(printer: string, tray: string, filament: string, units?: FeedUnit[], spool?: boolean) {

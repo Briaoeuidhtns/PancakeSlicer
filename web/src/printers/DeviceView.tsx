@@ -176,7 +176,7 @@ function DevicePanel({ connection, model, cover, status, live }: { connection: P
   const filaments = useStore((s) => s.records.filaments), reads = useStore((s) => s.catalogReads);
   const choices = useMemo(() => filaments.filter((f) => !f.archived).map((f) => ({ key: f.id, name: f.name, type: profileInfo(getState(), 'filament', f.id).entry?.type ?? '' })).sort((a, b) => a.name.localeCompare(b.name)), [filaments, reads]); // eslint-disable-line react-hooks/exhaustive-deps
   const [choosing, setChoosing] = useState(false);
-  const choose = (t: Tray) => (filament: string) => { setChoosing(true); act(() => pickSlotFilament(connection.printer, slotOf(t), filament, reportedUnits(trays), !!reportOf(t)?.spool)).finally(() => setChoosing(false)); };
+  const choose = (t: Tray) => (filament: string) => { setChoosing(true); act(() => pickSlotFilament(connection.printer, slotOf(t), filament, reportedUnits(trays, stored?.nozzles.length ?? 1), !!reportOf(t)?.spool)).finally(() => setChoosing(false)); };
   for (const tray of trays.filter((t) => t.kind !== 'external')) units.set(tray.ams, [...(units.get(tray.ams) ?? []), tray]);
   const lastJob = history.find((job) => job.state === 'done' && job.start);
   const runningId = canStop && status?.file ? history.find((job) => job.start && job.outcome === 'printing' && !job.job_end && job.filename === status.file)?.id : undefined;
