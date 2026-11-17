@@ -3051,11 +3051,21 @@ PrintObject::detect_nonplanar_surfaces()
                                 if (s.is_nonplanar())
                                     polygons_append(owned, to_polygons(s.expolygon));
                             if (! owned.empty()) {
+                                owned = union_(owned);
+                                const BoundingBox owned_box = get_extents(owned);
                                 Surfaces unclaimed;
                                 double overlap = 0;
                                 for (const Surface &piece : topNonplanar.surfaces) {
-                                    overlap += area(intersection(to_polygons(piece.expolygon), owned));
-                                    surfaces_append(unclaimed, diff_ex(piece.expolygon, owned, ApplySafetyOffset::No), piece);
+                                    const BoundingBox piece_box = get_extents(piece.expolygon);
+                                    if (! owned_box.overlap(piece_box)) {
+                                        unclaimed.push_back(piece);
+                                        continue;
+                                    }
+                                    ExPolygons rest = diff_ex(piece.expolygon,
+                                        ClipperUtils::clip_clipper_polygons_with_subject_bbox(owned, piece_box.inflated(SCALED_EPSILON)),
+                                        ApplySafetyOffset::No);
+                                    overlap += std::max(0., piece.expolygon.area() - area(rest));
+                                    surfaces_append(unclaimed, std::move(rest), piece);
                                 }
                                 if (overlap > 0)
                                     BOOST_LOG_TRIVIAL(warning) << "Nonplanar surface " << nonplanar_surface.stable_id
