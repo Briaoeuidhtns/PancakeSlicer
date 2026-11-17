@@ -295,6 +295,34 @@ func (j *Job) OutputPath(kind string) string {
 	return filepath.Join(j.Dir, "out", outputBase(j.Request)+"."+kind)
 }
 
+func (j *Job) SettingsPath() string { return filepath.Join(j.Dir, "settings.json") }
+
+func (j *Job) writeSettings() error {
+	if len(j.Request.Overrides) == 0 {
+		return nil
+	}
+	raw, err := json.Marshal(j.Request.Overrides)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(j.SettingsPath(), raw, 0600)
+}
+
+func keyArgs(j *Job, args []string) []string {
+	out := make([]string, 0, len(args)+2*len(j.Request.Overrides))
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--set-file" && i+1 < len(args) {
+			for _, kv := range j.Request.Overrides {
+				out = append(out, "--set", kv[0]+"="+kv[1])
+			}
+			i++
+			continue
+		}
+		out = append(out, args[i])
+	}
+	return out
+}
+
 func validPiece(side string) bool {
 	if side == "upper" || side == "lower" {
 		return true
@@ -685,8 +713,8 @@ func (m *JobManager) toolArgs(j *Job) []string {
 	for _, f := range r.Filaments {
 		args = append(args, "--filament", f)
 	}
-	for _, kv := range r.Overrides {
-		args = append(args, "--set", kv[0]+"="+kv[1])
+	if len(r.Overrides) > 0 {
+		args = append(args, "--set-file", j.SettingsPath())
 	}
 	for _, e := range r.Events {
 		args = append(args, "--event", e)
@@ -793,8 +821,13 @@ func (m *JobManager) run(ctx context.Context, j *Job) {
 		return
 	}
 	j.log("server", "progress preparing 0")
+	if err := j.writeSettings(); err != nil {
+		j.failWith("slice_setup_failed", "cannot write the job settings: "+err.Error())
+		return
+	}
 	args := m.toolArgs(j)
 	j.log("server", "nonplanar_slice_tool "+quoteArgs(args))
+	j.log("server", fmt.Sprintf("argv_chars %d", len(m.cfg.Tool)+1+len(quoteArgs(args))))
 	if jobResultGet != nil && jobResultGet(m, j, args) {
 		return
 	}

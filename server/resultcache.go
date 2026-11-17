@@ -389,6 +389,7 @@ func restoreJobResult(m *JobManager, j *Job, args []string) bool {
 	if state == nil {
 		return false
 	}
+	args = keyArgs(j, args)
 	normalized := make([]string, len(args))
 	for i, arg := range args {
 		normalized[i] = strings.ReplaceAll(arg, j.Dir, "<job>")

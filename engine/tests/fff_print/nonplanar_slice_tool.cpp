@@ -247,7 +247,7 @@ Model read_input(const std::string &file)
               << "usage: nonplanar_slice_tool --printer VARIANT --process PRINT --filament FILAMENT [--catalog DIR]\n"
                  "       --detect-regions OUT.json MODEL [--printer VARIANT] (no slicing)\n"
                  "       --plan-tops OUT.json: with the print arguments and no -o, the curved tops plan per detected region\n"
-                 "       [--profiles DIR] [--datadir DIR] [--bed-type NAME] [--set key=value]... [--center X,Y]\n"
+                 "       [--profiles DIR] [--datadir DIR] [--bed-type NAME] [--set key=value]... [--set-file PAIRS.json] [--center X,Y]\n"
                  "       [--config-out FILE] [--project-out FILE] [--head-out FILE] [--gcode-3mf FILE] [--json FILE]\n"
                  "       [--field-file FIELD.npz] [--dump-field FIELD.npz]\n"
                  "       [--atom TOOLPATH] [--verify] [--explain] [--auto-orient | --orient-only | --orient-scores] [--floating] [--save-3mf PROJECT.3mf]\n"
@@ -601,6 +601,24 @@ Args parse_args(int argc, char **argv)
             if (pos == std::string::npos)
                 usage("--set expects key=value, got " + kv);
             a.overrides.emplace_back(kv.substr(0, pos), kv.substr(pos + 1));
+        } else if (arg == "--set-file") {
+            const std::string path = next();
+            boost::nowide::ifstream in(path, std::ios::binary);
+            if (!in)
+                usage("--set-file " + path + ": cannot open the file");
+            nlohmann::json pairs;
+            try {
+                in >> pairs;
+            } catch (const std::exception &e) {
+                usage("--set-file " + path + ": " + e.what());
+            }
+            if (!pairs.is_array())
+                usage("--set-file " + path + ": expected a JSON array of [key, value] pairs");
+            for (const nlohmann::json &kv : pairs) {
+                if (!kv.is_array() || kv.size() != 2 || !kv[0].is_string() || !kv[1].is_string() || kv[0].get<std::string>().empty())
+                    usage("--set-file " + path + ": expected [key, value] string pairs, got " + kv.dump());
+                a.overrides.emplace_back(kv[0].get<std::string>(), kv[1].get<std::string>());
+            }
         } else if (arg == "--event") {
             const std::string ev    = next();
             const size_t      colon = ev.find(':');
