@@ -295,7 +295,7 @@ Model read_input(const std::string &file)
 std::optional<CalibMode> classic_calib_mode(const std::string &kind);
 std::vector<coordf_t> read_layer_profile(const std::string &path)
 {
-    std::ifstream in(path);
+    boost::nowide::ifstream in(path);
     if (!in)
         usage("--layer-profile file:" + path + ": cannot open the file");
     std::vector<coordf_t> profile;
@@ -3242,6 +3242,10 @@ struct CodedWarnings
 
 int main(int argc, char **argv)
 {
+#ifdef _WIN32
+    boost::nowide::args utf8_args(argc, argv);
+    boost::nowide::nowide_filesystem();
+#endif
     if (argc == 3 && std::string(argv[1]) == "--load-gcode") {
         const auto     t0 = std::chrono::steady_clock::now();
         const double   c0 = process_cpu_seconds();
@@ -3254,15 +3258,6 @@ int main(int argc, char **argv)
                   << "preview_moves_mb " << double(moves.size() * sizeof(moves.front())) / 1e6 << "\n";
         return 0;
     }
-#ifdef _WIN32
-    std::unique_ptr<boost::nowide::args> utf8_args;
-    for (int i = 1; i < argc; ++i)
-        if (std::string(argv[i]) == "--emboss-text" || std::string(argv[i]) == "--emboss-fonts" || std::string(argv[i]) == "--emboss-svg" || std::string(argv[i]) == "--export-3mf-generic" || std::string(argv[i]) == "--export-drc") {
-            utf8_args = std::make_unique<boost::nowide::args>(argc, argv);
-            boost::nowide::nowide_filesystem();
-            break;
-        }
-#endif
     const Args args = parse_args(argc, argv);
     if (!args.stage_cache.empty())
         Slic3r::Nonplanar::set_stage_cache(args.stage_cache, args.stage_cache_max_mb << 20);
@@ -3836,7 +3831,7 @@ int main(int argc, char **argv)
         if (! args.json.empty() && !role_time.empty())
             record["text_summary"]["role_time_s"] = text_value(role_time.begin()->second) + " " + role_time.begin()->first;
         if (!args.move_times.empty()) {
-            std::ofstream mt(args.move_times);
+            boost::nowide::ofstream mt(args.move_times);
             for (const auto &m : result.moves)
                 mt << m.gcode_id << ' ' << m.position.x() << ' ' << m.position.y() << ' ' << m.position.z() << ' '
                    << m.time[size_t(PrintEstimatedStatistics::ETimeMode::Normal)] << ' ' << int(result.state(m).nonplanar_patch_shell != 0xFF) << '\n';
