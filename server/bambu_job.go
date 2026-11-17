@@ -137,7 +137,7 @@ func checkSendTopology(sliced *BambuJobMapping, submitted []int, status PrinterS
 		if i < 0 {
 			return fmt.Errorf("Hmm, filament %d is mapped to a tray that %s isn't reporting right now. Pick a loaded tray instead!", m.Slot, printer)
 		}
-		if t := status.Trays[i]; t.Extruder != nil && *t.Extruder != nozzle {
+		if t := status.Trays[i]; dual && t.Extruder != nil && *t.Extruder != nozzle {
 			return fmt.Errorf("Filament %d is sliced for the %s, and its tray feeds the %s. Pick a tray on the %s!", m.Slot, side(nozzle), side(*t.Extruder), side(nozzle))
 		}
 		installed := []NozzleStatus{}
