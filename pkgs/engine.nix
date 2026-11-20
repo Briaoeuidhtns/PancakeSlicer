@@ -6,7 +6,7 @@
 , gettext
 , python312
 , uv
-, boost
+, boost187
 , eigen_5
 , tbb
 , openssl
@@ -37,6 +37,11 @@
 , revision
 }:
 
+let
+  # The engine uses Boost.Process v1, removed in Boost 1.88.
+  boost = boost187;
+  engineOpenvdb = openvdb.override { inherit boost; };
+in
 stdenv.mkDerivation (finalAttrs: {
   pname = "pancakeslicer-headless-engine";
   version = "0.5.0";
@@ -45,14 +50,13 @@ stdenv.mkDerivation (finalAttrs: {
   nativeBuildInputs = [ cmake ninja pkg-config gettext python312 uv ];
   buildInputs = [
     boost eigen_5 tbb openssl curl freetype zlib expat libpng libjpeg
-    libGL libGLU dbus glfw cereal nlopt openvdb cgal opencv assimp
+    libGL libGLU dbus glfw cereal nlopt engineOpenvdb cgal opencv assimp
     opencascade-occt draco python312 gmp mpfr
     c-blosc imath libnoise
   ];
 
   postPatch = ''
     substituteInPlace CMakeLists.txt \
-      --replace-fail 'REQUIRED COMPONENTS system filesystem' 'REQUIRED COMPONENTS filesystem' \
       --replace-fail 'set(_bundled_python_version "3.12.13")' 'set(_bundled_python_version "${python312.version}")' \
       --replace-fail 'set(_bundled_python_root "''${CMAKE_PREFIX_PATH}/libpython")' 'set(_bundled_python_root "${python312}")'
     substituteInPlace src/CMakeLists.txt \
@@ -75,7 +79,7 @@ stdenv.mkDerivation (finalAttrs: {
       -DSLIC3R_CAD=OFF \
       -DSLIC3R_STATIC=OFF \
       -DORCA_BUILD_PYTHON_STUBGEN_MODULE=OFF \
-      -DCMAKE_MODULE_PATH=${lib.getDev openvdb}/lib/cmake/OpenVDB \
+      -DCMAKE_MODULE_PATH=${lib.getDev engineOpenvdb}/lib/cmake/OpenVDB \
       -DORCA_BUNDLED_UV_EXECUTABLE=${lib.getExe uv} \
       -DBUILD_TESTS=ON \
       -DCMAKE_INSTALL_PREFIX=$out
