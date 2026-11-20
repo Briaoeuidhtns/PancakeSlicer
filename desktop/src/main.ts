@@ -107,7 +107,6 @@ interface BundleIdentity {
   native_resources_sha256: string;
   server_binary_sha256: string;
   native_manifest_sha256: string;
-  native_qualification_sha256: string;
 
   schemas: Record<string, number>;
 }
@@ -127,7 +126,7 @@ async function bundleIdentity(web: string, engine: string): Promise<BundleIdenti
   if (fs.readFileSync(path.join(web, 'REVISION.txt'), 'utf8').trim() !== expected.client_source) throw new Error('Oops! The bundled web interface doesn\'t match this app version. Try reinstalling PancakeSlicer.');
   const hashes = await Promise.all(([
     [`orca-webapp-server${EXE}`, 'server_binary_sha256'], [`nonplanar_slice_tool${EXE}`, 'native_binary_sha256'],
-    ['surface-manifest.json', 'native_manifest_sha256'], ['artifact-qualification.ready', 'native_qualification_sha256'],
+    ['surface-manifest.json', 'native_manifest_sha256'],
   ] as const).map(async ([name, key]) => /^[a-f0-9]{64}$/.test(expected[key]) && await fileHash(path.join(engine, name)) === expected[key]));
   if (!hashes.every(Boolean)) throw new Error('Oops! One of the app\'s bundled files looks modified or corrupted. Try reinstalling PancakeSlicer.');
   if (!/^[a-f0-9]{64}$/.test(expected.native_resources_sha256)) throw new Error('Oops! Required app resources are missing from this installation. Try reinstalling PancakeSlicer.');

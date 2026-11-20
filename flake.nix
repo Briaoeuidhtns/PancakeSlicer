@@ -48,19 +48,22 @@
         let system = pkgs.stdenv.hostPlatform.system;
         in { default = appImage pkgs system; } // nixpkgs.lib.optionalAttrs (system == nativeSystem) (
           let
-            engine = pkgs.callPackage ./pkgs/engine.nix { inherit revision; };
+            engine-unwrapped = pkgs.callPackage ./pkgs/engine.nix { inherit revision; };
+            engine = pkgs.callPackage ./pkgs/engine-bundle.nix {
+              engine = engine-unwrapped;
+              inherit revision;
+            };
             web = pkgs.callPackage ./pkgs/web.nix { };
             server = pkgs.callPackage ./pkgs/server.nix { inherit revision; };
-            qualification = pkgs.callPackage ./pkgs/qualification.nix { inherit engine revision; };
           in {
-            inherit engine web qualification;
+            inherit engine engine-unwrapped web;
             server-unwrapped = server;
             server = pkgs.callPackage ./pkgs/server-bundle.nix {
-              inherit engine web server revision qualification;
+              inherit engine web server revision;
               source = self;
             };
             desktop = pkgs.callPackage ./pkgs/desktop.nix {
-              inherit engine web server revision qualification;
+              inherit engine web server revision;
             };
           }
         ));
@@ -82,7 +85,7 @@
       });
 
       checks.${nativeSystem} = {
-        inherit (self.packages.${nativeSystem}) qualification server;
+        inherit (self.packages.${nativeSystem}) engine server;
       };
 
       nixosModules.pancakeslicer = import ./nixos/pancakeslicer.nix self;

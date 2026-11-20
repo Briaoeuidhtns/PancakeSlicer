@@ -163,6 +163,7 @@ const realApi: Api = {
 export interface SurfaceArtifactManifest {
   validated: boolean;
   preview_ready?: boolean;
+  print_ready?: boolean;
   print_qualified?: boolean;
   backend?: string;
   source_sha?: string;

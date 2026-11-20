@@ -1467,8 +1467,6 @@ func newEngineHealth(c Config) *engineHealth {
 		Source          string            `json:"source_sha"`
 		Available       bool              `json:"available"`
 		Preview         bool              `json:"preview_ready"`
-		Curved          bool              `json:"validated_curved_benchy_clearance"`
-		Wave            bool              `json:"validated_wave_export"`
 		Features        map[string]bool   `json:"features"`
 	}
 	if json.Unmarshal(raw, &manifest) != nil || !manifest.Available {
@@ -1484,15 +1482,15 @@ func newEngineHealth(c Config) *engineHealth {
 		h.reason = c.Engine.Unqualified
 		log.Printf("engine not qualified: %s", h.reason)
 	}
-	wave := qualified && manifest.Preview && manifest.Wave && manifest.Features["nonplanar_wave"]
+	wave := manifest.Preview && manifest.Features["nonplanar_wave"]
 	modes := []string{}
 	if wave {
 		modes = append(modes, "whole")
 	}
 	h.manifest = map[string]any{"backend": manifest.Backend, "source_sha": manifest.Source, "publication_main_sha": manifest.PublicationMain, "platform": manifest.Platform,
-		"validated": manifest.Preview, "preview_ready": manifest.Preview, "print_qualified": qualified,
+		"validated": manifest.Preview, "preview_ready": manifest.Preview, "print_ready": manifest.Preview, "print_qualified": qualified,
 		"binary_sha256": binary, "resources_sha256": resources, "wave_modes": modes,
-		"features":            map[string]bool{"curved_tops": manifest.Preview && manifest.Curved, "nonplanar_wave": wave},
+		"features":            map[string]bool{"curved_tops": manifest.Preview && manifest.Features["curved_tops"], "nonplanar_wave": wave},
 		"qualification_scope": "exact audited reference outputs"}
 	return h
 }

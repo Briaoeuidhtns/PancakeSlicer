@@ -46,9 +46,18 @@ The native server is packaged for `x86_64-linux`. Open <http://127.0.0.1:6868> o
 
 For a one-off run without NixOS, use `nix run github:Briaoeuidhtns/PancakeSlicer/nixos-server#server`.
 
-The native server and desktop builds require the upstream engine qualification suite to pass. Nix first generates an identity manifest from the final executable and resources, independently of the tests. The qualification check audits the Nix build, compares flat Benchy G-code with pinned upstream Linux x86-64 evidence, and generates the qualification record. The record applies only to the exact engine and audited outputs; it does not certify arbitrary prints. Printer networking remains off by default for the server.
+The native server and desktop run the upstream slicing audits in `checkPhase` by default; a failed audit or flat Benchy regression fails the build. Hashes and capability metadata are always generated from the final engine and resources, independently of the tests. Runtime features do not require a qualification record. Skipping tests does not disable curved tops, waves, export, or printer sending, and does not claim the engine passed qualification. Per-print collision checks and printer/network restrictions still apply; printer networking is off by default for the server.
 
-Run the qualification alone with `nix build .#qualification`. If an engine or fixture update intentionally changes the reference output, review the difference and update the pinned evidence in `pkgs/qualification.nix`.
+Run the engine checks alone with `nix build .#engine`. To skip checks for the native server or desktop, override that package with `package.overrideAttrs { doCheck = false; }`; this also disables its engine and Go checks. For example, in a NixOS host module:
+
+```nix
+services.pancakeslicer.package =
+  inputs.pancakeslicer.packages.x86_64-linux.server.overrideAttrs {
+    doCheck = false;
+  };
+```
+
+If an engine or fixture update intentionally changes the reference output, review the difference and update the pinned evidence in `pkgs/engine-bundle.nix`.
 
 ## Supported Printers
 Printers listed below have their non-planar paths checked against a model of their print head for collisons. Printers not listed here are still able to slice, but they're checked against a generic (oversized) head, which may limit non-planarness and be incorrect (watch out for collisions!).

@@ -5,17 +5,21 @@
   ffmpeg-headless,
   coreutils,
   engine,
-  qualification,
   web,
   server,
   revision,
   source,
 }:
 
-stdenvNoCC.mkDerivation {
+stdenvNoCC.mkDerivation (finalAttrs:
+let
+  runtimeEngine = engine.overrideAttrs { doCheck = finalAttrs.doCheck; };
+  runtimeServer = server.overrideAttrs { doCheck = finalAttrs.doCheck; };
+in {
   pname = "pancakeslicer-server";
   inherit (server) version;
   dontUnpack = true;
+  doCheck = true;
   nativeBuildInputs = [ makeWrapper ];
 
   installPhase = ''
@@ -25,12 +29,11 @@ stdenvNoCC.mkDerivation {
     mkdir -p "$(dirname "$archive")"
     tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner -C ${source} -czf "$archive" .
     sourceHash=$(sha256sum "$archive" | cut -d ' ' -f 1)
-    makeWrapper ${server}/bin/pancakeslicer-server "$out/bin/pancakeslicer-server" \
+    makeWrapper ${runtimeServer}/bin/pancakeslicer-server "$out/bin/pancakeslicer-server" \
       --prefix PATH : ${lib.makeBinPath [ ffmpeg-headless coreutils ]} \
-      --set-default ORCA_WEB_TOOL ${engine}/bin/nonplanar_slice_tool \
-      --set-default ORCA_WEB_RESOURCES ${engine}/resources \
-      --set-default ORCA_WEB_SURFACE_MANIFEST ${qualification}/surface-manifest.json \
-      --set-default ORCA_WEB_ARTIFACT_QUALIFICATION ${qualification}/artifact-qualification.ready \
+      --set-default ORCA_WEB_TOOL ${runtimeEngine}/bin/nonplanar_slice_tool \
+      --set-default ORCA_WEB_RESOURCES ${runtimeEngine}/resources \
+      --set-default ORCA_WEB_SURFACE_MANIFEST ${runtimeEngine}/surface-manifest.json \
       --set-default ORCA_WEB_STATIC ${web}/share/pancakeslicer/web \
       --set-default ORCA_WEB_LISTEN 127.0.0.1:6868 \
       --set-default ORCA_WEB_PRINTER_NETWORK off \
@@ -42,4 +45,4 @@ stdenvNoCC.mkDerivation {
   '';
 
   meta = server.meta // { mainProgram = "pancakeslicer-server"; };
-}
+})

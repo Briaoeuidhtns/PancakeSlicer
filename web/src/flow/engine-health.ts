@@ -5,7 +5,7 @@ import { assertNever, createMachine, useMachine } from './fsm';
 export type EngineState = 'unknown' | 'healthy' | 'degraded' | 'qualified' | 'unqualified';
 export interface EngineHealth {
   artifact_manifest?: { features?: Record<string, unknown>; binary_sha256?: string; resources_sha256?: string;
-    validated?: boolean; preview_ready?: boolean; print_qualified?: boolean };
+    validated?: boolean; preview_ready?: boolean; print_ready?: boolean; print_qualified?: boolean };
   engine_state?: string;
 }
 type HealthEvent = { type: 'HEALTH'; health: EngineHealth } | { type: 'FAIL' };
@@ -13,8 +13,9 @@ interface HealthContext { health: EngineHealth | null }
 export function classifyEngine(health: EngineHealth): Exclude<EngineState, 'unknown'> {
   const manifest = health.artifact_manifest;
   if (health.engine_state === 'degraded' || health.engine_state === 'down') return 'degraded';
-  if (!manifest) return 'healthy';
+  if (!manifest) return 'unqualified';
   const hashes = /^[a-f0-9]{64}$/i.test(manifest.binary_sha256 ?? '') && /^[a-f0-9]{64}$/i.test(manifest.resources_sha256 ?? '');
+  if (hashes && manifest.print_ready === true) return 'healthy';
   return hashes && manifest.print_qualified === true ? 'qualified' : 'unqualified';
 }
 const healthTransitions = (['healthy', 'degraded', 'qualified', 'unqualified'] as const).map((target) => ({
@@ -52,8 +53,8 @@ export function enginePermission(): 'unknown' | 'preview' | 'print' | 'unavailab
   const state = engineHealth.get().value;
   switch (state) {
     case 'unknown': return 'unknown';
-    case 'healthy': case 'unqualified': return 'preview';
-    case 'qualified': return 'print';
+    case 'unqualified': return 'preview';
+    case 'healthy': case 'qualified': return 'print';
     case 'degraded': return 'unavailable';
     default: return assertNever(state);
   }

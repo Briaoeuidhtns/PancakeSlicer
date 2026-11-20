@@ -8,7 +8,6 @@
 , ffmpeg
 , coreutils
 , engine
-, qualification
 , web
 , server
 , revision
@@ -30,10 +29,15 @@ let
     '';
   };
 in
-stdenv.mkDerivation {
+stdenv.mkDerivation (finalAttrs:
+let
+  runtimeEngine = engine.overrideAttrs { doCheck = finalAttrs.doCheck; };
+  runtimeServer = server.overrideAttrs { doCheck = finalAttrs.doCheck; };
+in {
   pname = "pancakeslicer-desktop";
   version = "0.4.2";
   dontUnpack = true;
+  doCheck = true;
 
   nativeBuildInputs = [ makeWrapper python312 ];
 
@@ -44,12 +48,12 @@ stdenv.mkDerivation {
     mkdir -p "$out/bin" "$root/out" "$bundled_engine" "$payload/web"
     cp ${shell}/libexec/pancakeslicer-desktop/out/*.js "$root/out/"
     cp ${shell}/libexec/pancakeslicer-desktop/package.json "$root/"
-    cp ${engine}/bin/nonplanar_slice_tool "$bundled_engine/"
-    cp -R ${engine}/resources "$bundled_engine/"
-    cp ${qualification}/surface-manifest.json ${qualification}/artifact-qualification.ready "$bundled_engine/"
+    cp ${runtimeEngine}/bin/nonplanar_slice_tool "$bundled_engine/"
+    cp -R ${runtimeEngine}/resources/. "$bundled_engine/resources/"
+    cp ${runtimeEngine}/surface-manifest.json "$bundled_engine/"
     cp -R ${web}/share/pancakeslicer/web/. "$payload/web/"
-    cp ${server}/bin/pancakeslicer-server "$bundled_engine/orca-webapp-server"
-    cp ${server}/share/pancakeslicer/server/schemas.json "$bundled_engine/"
+    cp ${runtimeServer}/bin/pancakeslicer-server "$bundled_engine/orca-webapp-server"
+    cp ${runtimeServer}/share/pancakeslicer/server/schemas.json "$bundled_engine/"
     makeWrapper ${electron}/bin/electron $out/bin/pancakeslicer \
       --add-flags "$root/out/main.js" \
       --prefix PATH : ${lib.makeBinPath [ ffmpeg coreutils ]} \
@@ -104,7 +108,6 @@ components = {
     "native_resources_sha256": resources_hash.hexdigest(),
     "server_binary_sha256": digest(engine / "orca-webapp-server"),
     "native_manifest_sha256": digest(engine / "surface-manifest.json"),
-    "native_qualification_sha256": digest(engine / "artifact-qualification.ready"),
 }
 payload = json.dumps(components, indent=2) + "\n"
 (engine / "COMPONENTS.json").write_text(payload)
@@ -120,4 +123,4 @@ PY
     platforms = [ "x86_64-linux" ];
     mainProgram = "pancakeslicer";
   };
-}
+})
