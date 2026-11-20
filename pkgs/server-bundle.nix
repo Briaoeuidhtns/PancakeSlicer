@@ -5,6 +5,7 @@
   ffmpeg-headless,
   coreutils,
   engine,
+  qualification,
   web,
   server,
   revision,
@@ -28,7 +29,8 @@ stdenvNoCC.mkDerivation {
       --prefix PATH : ${lib.makeBinPath [ ffmpeg-headless coreutils ]} \
       --set-default ORCA_WEB_TOOL ${engine}/bin/nonplanar_slice_tool \
       --set-default ORCA_WEB_RESOURCES ${engine}/resources \
-      --set-default ORCA_WEB_SURFACE_MANIFEST ${engine.manifest} \
+      --set-default ORCA_WEB_SURFACE_MANIFEST ${qualification}/surface-manifest.json \
+      --set-default ORCA_WEB_ARTIFACT_QUALIFICATION ${qualification}/artifact-qualification.ready \
       --set-default ORCA_WEB_STATIC ${web}/share/pancakeslicer/web \
       --set-default ORCA_WEB_LISTEN 127.0.0.1:6868 \
       --set-default ORCA_WEB_PRINTER_NETWORK off \

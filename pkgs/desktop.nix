@@ -8,6 +8,7 @@
 , ffmpeg
 , coreutils
 , engine
+, qualification
 , web
 , server
 , revision
@@ -45,12 +46,10 @@ stdenv.mkDerivation {
     cp ${shell}/libexec/pancakeslicer-desktop/package.json "$root/"
     cp ${engine}/bin/nonplanar_slice_tool "$bundled_engine/"
     cp -R ${engine}/resources "$bundled_engine/"
-    cp ${engine.manifest} "$bundled_engine/surface-manifest.json"
+    cp ${qualification}/surface-manifest.json ${qualification}/artifact-qualification.ready "$bundled_engine/"
     cp -R ${web}/share/pancakeslicer/web/. "$payload/web/"
     cp ${server}/bin/pancakeslicer-server "$bundled_engine/orca-webapp-server"
     cp ${server}/share/pancakeslicer/server/schemas.json "$bundled_engine/"
-    # No reference-output audit was performed for this package.
-    printf '%s\n' '{"ready":false}' > "$bundled_engine/artifact-qualification.ready"
     makeWrapper ${electron}/bin/electron $out/bin/pancakeslicer \
       --add-flags "$root/out/main.js" \
       --prefix PATH : ${lib.makeBinPath [ ffmpeg coreutils ]} \

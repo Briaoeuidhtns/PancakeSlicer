@@ -11,7 +11,8 @@
         aarch64-linux = { arch = "arm64"; hash = "sha256:e8804a0e2ef00ce68d1ab29ff3bae9423a100a89f6b92df52086e6bfd97d6370"; };
       };
       systems = builtins.attrNames releases;
-      revision = self.rev or self.dirtyRev or "unknown";
+      # The qualifier requires a 40-hex source identity, including for local builds.
+      revision = self.rev or (builtins.hashString "sha1" (toString self.outPath));
       forEachSystem = f: nixpkgs.lib.genAttrs systems (system: f (import nixpkgs {
         inherit system;
         config.allowUnfree = true;
@@ -50,14 +51,17 @@
             engine = pkgs.callPackage ./pkgs/engine.nix { inherit revision; };
             web = pkgs.callPackage ./pkgs/web.nix { };
             server = pkgs.callPackage ./pkgs/server.nix { inherit revision; };
+            qualification = pkgs.callPackage ./pkgs/qualification.nix { inherit engine revision; };
           in {
-            inherit engine web;
+            inherit engine web qualification;
             server-unwrapped = server;
             server = pkgs.callPackage ./pkgs/server-bundle.nix {
-              inherit engine web server revision;
+              inherit engine web server revision qualification;
               source = self;
             };
-            desktop = pkgs.callPackage ./pkgs/desktop.nix { inherit engine web server revision; };
+            desktop = pkgs.callPackage ./pkgs/desktop.nix {
+              inherit engine web server revision qualification;
+            };
           }
         ));
 
@@ -77,7 +81,9 @@
         default = pkgs.callPackage ./pkgs/shell.nix { };
       });
 
-      checks.${nativeSystem}.server = self.packages.${nativeSystem}.server;
+      checks.${nativeSystem} = {
+        inherit (self.packages.${nativeSystem}) qualification server;
+      };
 
       nixosModules.pancakeslicer = import ./nixos/pancakeslicer.nix self;
       nixosModules.default = self.nixosModules.pancakeslicer;
