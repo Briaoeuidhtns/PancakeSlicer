@@ -12,6 +12,7 @@
 , openssl
 , curl
 , freetype
+, fontconfig
 , zlib
 , expat
 , libpng
@@ -49,7 +50,7 @@ stdenv.mkDerivation (finalAttrs: {
 
   nativeBuildInputs = [ cmake ninja pkg-config gettext python312 uv ];
   buildInputs = [
-    boost eigen_5 tbb openssl curl freetype zlib expat libpng libjpeg
+    boost eigen_5 tbb openssl curl freetype fontconfig zlib expat libpng libjpeg
     libGL libGLU dbus glfw cereal nlopt engineOpenvdb cgal opencv assimp
     opencascade-occt draco python312 gmp mpfr
     c-blosc imath libnoise
@@ -62,7 +63,9 @@ stdenv.mkDerivation (finalAttrs: {
     substituteInPlace src/CMakeLists.txt \
       --replace-fail 'if (NOT APPLE)' 'if (NOT APPLE AND SLIC3R_GUI)'
     substituteInPlace src/libslic3r/CMakeLists.txt \
-      --replace-fail 'set(OpenCASCADE_DIR "''${CMAKE_PREFIX_PATH}/lib/cmake/occt")' ""
+      --replace-fail 'set(OpenCASCADE_DIR "''${CMAKE_PREFIX_PATH}/lib/cmake/occt")' "" \
+      --replace-fail 'find_package(OpenCV REQUIRED core)' 'find_package(OpenCV REQUIRED core imgproc imgcodecs)' \
+      --replace-fail 'opencv_world' 'opencv_core opencv_imgproc opencv_imgcodecs'
     substituteInPlace cmake/modules/Findlibnoise.cmake \
       --replace-fail 'libnoise/noise.h' 'noise/noise.h' \
       --replace-fail 'NAMES libnoise libnoise_static' 'NAMES noise-static libnoise libnoise_static'
