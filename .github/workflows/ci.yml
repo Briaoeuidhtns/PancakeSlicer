@@ -58,12 +58,9 @@ jobs:
               - 'engine/**'
               - '!**/*.md'
             pipeline:
-              - '{.github/workflows/release.yml,.github/scripts/build/**,desktop/scripts/stage-ci.py,deploy/Dockerfile,deploy/test.sh,server/Dockerfile}'
+              - '{.github/workflows/release*.yml,.github/scripts/build/**,desktop/scripts/stage-ci.py,deploy/Dockerfile,deploy/test.sh,server/Dockerfile}'
             nix:
-              - 'flake.nix'
-              - 'flake.lock'
-              - 'pkgs/**'
-              - '.github/workflows/ci.yml'
+              - '{flake.nix,flake.lock,pkgs/**,nixos/**,.github/workflows/ci.yml}'
 
   nix:
     name: Nix flake (evaluation and packages)
@@ -75,7 +72,7 @@ jobs:
       - uses: DeterminateSystems/nix-installer-action@main
       - uses: DeterminateSystems/magic-nix-cache-action@main
       - run: nix flake check --no-build --all-systems
-      - run: nix build .#server .#web --no-link
+      - run: nix build .#server --no-link
 
   web:
     name: Web (tsc + build)

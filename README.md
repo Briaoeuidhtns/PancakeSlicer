@@ -28,6 +28,24 @@ PancakeSlicer is not signed for Mac (yet), you should run  `xattr -dr com.apple.
 ### Docker
 Running via compose file is recommended. See [`deploy/docker-compose.yml`](deploy/docker-compose.yml). An image is also avail. at `ghcr.io/zimengxiong/pancakeslicer`.
 
+### NixOS (native web service)
+
+Add the fork as a flake input and include its module in your NixOS configuration:
+
+```nix
+inputs.pancakeslicer.url = "github:Briaoeuidhtns/PancakeSlicer/nixos-server";
+
+# In the host's modules list:
+# inputs.pancakeslicer.nixosModules.default
+
+# In a host module:
+services.pancakeslicer.enable = true;
+```
+
+The native server is packaged for `x86_64-linux`. Open <http://127.0.0.1:6868> on the host after rebuilding. The module persists projects, profiles, and jobs under `/var/lib/pancakeslicer` and does not open the firewall. For remote access, keep the loopback bind and use an authenticated reverse proxy. Set `services.pancakeslicer.environmentFile` to a runtime file (outside the Nix store) if you need server environment variables or a mutation bearer token.
+
+For a one-off run without NixOS, use `nix run github:Briaoeuidhtns/PancakeSlicer/nixos-server#server`. The native build does not carry upstream's print qualification record; it can slice and export G-code, but the application's qualification gate prevents sending jobs directly to printers.
+
 ## Supported Printers
 Printers listed below have their non-planar paths checked against a model of their print head for collisons. Printers not listed here are still able to slice, but they're checked against a generic (oversized) head, which may limit non-planarness and be incorrect (watch out for collisions!).
 

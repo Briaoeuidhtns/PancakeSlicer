@@ -1,23 +1,41 @@
-{ lib, buildNpmPackage, nodejs_26, source ? ../. }:
+{ lib, buildNpmPackage, fetchNpmDeps, nodejs_26 }:
 
+let
+  source = lib.fileset.toSource {
+    root = ../.;
+    fileset = lib.fileset.unions [
+      ../LICENSE
+      ../web
+      ../engine/resources
+      (lib.fileset.fileFilter (file: file.hasExt "json") ../server)
+    ];
+  };
+in
 buildNpmPackage {
   pname = "pancakeslicer-web";
-  version = "0.4.2";
+  version = "0.5.0";
   src = source;
 
   nodejs = nodejs_26;
   npmRoot = "web";
-  npmDepsHash = "sha256-FuxSU9tv/hcRBMrtHjck+f0476xmz21W6RUFfMSZhKY=";
+  npmDeps = fetchNpmDeps {
+    src = ../web;
+    hash = "sha256-M1/zkZ5rBX5kmgWloHTsWtJlSKC3AvzU08rIGJJUEOs=";
+  };
 
   dontNpmBuild = true;
   buildPhase = ''
-    cd web
-    npm run build
+    runHook preBuild
+    npm --prefix web run build
+    runHook postBuild
   '';
 
   installPhase = ''
+    runHook preInstall
     mkdir -p $out/share/pancakeslicer/web
-    cp -R dist/. $out/share/pancakeslicer/web/
+    cp -R web/dist/. $out/share/pancakeslicer/web/
+    install -Dm644 LICENSE $out/share/pancakeslicer/web/licence.txt
+    runHook postInstall
   '';
 
   meta = {

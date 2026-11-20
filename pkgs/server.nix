@@ -1,12 +1,12 @@
-{ lib, buildGoModule, source ? ../server }:
+{ lib, buildGoModule, go_1_27, revision, source ? ../server }:
 
-buildGoModule {
+(buildGoModule.override { go = go_1_27; }) {
   pname = "pancakeslicer-server";
-  version = "0.4.2";
+  version = "0.5.0";
   src = source;
   vendorHash = null;
   subPackages = [ "." ];
-  ldflags = [ "-s" "-w" ];
+  ldflags = [ "-s" "-w" "-X main.buildRevision=${revision}" ];
 
   postInstall = ''
     mv $out/bin/server $out/bin/pancakeslicer-server

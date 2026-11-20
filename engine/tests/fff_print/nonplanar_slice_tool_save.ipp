@@ -96,7 +96,8 @@ std::string carried_cut_information(const std::string &source, const std::vector
     namespace pt = boost::property_tree;
     pt::ptree tree, out;
     pt::read_xml(in, tree, pt::xml_parser::trim_whitespace);
-    for (const auto &[tag, object] : tree.get_child("objects", pt::ptree())) {
+    const pt::ptree empty;
+    for (const auto &[tag, object] : tree.get_child("objects", empty)) {
         const int index = object.get<int>("<xmlattr>.id", 0) - 1;
         if (tag != "object" || index < 0 || size_t(index) >= source_objects.size())
             continue;
