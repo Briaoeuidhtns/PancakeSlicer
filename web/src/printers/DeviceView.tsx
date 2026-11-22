@@ -24,6 +24,7 @@ import './printers.css';
 import './device.css';
 import { pickSlotFilament, reportedUnits, setupOf } from './device-slots';
 import { NozzlesCard, SlotsCard } from './DeviceSlots';
+import { DeviceWebPanel } from './DeviceWebPanel';
 import { feedOf } from './feeds';
 import { RecordProblem } from '../profiles/RecordProblem';
 
@@ -262,24 +263,27 @@ export function DeviceView() {
   const connections = useStore((s) => s.printerConnections);
   const records = useStore((s) => s.records.printers);
   const platePrinter = useStore((s) => s.printer), [selected, select] = useState(platePrinter);
+  const [webPanel, showWebPanel] = useState(false);
   const setups = records.filter((r) => !r.archived).map((r) => ({ key: r.id, name: r.name, vendor: r.vendor, model: r.model })).sort((a, b) => a.name.localeCompare(b.name));
   const printers = setups.map((setup) => ({ setup, connection: connections.connections.find((c) => c.printer === setup.key) }));
   const current = printers.find((p) => p.setup.key === selected) ?? printers[0];
   const asked = useStore((s) => s.device);
-  useEffect(() => { if (asked.at && asked.printer) select(asked.printer); }, [asked.at]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (asked.at && asked.printer) { select(asked.printer); showWebPanel(false); } }, [asked.at]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { document.querySelector('.device-printer[aria-pressed=true]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }, [current?.setup.key]);
   return <main className="device-view" aria-label="Device">
     <aside className="device-list" aria-label="Printers"><h2>Printers</h2><div className="device-printer-rows">{printers.map(({ setup, connection }) => {
       const own = connection?.name && connection.name !== setup.name ? connection.name : connection?.serial ? `Serial ${connection.serial.slice(-4)}` : undefined;
       const cover = printerCover(setup.vendor, {}, setup.model);
       const state = connection ? presenceStatus(connections.live, connection, connections.status[connection.printer], true) : { label: 'Not connected', tone: 'offline' as const };
-      return <button type="button" className="device-printer" aria-pressed={setup.key === current?.setup.key} key={setup.key} onClick={() => select(setup.key)}>
+      return <button type="button" className="device-printer" aria-pressed={setup.key === current?.setup.key} key={setup.key} onClick={() => { if (setup.key !== current?.setup.key) showWebPanel(false); select(setup.key); }}>
         <PrinterRender cover={cover} /><span><strong>{setup.name}</strong>{own && <span className="device-printer-own">{own}</span>}<span className="status-text" data-tone={state.tone}>{state.label}</span></span>
       </button>;
     })}{!printers.length && <p className="device-muted">No printers yet</p>}</div>
       <div className="device-list-actions">{current && connections.enabled && <button type="button" className="btn" onClick={() => openConnection(current.setup.key)}>Connection</button>}
+        {current && <button type="button" className="btn" onClick={() => showWebPanel(!webPanel)}>{webPanel ? 'Device overview' : 'Web panel'}</button>}
         <button type="button" className="btn device-manage" onClick={() => openLibrary('machine')}>Manage printers</button></div></aside>
-    {current?.connection ? <DevicePanel key={current.setup.key} connection={{ ...current.connection, name: current.setup.name }} model={current.setup.model || current.connection.model || ''} cover={printerCover(current.setup.vendor, {}, current.setup.model)} status={connections.status[current.setup.key]} live={connections.live} />
+    {current && webPanel ? <DeviceWebPanel key={current.setup.key} printer={current.setup.key} name={current.setup.name}/>
+      : current?.connection ? <DevicePanel key={current.setup.key} connection={{ ...current.connection, name: current.setup.name }} model={current.setup.model || current.connection.model || ''} cover={printerCover(current.setup.vendor, {}, current.setup.model)} status={connections.status[current.setup.key]} live={connections.live} />
       : current ? <OfflinePanel key={current.setup.key} printer={current.setup.key} name={current.setup.name} cover={printerCover(current.setup.vendor, {}, current.setup.model)}/>
       : <div className="device-empty"><h1>Add a printer</h1><p>Add your printer to start slicing for it and keep all its filaments handy here.</p></div>}
   </main>;
